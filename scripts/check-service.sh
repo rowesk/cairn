@@ -26,7 +26,7 @@ install -m 0644 "$release/deploy/cairn.env" /etc/cairn/cairn.env
 install -m 0644 "$release/deploy/cairn.service" /etc/systemd/system/cairn.service
 systemctl daemon-reload
 systemctl start cairn
-curl --retry 10 --retry-connrefused --retry-delay 1 -fsS http://127.0.0.1:8080/settings | grep -q 'Service test owner'
+curl --retry 10 --retry-connrefused --retry-delay 1 -fsS http://127.0.0.1:8080/settings | grep 'Service test owner' >/dev/null
 systemctl is-active --quiet cairn
 cat >> /etc/cairn/cairn.env <<'CONFIG'
 CAIRN_PUBLIC_LISTEN=127.0.0.1:8081

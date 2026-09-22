@@ -15,7 +15,7 @@ for arch in amd64 arm64; do
   CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -ldflags="-s -w -X main.version=$version" -o "$stage/$name/cairn" ./cmd/cairn
   cp LICENSE THIRD_PARTY_NOTICES.md README.md CHANGELOG.md "$stage/$name/"
   cp -R docs deploy "$stage/$name/"
-  tar -czf "dist/$name.tar.gz" -C "$stage" "$name"
+  COPYFILE_DISABLE=1 tar --no-xattrs -czf "dist/$name.tar.gz" -C "$stage" "$name"
   rm -rf "$stage"
 done
 python3 - "$version" <<'PY'
