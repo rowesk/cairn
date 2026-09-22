@@ -1,0 +1,14 @@
+/data/
+/cairn
+*.test
+/node_modules/
+
+# Local screenshots from design reviews can contain private reports or keys.
+/.impeccable/
+/dist/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+publisher-token
+.env

@@ -1,0 +1,3 @@
+# Preserve upstream minified distributions byte-for-byte, including string whitespace.
+internal/cairn/runtime/mermaid.js -whitespace
+internal/cairn/runtime/echarts.js -whitespace

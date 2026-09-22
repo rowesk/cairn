@@ -1,0 +1,26 @@
+[Unit]
+Description=Cairn private report library
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cairn
+Group=cairn
+StateDirectory=cairn
+StateDirectoryMode=0700
+EnvironmentFile=/etc/cairn/cairn.env
+ExecStart=/usr/local/bin/cairn -data /var/lib/cairn -publisher-token-file /var/lib/cairn/publisher-token -listen ${CAIRN_LISTEN} -public-listen ${CAIRN_PUBLIC_LISTEN} -public-base-url ${CAIRN_PUBLIC_BASE_URL}
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

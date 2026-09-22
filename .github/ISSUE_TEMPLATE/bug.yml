@@ -1,0 +1,16 @@
+name: Bug report
+description: Report a reproducible Cairn problem
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Cairn version, operating system and architecture
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps, expected result and actual result
+      description: Remove keys, passwords, private URLs and report content.
+    validations:
+      required: true

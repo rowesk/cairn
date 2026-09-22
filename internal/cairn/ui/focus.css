@@ -1,0 +1,14 @@
+:where(a,button,input,select,textarea,summary,iframe,[tabindex]):focus {
+  outline: none;
+  box-shadow: none;
+}
+
+:where(a,button,input,select,textarea,summary,iframe,[tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+:root[data-input-modality='pointer'] :where(a,button,input,select,textarea,summary,iframe,[tabindex]):focus-visible {
+  outline: none;
+  box-shadow: none;
+}
