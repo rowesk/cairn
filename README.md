@@ -1,56 +1,73 @@
 # Cairn
 
-A self-hosted library for reports made by AI agents. Save a useful answer as a page, find it later, and share it when you choose.
+A self-hosted report library for AI agents. Turn useful answers into readable pages you can find again and share with a link.
 
-Cairn accepts Markdown or HTML through an API, a writing editor or file import. It stores reports, images and private request context together. Reports can include Mermaid diagrams and ECharts charts. Search by title, request or author; open a preview or read the full page.
+The research took an hour. Finding it in last month's chat shouldn't take another. Cairn gives your comparisons, plans, guides and technical notes a home outside the conversation, with the original request kept alongside them for context.
 
-One Go binary runs the service. SQLite and files hold your data. No AI subscription, API model, Node runtime or external database is required to run Cairn.
+[Download Cairn](https://github.com/rowesk/cairn/releases/latest) · [Installation guide](docs/install.md) · [Agent publishing API](docs/publishing.md)
 
-![Cairn library with fictional example reports](docs/images/library.png)
+![Cairn's searchable private library with research, planning and technical reports](docs/images/library.png)
+
+## Useful answers, worth keeping
+
+- Find a report by title, original request or author. Filter by agent, preview a page, or archive it for later.
+- Read Markdown as a formatted report, comparison or visual page. Publish custom HTML when the work needs its own layout.
+- Keep tables, images, Mermaid diagrams and interactive ECharts charts with the report. Cairn bundles the diagram and chart libraries locally.
+- Send someone one page without opening your library. Public sharing is optional, with short links and optional passwords.
+- Keep your data on your own machine. One Go binary runs Cairn; SQLite and files hold the library. No external database, Node runtime or AI subscription is required to run it.
+
+Cairn stores and presents the work your agents produce. You choose which agent does the research or writing. You can also write a page in the editor or import an existing file.
+
+## Made for reading
+
+Reports have their own reading view, with an author byline and the request that prompted them. The layout adapts to a phone, so a saved itinerary or comparison is useful away from your desk too.
+
+<table>
+<tr>
+<td width="76%" valign="top"><img src="docs/images/report.png" alt="Cairn desktop report with a workspace comparison table and a budget chart"></td>
+<td width="24%" valign="top"><img src="docs/images/mobile.png" alt="Cairn phone reader showing a weekend plan and its original request"></td>
+</tr>
+</table>
+
+Screenshots show the running application with fictional example reports. [Recreate them](CONTRIBUTING.md#readme-screenshots) from a temporary demo library.
 
 ## Download and start
 
-Download a Linux archive and `checksums.txt` from [GitHub Releases](https://github.com/rowesk/cairn/releases/latest). Choose `linux_amd64` for an x86-64 PC/server or `linux_arm64` for a 64-bit Raspberry Pi or ARM server. Use a 64-bit Linux installation. Windows and 32-bit ARM are not supported in this release.
+Get the Linux archive and `checksums.txt` from [GitHub Releases](https://github.com/rowesk/cairn/releases/latest). Choose `linux_amd64` for an x86-64 PC or server, or `linux_arm64` for a 64-bit Raspberry Pi or ARM server.
 
-For example, on an ARM64 machine, with both files in the current directory:
+For example, on ARM64, with both downloads in the current directory:
 
 ```sh
 sha256sum --ignore-missing --check checksums.txt
+# Check that your archive reports OK before continuing.
 tar -xzf cairn_v0.1.0_linux_arm64.tar.gz
 cd cairn_v0.1.0_linux_arm64
 ./cairn init -data ./data -owner "Alex"
 ./cairn -data ./data -publisher-token-file ./data/publisher-token
 ```
 
-Check that the downloaded archive reports `OK` before extracting it. Open `http://127.0.0.1:8080` on that machine. For a remote server, follow the [Linux installation guide](docs/install.md). `init` creates a credential without printing it and preserves existing credentials and settings when run again.
+Open `http://127.0.0.1:8080` on that machine. For a remote server, Tailscale access or a service that starts on boot, follow the [installation guide](docs/install.md). Published binaries require 64-bit Linux.
 
-## Connect an agent
+The private library has **no login**. Anyone who can reach it can read and manage it. Keep it on localhost or restrict access to the owner and trusted devices. Publishing keys protect the publishing API, not the library UI.
 
-Open **Settings**, add the agent's name and select **Set up key**. Copy the generated instructions into your agent's configuration and keep its key in a secret store. The instructions contain the private address, publication format and limits. The agent must be able to reach that private address.
+## Give your agent somewhere to publish
 
-Each key publishes with its assigned byline and can replace that author's pages. It cannot enable public sharing. You can rotate or revoke keys in Settings. See the [publishing API](docs/publishing.md) for direct HTTP integration.
+In **Settings**, add your agent's name and select **Set up key**. Copy the generated instructions into its configuration and keep the key in a secret store. Any agent that can make authenticated HTTP requests and reach your private Cairn address can publish.
 
-## Private reading and public sharing
+Ask it to save the finished work to Cairn and return the page link. Each agent key supplies its byline, can replace that author's pages, and can be rotated or revoked. Agents cannot enable public sharing.
 
-The private listener has **no login**. Anyone who can reach it can read and manage the library. Keep it on localhost or restrict its Tailscale access to the owner and trusted devices. A publishing key does not protect the library UI.
+For agents and integration developers, start with the [publishing contract](docs/publishing.md). Send Markdown or HTML to `POST /api/pages`; `GET /api` provides a machine-readable index with endpoints, limits and examples. No Cairn-specific SDK is needed.
 
-Public sharing uses a separate listener. Only explicitly shared pages are available there. New paths default to three characters from `A-Z`, `a-z` and `0-9`, with 238,328 combinations. Sharing keeps the private path on the public domain. These short addresses are discoverable; use sharing for content you are comfortable making public, or add a password. Turning sharing off preserves the private page.
+## Share a page, keep the library private
 
-Reports run in an isolated iframe. Original request metadata stays out of public readers. Imported originals are downloadable when their page is shared, under the same password gate.
+An optional public listener serves only pages you choose to share. A page keeps the same path on your private and public addresses. Turn sharing off and the private link still works.
 
-## Guides
+New links default to three random letters or numbers, including uppercase and lowercase. These addresses are discoverable, so share content you are comfortable making public or add a password. Original-request metadata stays private; the report body and any downloadable original are part of the shared page. See the [sharing guide](docs/sharing.md).
 
-- [Install on Linux and connect with Tailscale](docs/install.md)
-- [Set up optional public sharing](docs/sharing.md)
-- [Write, import and manage author profiles](docs/authoring.md)
-- [Publish from an agent](docs/publishing.md)
-- [Back up, restore and upgrade](docs/operations.md)
-- [Troubleshooting](docs/troubleshooting.md)
-- [Contributing and development](CONTRIBUTING.md)
-- [Security and support boundaries](SECURITY.md)
+Cairn is for one owner. It has no team accounts, comments, drafts or page history. Replacing a report overwrites its current contents.
 
-Cairn is designed for one owner. There are no teams, per-reader permissions, comments, drafts or page history. Replacement overwrites the current report.
+## More documentation
 
-## Licence
+[Writing and importing](docs/authoring.md) · [Backups and upgrades](docs/operations.md) · [Troubleshooting](docs/troubleshooting.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
-Cairn is [MIT licensed](LICENSE). Bundled dependencies retain their own licences; see [third-party notices](THIRD_PARTY_NOTICES.md).
+Cairn is [MIT licensed](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md) for bundled dependencies.

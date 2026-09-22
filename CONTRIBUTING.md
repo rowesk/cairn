@@ -29,3 +29,13 @@ Mermaid and ECharts distributions are committed under `internal/cairn/runtime`. 
 Maintainers tag reviewed commits as `vX.Y.Z`. The release workflow reruns checks, creates Linux AMD64/ARM64 archives and checksums, and opens a draft GitHub Release. Test its downloaded archives before publishing the draft. CI uses hosted runners and no production credentials. See `scripts/release.sh` for the local packaging command.
 
 By contributing, you agree to license your contribution under this project's MIT licence.
+
+## README screenshots
+
+After building `cairn` and installing the browser-check dependencies above, run:
+
+```sh
+node scripts/capture-demo.cjs
+```
+
+The script starts Cairn on localhost with a temporary library, publishes fictional example reports, and captures the library and desktop/mobile readers using headless Chromium. It writes the images to `docs/images/`, closes the browser and server, then removes the demo data. It does not use your running Cairn instance or personal reports.
