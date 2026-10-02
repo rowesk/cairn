@@ -17,7 +17,7 @@ var focusCSS string
 //go:embed ui/focus.js
 var focusJS string
 
-var ownerCSS = ownerBaseCSS + "\n" + focusCSS
+var ownerCSS = ownerBaseCSS + "\n" + themesCSS + "\n" + focusCSS
 var focusScriptTag = "<script>" + focusJS + "</script>"
 var focusScriptHash = func() string {
 	sum := sha256.Sum256([]byte(focusJS))
@@ -37,6 +37,7 @@ var libraryScriptHash = func() string {
 	return base64.StdEncoding.EncodeToString(sum[:])
 }()
 var uiFunctions = template.FuncMap{
+	"themes": func() []themePreset { return themePresets },
 	"css":    func() template.CSS { return template.CSS(ownerCSS) },
 	"script": func() template.JS { return template.JS(libraryJS) },
 	"mark": func() template.HTML {

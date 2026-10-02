@@ -114,6 +114,8 @@ func Open(cfg Config) (*Server, error) {
  share_enabled INTEGER NOT NULL DEFAULT 0, public_slug TEXT UNIQUE, password_hash TEXT);
  CREATE TABLE IF NOT EXISTS preferences (id INTEGER PRIMARY KEY CHECK(id=1),author TEXT NOT NULL,template TEXT NOT NULL,link_length INTEGER NOT NULL CHECK(link_length BETWEEN 3 AND 7));
 
+ CREATE TABLE IF NOT EXISTS theme_preferences (id INTEGER PRIMARY KEY CHECK(id=1),admin TEXT NOT NULL DEFAULT 'cairn',reader TEXT NOT NULL DEFAULT 'cairn',public TEXT NOT NULL DEFAULT 'cairn');
+ INSERT OR IGNORE INTO theme_preferences(id) VALUES(1);
  CREATE TABLE IF NOT EXISTS agent_keys (name TEXT PRIMARY KEY, digest BLOB UNIQUE, created_at TEXT NOT NULL, last_used TEXT NOT NULL DEFAULT '');
  CREATE TABLE IF NOT EXISTS author_profiles (name TEXT PRIMARY KEY,photo BLOB NOT NULL);`)
 	if err != nil {

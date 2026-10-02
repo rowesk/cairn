@@ -29,3 +29,18 @@
  async function copy(field){try{if(navigator.clipboard&&isSecureContext){await navigator.clipboard.writeText(field.value);}else{field.focus();field.select();if(!document.execCommand('copy'))throw Error();}feedback.textContent='Copied.';}catch{field.focus();field.select();feedback.textContent='Select and copy the text above.';}}
  document.querySelector('#key-copy').onclick=()=>copy(secret);document.querySelector('#snippet-copy').onclick=()=>copy(snippet);document.querySelector('#key-close').onclick=()=>dialog.close();dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault();});dialog.addEventListener('close',()=>{secret.value='';snippet.value='';if(changed)location.assign('/settings');});
 })();
+
+(() => {
+ const choices = [...document.querySelectorAll('#theme-form select[name]')];
+ const all = document.querySelector('#all-theme');
+ const status = document.querySelector('#theme-status');
+ all.value = choices[0].value;
+ document.querySelector('#theme-all').hidden = false;
+ document.querySelector('#apply-all-themes').addEventListener('click', () => {
+  choices.forEach(select => { select.value = all.value; });
+  status.textContent = 'All three set to ' + all.selectedOptions[0].textContent + '. Save themes to apply.';
+ });
+ choices.forEach(select => select.addEventListener('change', () => {
+  status.textContent = 'Unsaved selections. Save themes to apply.';
+ }));
+})();

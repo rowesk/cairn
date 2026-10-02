@@ -30,6 +30,8 @@ type authorProfile struct {
 	KeyCreated, KeyUsed string
 }
 type settingsData struct {
+	Theme                string
+	Themes               themePreferences
 	CSRF, Error, Message string
 	Preferences          preferences
 	Profiles             []authorProfile
@@ -114,7 +116,8 @@ func normalizedPhoto(data []byte) ([]byte, error) {
 func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 	privateFormHeaders(w)
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data: blob:; connect-src 'self'; script-src 'sha256-"+settingsHash+"'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
-	d := settingsData{CSRF: s.csrf, Preferences: s.preferences()}
+	themes := s.themes()
+	d := settingsData{Theme: themes.Admin, Themes: themes, CSRF: s.csrf, Preferences: s.preferences()}
 	status := 200
 	if r.Method == http.MethodPost {
 		r.Body = http.MaxBytesReader(w, r.Body, 5<<20)
@@ -138,6 +141,15 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 			case "key_create", "key_rotate", "key_revoke":
 				s.changeAgentKey(w, r)
 				return
+			case "themes":
+				next := themePreferences{Admin: r.FormValue("admin_theme"), Reader: r.FormValue("reader_theme"), Public: r.FormValue("public_theme")}
+				if !validTheme(next.Admin) || !validTheme(next.Reader) || !validTheme(next.Public) {
+					d.Error = "Choose a listed preset for each view."
+					status = 400
+					break
+				}
+				d.Themes = next
+				_, err = s.db.Exec(`UPDATE theme_preferences SET admin=?,reader=?,public=? WHERE id=1`, next.Admin, next.Reader, next.Public)
 			case "defaults":
 				length, e := strconv.Atoi(r.FormValue("link_length"))
 				author := strings.TrimSpace(r.FormValue("author"))

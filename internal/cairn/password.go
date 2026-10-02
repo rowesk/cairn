@@ -86,7 +86,7 @@ func (s *Server) passwordGate(w http.ResponseWriter, r *http.Request, id, hash, 
 			return true
 		}
 		if kind == "page" {
-			showPassword(w, "", 401)
+			s.showPassword(w, "", 401)
 		} else {
 			http.Error(w, "password required", 401)
 		}
@@ -104,24 +104,24 @@ func (s *Server) passwordGate(w http.ResponseWriter, r *http.Request, id, hash, 
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4096)
 	if err := r.ParseForm(); err != nil {
-		showPassword(w, "Invalid password request.", 400)
+		s.showPassword(w, "Invalid password request.", 400)
 		return false
 	}
 	password := r.FormValue("password")
 	if len(password) == 0 || len(password) > 72 {
-		showPassword(w, "Enter a password of at most 72 bytes.", 400)
+		s.showPassword(w, "Enter a password of at most 72 bytes.", 400)
 		return false
 	}
 	s.authMu.Lock()
 	defer s.authMu.Unlock()
 	if time.Now().Before(s.failedUnlock[id]) {
 		w.Header().Set("Retry-After", "1")
-		showPassword(w, "Wait a moment before trying again.", 429)
+		s.showPassword(w, "Wait a moment before trying again.", 429)
 		return false
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
 		s.failedUnlock[id] = time.Now().Add(time.Second)
-		showPassword(w, "That password did not match.", 401)
+		s.showPassword(w, "That password did not match.", 401)
 		return false
 	}
 	delete(s.failedUnlock, id)
@@ -131,10 +131,10 @@ func (s *Server) passwordGate(w http.ResponseWriter, r *http.Request, id, hash, 
 	http.Redirect(w, r, "/"+route, http.StatusSeeOther)
 	return false
 }
-func showPassword(w http.ResponseWriter, message string, status int) {
+func (s *Server) showPassword(w http.ResponseWriter, message string, status int) {
 	privateFormHeaders(w)
 	w.WriteHeader(status)
-	passwordView.Execute(w, message)
+	passwordView.Execute(w, struct{ Message, Theme string }{message, s.themes().Public})
 }
 
-var passwordView = template.Must(template.New("password").Parse(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Unlock report</title><style>` + ownerCSS + `</style><h1>This report needs a password</h1>{{if .}}<p role="alert">{{.}}</p>{{end}}<form method="post" class="actions"><label>Password <input type="password" name="password" required autocomplete="current-password"></label><button>Unlock report</button></form>` + focusScriptTag + `</html>`))
+var passwordView = template.Must(template.New("password").Parse(`<!doctype html><html lang="en" data-theme="{{.Theme}}"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Unlock report</title><style>` + ownerCSS + `</style><body><main class="form-page"><h1>This report needs a password</h1>{{if .Message}}<p role="alert">{{.Message}}</p>{{end}}<form method="post" class="actions"><label>Password <input type="password" name="password" required autocomplete="current-password"></label><button>Unlock report</button></form></main>` + focusScriptTag + `</body></html>`))

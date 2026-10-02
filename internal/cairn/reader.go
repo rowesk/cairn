@@ -23,6 +23,7 @@ var readerHash = func() string {
 var readerView = template.Must(template.New("reader").Funcs(uiFunctions).Funcs(template.FuncMap{"readerScript": func() template.JS { return template.JS(readerJS) }}).Parse(readerHTML))
 
 type readerData struct {
+	Theme                                                                         string
 	Title, Agent, CreatedAt, Slug, FileName, Request, Link, Format, RequestSource string
 	Photo                                                                         template.URL
 	Owner, Shared, Protected                                                      bool
@@ -30,6 +31,11 @@ type readerData struct {
 
 func (s *Server) renderReader(w http.ResponseWriter, r *http.Request, p savedPage, route string, owner, shared, protected bool, link string) {
 	d := readerData{Title: p.Title, Agent: p.Agent, CreatedAt: p.CreatedAt, Slug: route, FileName: p.FileName, Owner: owner, Shared: shared, Protected: protected, Link: link}
+	themes := s.themes()
+	d.Theme = themes.Public
+	if owner {
+		d.Theme = themes.Reader
+	}
 	d.Photo = s.authorPhoto(p.Agent)
 	d.Format = "HTML"
 	if ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(p.FileName)), "."); ext != "" {

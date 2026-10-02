@@ -22,7 +22,7 @@ const fs=require('node:fs');const os=require('node:os');const path=require('node
   await fetch(base+'/api/pages',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer browser-smoke-token-at-least-32-characters'},body:JSON.stringify({title:'Other page',agent:'Test',original_request:'Other private request',slug:'other',html:'<p>Other page</p>',assets:{'secret.png':'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='}})});
   const response=await fetch(base+'/api/pages',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer browser-smoke-token-at-least-32-characters'},body:JSON.stringify({title:'Browser report',agent:'ExampleAgent',original_request:'PRIVATE-BROWSER-MARKER',slug:'browser',html:'<h1>Sandboxed report</h1><img src="?asset=bulb.png"><img id="cross-page" src="/_assets/other/secret.png"><script>document.body.dataset.executed="yes"</script>',assets:{'bulb.png':'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='}})});
   if(response.status!==201)throw Error(await response.text());
-  browser=await chromium.launch({headless:true});
+  browser=await chromium.launch({headless:true,executablePath:process.env.CAIRN_CHROMIUM_EXECUTABLE || undefined});
   const page=await browser.newPage({viewport:{width:390,height:844}});
   page.setDefaultTimeout(10000);
   await page.goto(base+'/browser');
@@ -117,7 +117,36 @@ const fs=require('node:fs');const os=require('node:os');const path=require('node
   await page.waitForFunction(()=>document.querySelector('#key-primary').textContent==='Create key');
   if((await fetch(base+'/api/pages',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+key},body:'{}'})).status!==401)throw Error('revoked key accepted');
   await Promise.all([page.waitForNavigation({waitUntil:'load'}),page.locator('#key-close').click()]);
-  for(const width of [320,390,1440]){
+  // Themes persist independently and render on every app-owned screen.
+  const setThemes=async(admin,reader,shared)=>{
+   await page.goto(base+'/settings');
+   await page.getByLabel('Admin view',{exact:true}).selectOption(admin);
+   await page.getByLabel('Private report view',{exact:true}).selectOption(reader);
+   await page.getByLabel('Public report view',{exact:true}).selectOption(shared);
+   await page.getByRole('button',{name:'Save themes',exact:true}).click();
+   await page.waitForURL('**/settings?saved=1');
+  };
+  await page.goto(base+'/manage/report');await page.getByRole('button',{name:'Enable public link',exact:true}).click();
+  await page.getByRole('button',{name:'Remove password',exact:true}).click();
+  await setThemes('minimal','futuristic','cairn');
+  for(const [url,theme] of [[base+'/','minimal'],[base+'/settings','minimal'],[base+'/new','minimal'],[base+'/import','minimal'],[base+'/manage/report','minimal'],[base+'/report','futuristic'],[publicBase+'/report','cairn']]){
+   await page.goto(url);
+   if(await page.locator('html').getAttribute('data-theme')!==theme)throw Error('wrong theme at '+url);
+  }
+  const backgrounds={cairn:'rgb(238, 242, 245)',minimal:'rgb(250, 250, 250)',futuristic:'rgb(26, 27, 38)'};
+  for(const theme of ['cairn','minimal','futuristic']){
+   await page.goto(base+'/settings');
+   await page.getByLabel('One preset for all views',{exact:true}).selectOption(theme);
+   await page.getByRole('button',{name:'Use for all three',exact:true}).click();
+   for(const name of ['admin_theme','reader_theme','public_theme']){
+    if(await page.locator('[name='+name+']').inputValue()!==theme)throw Error('all-views shortcut missed '+name);
+   }
+   await page.getByRole('button',{name:'Save themes',exact:true}).click();await page.waitForURL('**/settings?saved=1');
+   await page.reload();
+   for(const name of ['admin_theme','reader_theme','public_theme']){
+    if(await page.locator('[name='+name+']').inputValue()!==theme)throw Error('theme selection did not persist');
+   }
+   for(const width of [320,390,1440]){
    await page.setViewportSize({width,height:900});
    for(const route of ['/','/settings','/new','/report']){
     await page.goto(base+route);
@@ -126,7 +155,7 @@ const fs=require('node:fs');const os=require('node:os');const path=require('node
   }
   await page.setViewportSize({width:1280,height:900});await page.goto(base+'/report');
   if(process.env.CAIRN_SCREENSHOT)await page.screenshot({path:process.env.CAIRN_SCREENSHOT,fullPage:true});
-  console.log('Headless Chromium passed: responsive readers, sandbox isolation, images, charts, imports, library lifecycle, matching share paths, passwords, revocation, editor preview/save, agent keys and settings.');
+  console.log('Headless Chromium passed: responsive readers, sandbox isolation, images, charts, imports, library lifecycle, matching share paths, passwords, revocation, editor preview/save, agent keys, settings and three independently saved themes.');
  }finally{
   if(browser)await browser.close();
   if(child.pid && child.exitCode===null && child.signalCode===null){

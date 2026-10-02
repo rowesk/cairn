@@ -25,13 +25,14 @@ var editorHash = func() string {
 var editorView = template.Must(template.New("editor").Funcs(uiFunctions).Funcs(template.FuncMap{"editorScript": func() template.JS { return template.JS(editorJS) }}).Parse(editorHTML))
 
 type editorData struct {
+	Theme                                                  string
 	CSRF, Title, Markdown, Error, Slug, Images, PublicBase string
 	Shared, PublicReady                                    bool
 }
 
 func (s *Server) newPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Referrer-Policy", "same-origin")
-	d := editorData{CSRF: s.csrf, PublicReady: s.cfg.PublicBaseURL != "", PublicBase: s.cfg.PublicBaseURL}
+	d := editorData{Theme: s.themes().Admin, CSRF: s.csrf, PublicReady: s.cfg.PublicBaseURL != "", PublicBase: s.cfg.PublicBaseURL}
 	status := http.StatusOK
 	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", 405)
