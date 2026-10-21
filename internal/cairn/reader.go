@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"html/template"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -27,6 +28,7 @@ type readerData struct {
 	Title, Agent, CreatedAt, Slug, FileName, Request, Link, Format, RequestSource string
 	Photo                                                                         template.URL
 	Owner, Shared, Protected                                                      bool
+	Contents                                                                      []*contentsEntry
 }
 
 func (s *Server) renderReader(w http.ResponseWriter, r *http.Request, p savedPage, route string, owner, shared, protected bool, link string) {
@@ -37,6 +39,10 @@ func (s *Server) renderReader(w http.ResponseWriter, r *http.Request, p savedPag
 		d.Theme = themes.Reader
 	}
 	d.Photo = s.authorPhoto(p.Agent)
+	if data, err := os.ReadFile(filepath.Join(s.cfg.DataDir, "objects", p.Object, "page.html")); err == nil {
+		_, headings := reportHeadings(string(data))
+		d.Contents = reportContents(headings, route)
+	}
 	d.Format = "HTML"
 	if ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(p.FileName)), "."); ext != "" {
 		d.Format = strings.ToUpper(ext)

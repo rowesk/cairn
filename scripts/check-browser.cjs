@@ -50,6 +50,30 @@ const fs=require('node:fs');const os=require('node:os');const path=require('node
     if(metrics.wide || metrics.layout!==layout || (width===390 && !metrics.table))throw Error(JSON.stringify(metrics));
    }
   }
+  let sections='<p><a id="jump" href="#s4">Section 4</a></p>';for(let i=1;i<=8;i++)sections+=`<h2 id="s${i}">Section ${i}</h2><p>${'Reading text. '.repeat(120)}</p>`;
+  const flowing=await fetch(base+'/api/pages',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer browser-smoke-token-at-least-32-characters'},body:JSON.stringify({title:'Flowing reader',agent:'ExampleAgent',original_request:'PRIVATE-FLOW',slug:'flowing',html:sections})});
+  if(flowing.status!==201)throw Error(await flowing.text());
+  await page.setViewportSize({width:1280,height:800});await page.goto(base+'/flowing');
+  const flowFrame=page.frameLocator('iframe');await flowFrame.locator('#jump').waitFor();await page.waitForTimeout(600);
+  const sized=await page.evaluate(()=>({flowing:document.body.classList.contains('flowing-report'),height:document.querySelector('iframe').offsetHeight}));
+  if(!sized.flowing||sized.height<1200||sized.height>20000)throw Error('desktop report did not flow at its own height: '+JSON.stringify(sized));
+  await flowFrame.locator('#jump').click();await page.waitForFunction(()=>scrollY>500);await page.waitForTimeout(900);
+  const landed=await page.evaluate(()=>document.querySelector('iframe').getBoundingClientRect().top)+await page.frames().find(f=>f!==page.mainFrame()).evaluate(()=>document.getElementById('s4').getBoundingClientRect().top);
+  if(landed<30||landed>120)throw Error('in-report link landed at '+landed);
+  const barShown=()=>page.evaluate(()=>document.querySelector('.compact-reader').classList.contains('is-visible'));
+  await page.evaluate(()=>scrollTo(0,400));await page.waitForTimeout(300);await page.mouse.move(640,700);await page.mouse.wheel(0,200);await page.waitForTimeout(400);
+  if(await barShown())throw Error('compact bar stayed visible while scrolling down');
+  await page.mouse.wheel(0,-120);await page.waitForTimeout(400);
+  if(!await barShown())throw Error('compact bar did not return on scroll up');
+  await page.locator('.compact-title').click();await page.getByRole('region',{name:'Page details'}).getByText('PRIVATE-FLOW').waitFor();
+  await page.keyboard.press('Escape');if(await page.locator('#reader-details').isVisible())throw Error('Escape did not close page details');
+  await page.evaluate(()=>scrollTo(0,0));await page.getByRole('navigation',{name:'Contents'}).getByRole('link',{name:'Section 6'}).click();await page.waitForFunction(()=>document.querySelector('.reader-toc a[aria-current]')?.dataset.id==='s6');
+  const railLanded=await page.evaluate(()=>document.querySelector('iframe').getBoundingClientRect().top)+await page.frames().find(f=>f!==page.mainFrame()).evaluate(()=>document.getElementById('s6').getBoundingClientRect().top);
+  if(railLanded<30||railLanded>120||await page.evaluate(()=>location.hash)!=='#s6')throw Error('contents link landed at '+railLanded);
+  await page.setViewportSize({width:390,height:844});await page.goto(base+'/flowing');await flowFrame.locator('#jump').waitFor();await page.waitForTimeout(600);
+  await page.mouse.move(195,700);await page.mouse.wheel(0,1500);await page.waitForTimeout(300);await page.mouse.wheel(0,-120);await page.waitForTimeout(400);
+  await page.getByRole('button',{name:'Contents'}).click();await page.getByRole('navigation',{name:'Contents'}).getByRole('link',{name:'Section 2'}).click();
+  await page.waitForFunction(()=>document.querySelector('.compact-section').textContent==='Section 2'&&!document.body.classList.contains('contents-open'));
   await page.goto(base+'/import');
   await page.locator('[name=document]').setInputFiles({name:'notes.md',mimeType:'text/markdown',buffer:Buffer.from('# Imported from a file\n\nA private report.')});
   await page.locator('[name=title]').fill('Imported notes');await page.locator('details summary').click();await page.locator('[name=agent]').fill('the owner');await page.locator('[name=original_request]').fill('Private import request');await page.locator('[name=slug]').fill('import-check');
@@ -147,6 +171,33 @@ const fs=require('node:fs');const os=require('node:os');const path=require('node
     if(await page.locator('[name='+name+']').inputValue()!==theme)throw Error('theme selection did not persist');
    }
    for(const width of [320,390,1440]){
+    await page.setViewportSize({width,height:900});
+    for(const route of ['/','/settings','/new','/import','/manage/report','/report']){
+     await page.goto(base+route);
+     if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error('theme overflow '+theme+' '+width+' '+route);
+     if(await page.locator('html').getAttribute('data-theme')!==theme)throw Error('missing theme '+route);
+     const background=await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor);
+     if(background!==backgrounds[theme])throw Error('incorrect background '+theme+' '+route+' '+background);
+     if(process.env.CAIRN_THEME_SCREENSHOTS && width!==320 && ['/','/settings','/report'].includes(route)){
+      fs.mkdirSync(process.env.CAIRN_THEME_SCREENSHOTS,{recursive:true});
+      await page.screenshot({path:path.join(process.env.CAIRN_THEME_SCREENSHOTS,theme+'-'+(route.slice(1)||'library')+'-'+width+'.png'),fullPage:true});
+     }
+    }
+    await page.goto(publicBase+'/report');
+    if(await page.locator('html').getAttribute('data-theme')!==theme)throw Error('public theme not applied');
+    if((await page.content()).includes('PRIVATE-TEMPLATE-MARKER'))throw Error('theme exposed private context');
+   }
+  }
+  // Appearance settings remain usable without the optional all-views shortcut.
+  const noJS=await browser.newContext({javaScriptEnabled:false});
+  try{
+   const plain=await noJS.newPage();await plain.goto(base+'/settings');
+   await plain.getByLabel('Admin view',{exact:true}).selectOption('minimal');
+   await plain.getByRole('button',{name:'Save themes',exact:true}).click();await plain.waitForURL('**/settings?saved=1');
+   if(await plain.locator('html').getAttribute('data-theme')!=='minimal')throw Error('no-JavaScript theme save failed');
+  }finally{await noJS.close();}
+  await setThemes('cairn','cairn','cairn');
+  for(const width of [320,390,1440]){
    await page.setViewportSize({width,height:900});
    for(const route of ['/','/settings','/new','/report']){
     await page.goto(base+route);

@@ -215,7 +215,7 @@ func TestExplicitReplacementAndFailurePreservePage(t *testing.T) {
 	srv, close = start(t, dir)
 	defer close()
 	status, _, body = request(t, srv, "GET", "/_content/report", nil, "")
-	if status != 200 || !strings.HasPrefix(string(body), "<h1>Replacement</h1>\n<script>") {
+	if status != 200 || !strings.HasPrefix(string(body), "<h1 id=\"replacement\">Replacement</h1>\n<script>") {
 		t.Fatalf("failed update/restart lost current content: %d %s", status, body)
 	}
 	status, _, _ = request(t, srv, "PUT", "/api/pages/missing", page("Missing"), token)
@@ -333,7 +333,7 @@ func TestMarkdownTemplatesPersistAsHTML(t *testing.T) {
 	defer close()
 	for _, layout := range []string{"report", "comparison", "visual"} {
 		status, _, body := request(t, srv, "GET", "/_content/"+layout+"-page", nil, "")
-		for _, want := range []string{"<h1>Bulbs</h1>", "table-scroll", "data-template=\"" + layout + "\"", "<style>", "<a href=\"?asset=bulb.png\""} {
+		for _, want := range []string{"<h1 id=\"bulbs\">Bulbs</h1>", "table-scroll", "data-template=\"" + layout + "\"", "<style>", "<a href=\"?asset=bulb.png\""} {
 			if status != 200 || !strings.Contains(string(body), want) {
 				t.Errorf("%s missing %s: %d %s", layout, want, status, body)
 			}
@@ -386,7 +386,7 @@ func TestManualImportUsesPrivatePublishingPath(t *testing.T) {
 		t.Fatalf("import: %d %s", res.StatusCode, b)
 	}
 	status, _, body = request(t, srv, "GET", "/_content/imported", nil, "")
-	if status != 200 || !strings.Contains(string(body), "<h1>Imported Markdown</h1>") {
+	if status != 200 || !strings.Contains(string(body), "<h1 id=\"imported-markdown\">Imported Markdown</h1>") {
 		t.Fatalf("imported content: %d %s", status, body)
 	}
 }

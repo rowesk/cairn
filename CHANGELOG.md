@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Saved preset themes (Cairn, Minimal, Futuristic) for the admin view, private reader and public reader.
+- One page scroll in the reader at every width: a shorter cover band, a bar that hides while reading and returns on scroll-up, and a page-details sheet with the byline and full request.
+- Nested contents list from report headings: a sticky rail from 1200px, a sheet on smaller screens, current-section tracking and `#section` deep links.
+- Headings without ids get stable GitHub-style ids when served, so Markdown section links work.
+- Fixed in-report section links that did nothing on phones, and runaway frame heights for HTML reports without a doctype.
+
 ## v0.1.0
 
 Initial public release under the MIT licence.
