@@ -47,18 +47,18 @@
 
 (() => {
  const root=document.documentElement,body=document.body,frame=document.querySelector('.reading-shell>iframe'),bar=document.querySelector('.compact-reader'),nav=document.querySelector('.reading-nav'),toggle=bar.querySelector('.compact-title'),details=document.querySelector('#reader-details'),scrim=document.querySelector('.reader-scrim'),progress=bar.querySelector('.reading-progress'),reduced=matchMedia('(prefers-reduced-motion: reduce)');
- const toc=document.querySelector('.reader-toc'),contentsButton=bar.querySelector('.compact-contents'),section=bar.querySelector('.compact-section'),collapse=toc?.querySelector('.toc-collapse'),wide=matchMedia('(min-width:1200px)');
+ const toc=document.querySelector('.reader-toc'),contentsButton=bar.querySelector('.compact-contents'),section=bar.querySelector('.compact-section'),panel=toc?.querySelector('.toc-panel');
  const links=toc?[...toc.querySelectorAll('a[data-id]')]:[],controls=[...bar.querySelectorAll('a,button')];
  // Bar height plus breathing room, so a jumped-to heading is not hidden under the bar.
  const offset=64;
- let pending=false,lastY=scrollY,travel=0,shown=false,sheet=null,openedAt=0,width=innerWidth,flowing=true,growth=[],restore=null,positions=new Map(),active=null;
+ let pending=false,shown=false,floating=false,sheet=null,openedAt=0,width=innerWidth,flowing=true,growth=[],restore=null,positions=new Map(),active=null;
  let wanted=null;try{wanted=decodeURIComponent(location.hash.slice(1));}catch{}
  if(!links.some(link=>link.dataset.id===wanted))wanted=null;
  // A deep link follows the report's late layout shifts (fonts, images) until the reader scrolls.
  let settle=0;
  for(const type of ['wheel','touchstart','keydown'])addEventListener(type,()=>{wanted=null;},{passive:true,once:true});
 
- // One sheet at a time drops below the bar: page details or, below 1200px, the contents.
+ // One sheet at a time drops below the bar: page details or, when the margin is too narrow, the contents.
  const isOpen=()=>sheet!==null;
  function openSheet(name){
   closeSheet(false);sheet=name;openedAt=scrollY;scrim.hidden=false;
@@ -77,11 +77,10 @@
  contentsButton?.addEventListener('click',()=>sheet==='contents'?closeSheet(false):openSheet('contents'));
  scrim.addEventListener('click',()=>closeSheet(false));
  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&isOpen())closeSheet(true);});
- wide.addEventListener('change',()=>{if(sheet==='contents')closeSheet(false);});
 
  function show(next){
   if(next===shown)return;
-  shown=next;bar.classList.toggle('is-visible',next);bar.setAttribute('aria-hidden',String(!next));body.classList.toggle('bar-shown',next);
+  shown=next;bar.classList.toggle('is-visible',next);bar.setAttribute('aria-hidden',String(!next));
   for(const control of controls)control.tabIndex=next?0:-1;
   if(!next)closeSheet(false);
  }
@@ -89,22 +88,17 @@
   if(link===active)return;
   active?.removeAttribute('aria-current');link?.setAttribute('aria-current','location');active=link;
   section.textContent=link?link.textContent:'';toggle.classList.toggle('has-section',!!link);
-  // Keep the current entry in view inside the rail without scrolling the page.
-  if(link&&wide.matches&&!body.classList.contains('contents-collapsed')){
+  // Keep the current entry in view inside a long contents list without scrolling the page.
+  if(link&&floating){
    const top=link.offsetTop,bottom=top+link.offsetHeight;
-   if(top<toc.scrollTop+48)toc.scrollTop=top-48;else if(bottom>toc.scrollTop+toc.clientHeight-24)toc.scrollTop=bottom-toc.clientHeight+24;
+   if(top<panel.scrollTop+48)panel.scrollTop=top-48;else if(bottom>panel.scrollTop+panel.clientHeight-24)panel.scrollTop=bottom-panel.clientHeight+24;
   }
  }
  function update(){
   pending=false;
-  const y=scrollY,delta=y-lastY;lastY=y;
-  if(delta&&Math.sign(delta)!==Math.sign(travel))travel=0;
-  travel+=delta;
-  const covered=nav.getBoundingClientRect().bottom>0,atEnd=innerHeight+y>=root.scrollHeight-80,keyboard=root.dataset.inputModality==='keyboard'&&bar.contains(document.activeElement);
-  if(covered)show(false);
-  else if(isOpen()||keyboard||atEnd||travel<-12)show(true);
-  else if(travel>24)show(false);
-  if(isOpen()&&Math.abs(y-openedAt)>60)closeSheet(false);
+  // The bar takes over from the cover's navigation and stays for the rest of the read.
+  show(nav.getBoundingClientRect().bottom<=0);
+  if(isOpen()&&Math.abs(scrollY-openedAt)>60)closeSheet(false);
   const rect=frame.getBoundingClientRect(),span=rect.height-innerHeight;
   progress.style.transform='scaleX('+(span>0?Math.min(1,Math.max(0,-rect.top/span)):rect.top<=0?1:0)+')';
   if(links.length&&flowing&&positions.size){
@@ -115,7 +109,6 @@
  }
  const queue=()=>{if(!pending){pending=true;requestAnimationFrame(update);}};
  window.addEventListener('scroll',queue,{passive:true});
- bar.addEventListener('focusin',()=>{if(root.dataset.inputModality==='keyboard')show(true);});
 
  // The report grows to its full height so the window does all the scrolling. A report
  // that keeps growing as it is resized (viewport-height layouts) keeps its own scroll.
@@ -147,6 +140,7 @@
   if(event.source!==frame.contentWindow)return;
   const data=event.data;
   if(data?.type==='cairn:headings')return headings(data.items);
+  if(data?.type==='cairn:layout')return place(data);
   const value=data?.type==='cairn:report-height'?data.height:data?.type==='cairn:scroll-to'?data.top:NaN;
   if(!Number.isFinite(value)||value<0||value>200000)return;
   if(data.type==='cairn:report-height'&&flowing&&value>=1)resize(value);
@@ -158,13 +152,20 @@
   event.preventDefault();closeSheet(false);goTo(link.dataset.id,true);
   try{history.replaceState(null,'','#'+encodeURIComponent(link.dataset.id));}catch{}
  });
- if(collapse){
-  const collapsed=on=>{
-   body.classList.toggle('contents-collapsed',on);collapse.setAttribute('aria-expanded',String(!on));
-   const label=on?'Show contents':'Hide contents';collapse.setAttribute('aria-label',label);collapse.title=label;
-  };
-  try{collapsed(localStorage.getItem('cairn:contents')==='hidden');}catch{}
-  collapse.addEventListener('click',()=>{const on=!body.classList.contains('contents-collapsed');collapsed(on);measure();try{localStorage.setItem('cairn:contents',on?'hidden':'shown');}catch{}});
+ // The contents sit in the report's own left margin, beside its text, when the margin has room.
+ const gap=40,edge=20,narrowest=168,widest=260,colour=value=>typeof value==='string'&&value.length<64&&CSS.supports('color',value);
+ function place(report){
+  if(!toc||![report.left,report.lead].every(n=>Number.isFinite(n)&&n>=0&&n<=200000))return;
+  const room=report.left-gap-edge,fits=room>=narrowest;
+  if(fits){
+   const width=Math.min(widest,room);
+   toc.style.setProperty('--toc-left',report.left-gap-width+'px');toc.style.setProperty('--toc-width',width+'px');toc.style.setProperty('--toc-lead',report.lead+'px');
+   if(colour(report.ink))toc.style.setProperty('--toc-ink',report.ink);
+   if(colour(report.accent))toc.style.setProperty('--toc-accent',report.accent);
+   if(colour(report.paper)&&!/^rgba\(.*,\s*0\)$/.test(report.paper)&&report.paper!=='transparent')toc.style.setProperty('--toc-paper',report.paper);
+   if(typeof report.font==='string'&&report.font.length<300&&!/[;{}]/.test(report.font))toc.style.setProperty('--toc-font',report.font);
+  }
+  if(fits!==floating){floating=fits;body.classList.toggle('toc-floating',fits);if(fits&&sheet==='contents')closeSheet(false);}
  }
  function measure(){
   if(!flowing)return;

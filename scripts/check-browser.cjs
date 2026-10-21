@@ -50,7 +50,7 @@ const fs=require('node:fs');const os=require('node:os');const path=require('node
     if(metrics.wide || metrics.layout!==layout || (width===390 && !metrics.table))throw Error(JSON.stringify(metrics));
    }
   }
-  let sections='<p><a id="jump" href="#s4">Section 4</a></p>';for(let i=1;i<=8;i++)sections+=`<h2 id="s${i}">Section ${i}</h2><p>${'Reading text. '.repeat(120)}</p>`;
+  let sections='<style>body{max-width:40rem;margin:2rem auto;font:18px/1.6 Georgia,serif}</style><p><a id="jump" href="#s4">Section 4</a></p>';for(let i=1;i<=8;i++)sections+=`<h2 id="s${i}">Section ${i}</h2><p>${'Reading text. '.repeat(120)}</p>`;
   const flowing=await fetch(base+'/api/pages',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer browser-smoke-token-at-least-32-characters'},body:JSON.stringify({title:'Flowing reader',agent:'ExampleAgent',original_request:'PRIVATE-FLOW',slug:'flowing',html:sections})});
   if(flowing.status!==201)throw Error(await flowing.text());
   await page.setViewportSize({width:1280,height:800});await page.goto(base+'/flowing');
@@ -62,11 +62,11 @@ const fs=require('node:fs');const os=require('node:os');const path=require('node
   if(landed<30||landed>120)throw Error('in-report link landed at '+landed);
   const barShown=()=>page.evaluate(()=>document.querySelector('.compact-reader').classList.contains('is-visible'));
   await page.evaluate(()=>scrollTo(0,400));await page.waitForTimeout(300);await page.mouse.move(640,700);await page.mouse.wheel(0,200);await page.waitForTimeout(400);
-  if(await barShown())throw Error('compact bar stayed visible while scrolling down');
-  await page.mouse.wheel(0,-120);await page.waitForTimeout(400);
-  if(!await barShown())throw Error('compact bar did not return on scroll up');
-  await page.locator('.compact-title').click();await page.getByRole('region',{name:'Page details'}).getByText('PRIVATE-FLOW').waitFor();
+  if(!await barShown())throw Error('compact bar hid while scrolling down');
+    await page.locator('.compact-title').click();await page.getByRole('region',{name:'Page details'}).getByText('PRIVATE-FLOW').waitFor();
   await page.keyboard.press('Escape');if(await page.locator('#reader-details').isVisible())throw Error('Escape did not close page details');
+  const margin=await page.evaluate(()=>{const panel=document.querySelector('.toc-panel').getBoundingClientRect();return document.body.classList.contains('toc-floating')&&panel.right<=document.querySelector('iframe').getBoundingClientRect().left+320});
+  if(!margin)throw Error('contents did not sit in the report margin');
   await page.evaluate(()=>scrollTo(0,0));await page.getByRole('navigation',{name:'Contents'}).getByRole('link',{name:'Section 6'}).click();await page.waitForFunction(()=>document.querySelector('.reader-toc a[aria-current]')?.dataset.id==='s6');
   const railLanded=await page.evaluate(()=>document.querySelector('iframe').getBoundingClientRect().top)+await page.frames().find(f=>f!==page.mainFrame()).evaluate(()=>document.getElementById('s6').getBoundingClientRect().top);
   if(railLanded<30||railLanded>120||await page.evaluate(()=>location.hash)!=='#s6')throw Error('contents link landed at '+railLanded);
