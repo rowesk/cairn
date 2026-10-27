@@ -1,26 +1,22 @@
 # Cairn
 
-A self-hosted report library for AI agents. Turn useful answers into readable pages you can find again and share with a link.
+Cairn is a self-hosted library for reports your AI agents write.
 
-The research took an hour. Finding it in last month's chat shouldn't take another. Cairn gives your comparisons, plans, guides and technical notes a home outside the conversation, with the original request kept alongside them for context.
+When an agent puts together a good hardware comparison, a trip itinerary, or a deep technical note, leaving it in a chat thread means you will probably lose it. Two weeks later you are digging through old conversations trying to remember which window had the table you needed.
+
+Cairn gives your agents a place to publish finished work as standalone web pages. Your pages live in a private, searchable library on your own machine, with the original prompt and the agent's name kept alongside each report so you always know what you asked for.
 
 [Download Cairn](https://github.com/rowesk/cairn/releases/latest) · [Installation guide](docs/install.md) · [Agent publishing API](docs/publishing.md)
 
 ![Cairn's searchable private library with research, planning and technical reports](docs/images/library.png)
 
-## Useful answers, worth keeping
+## What you get
 
-- Find a report by title, original request or author. Filter by agent, preview a page, or archive it for later.
-- Read Markdown as a formatted report, comparison or visual page. Publish custom HTML when the work needs its own layout.
-- Keep tables, images, Mermaid diagrams and interactive ECharts charts with the report. Cairn bundles the diagram and chart libraries locally.
-- Send someone one page without opening your library. Public sharing is optional, with short links and optional passwords.
-- Keep your data on your own machine. One Go binary runs Cairn; SQLite and files hold the library. No external database, Node runtime or AI subscription is required to run it.
+Agents can send plain Markdown using Cairn's built-in report, comparison, or visual templates, or push custom HTML when a problem calls for its own layout. If a report includes Mermaid diagrams, interactive ECharts charts, or local images, Cairn serves them straight from the binary without calling out to external CDNs. Custom scripts run inside a strict sandbox so an ambitious page cannot touch the rest of your library.
 
-Cairn stores and presents the work your agents produce. You choose which agent does the research or writing. You can also write a page in the editor or import an existing file.
+Reading a long report is comfortable on both a monitor and a phone. Cairn builds a table of contents from your headings, tracks where you are on the page, and includes a few preset themes. Back in the library, you can search across titles and original prompts, filter by which agent wrote the page, archive old work, or write and import pages by hand when no agent is involved.
 
-## Made for reading
-
-Reports have their own reading view, with an author byline and the request that prompted them. The layout adapts to a phone, so a saved itinerary or comparison is useful away from your desk too.
+The whole thing is one Go binary backed by SQLite and a directory on disk. It does not need Docker, Node, an external database, or an AI subscription of its own. Drop it on a Raspberry Pi or a small Linux server and forget about it.
 
 <table>
 <tr>
@@ -29,13 +25,13 @@ Reports have their own reading view, with an author byline and the request that 
 </tr>
 </table>
 
-Screenshots show the running application with fictional example reports. [Recreate them](CONTRIBUTING.md#readme-screenshots) from a temporary demo library.
+The screenshots above come from a temporary demo library. You can [recreate them locally](CONTRIBUTING.md#readme-screenshots) if you want to poke around the sample pages.
 
-## Download and start
+## Quick start
 
-Get the Linux archive and `checksums.txt` from [GitHub Releases](https://github.com/rowesk/cairn/releases/latest). Choose `linux_amd64` for an x86-64 PC or server, or `linux_arm64` for a 64-bit Raspberry Pi or ARM server.
+Grab the Linux archive and `checksums.txt` from [GitHub Releases](https://github.com/rowesk/cairn/releases/latest). Use `linux_amd64` for standard x86-64 machines, or `linux_arm64` for a 64-bit Raspberry Pi or ARM server.
 
-For example, on ARM64, with both downloads in the current directory:
+On ARM64, with both files in the current directory:
 
 ```sh
 sha256sum --ignore-missing --check checksums.txt
@@ -46,28 +42,28 @@ cd cairn_v0.1.0_linux_arm64
 ./cairn -data ./data -publisher-token-file ./data/publisher-token
 ```
 
-Open `http://127.0.0.1:8080` on that machine. For a remote server, Tailscale access or a service that starts on boot, follow the [installation guide](docs/install.md). Published binaries require 64-bit Linux.
+Open `http://127.0.0.1:8080` on that machine. If you are putting Cairn on a remote box, exposing it over Tailscale, or setting up systemd so it starts on boot, read the [installation guide](docs/install.md).
 
-The private library has **no login**. Anyone who can reach it can read and manage it. Keep it on localhost or restrict access to the owner and trusted devices. Publishing keys protect the publishing API, not the library UI.
+One important detail: the private library has **no login screen**. Anyone who can reach the private listener can read and manage your pages. Keep it bound to localhost or your own Tailscale network. Publishing keys authenticate the API that agents use, not the web UI.
 
-## Give your agent somewhere to publish
+## Connecting your agents
 
-In **Settings**, add your agent's name and select **Set up key**. Copy the generated instructions into its configuration and keep the key in a secret store. Any agent that can make authenticated HTTP requests and reach your private Cairn address can publish.
+Open **Settings** in the web UI, add an agent by name, and click **Set up key**. Cairn generates a ready-to-paste prompt block explaining how to publish, while you keep the secret key in your agent's environment or secret store. Any tool or agent that can make an HTTP POST request to your Cairn address can publish a page.
 
-Ask it to save the finished work to Cairn and return the page link. Each agent key supplies its byline, can replace that author's pages, and can be rotated or revoked. Agents cannot enable public sharing.
+From there, just ask your agent to save its output to Cairn and give you the link. Each agent gets its own key, attaches its own byline, and can update pages it previously wrote without touching anything else. You can rotate or revoke keys at any time.
 
-For agents and integration developers, start with the [publishing contract](docs/publishing.md). Send Markdown or HTML to `POST /api/pages`; `GET /api` provides a machine-readable index with endpoints, limits and examples. No Cairn-specific SDK is needed.
+If you are wiring up an integration yourself, read the [publishing contract](docs/publishing.md). Agents send Markdown or HTML to `POST /api/pages`, and `GET /api` returns a JSON spec with all endpoints, size limits, and examples. You do not need a client SDK.
 
-## Share a page, keep the library private
+## Sharing individual pages
 
-An optional public listener serves only pages you choose to share. A page keeps the same path on your private and public addresses. Turn sharing off and the private link still works.
+By default, everything stays private. If you want to send a single report to a friend or colleague without exposing the rest of your library, you can start Cairn with an optional public listener and point a tunnel or reverse proxy at that port alone.
 
-New links default to three random letters or numbers, including uppercase and lowercase. These addresses are discoverable, so share content you are comfortable making public or add a password. Original-request metadata stays private; the report body and any downloadable original are part of the shared page. See the [sharing guide](docs/sharing.md).
+When you flip sharing on for a page, it becomes available on your public domain at the same short path it uses privately, defaulting to three random mixed-case characters. Your original prompt stays hidden on the private side, and you can put a password on any shared page if you do not want it open to anyone with the link. Agents cannot turn public sharing on through the API; only you can do that from the UI. See the [sharing guide](docs/sharing.md) for the setup details.
 
-Cairn is for one owner. It has no team accounts, comments, drafts or page history. Replacing a report overwrites its current contents.
+Cairn is built for a single owner. It intentionally skips multi-user accounts, comment threads, draft workflows, and revision history. Updating a page replaces it in place.
 
-## More documentation
+## Documentation
 
 [Writing and importing](docs/authoring.md) · [Backups and upgrades](docs/operations.md) · [Troubleshooting](docs/troubleshooting.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
-Cairn is [MIT licensed](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md) for bundled dependencies.
+Cairn is [MIT licensed](LICENSE). Bundled frontend libraries are listed in [third-party notices](THIRD_PARTY_NOTICES.md).
