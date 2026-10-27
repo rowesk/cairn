@@ -6,6 +6,7 @@
 - One page scroll in the reader at every width: a shorter cover band, a pinned bar with the title, current section and page actions, and a page-details sheet with the byline and full request.
 - Nested contents list from report headings, set in the report's left margin beside its text when there is room and opened from the bar otherwise, with current-section tracking and `#section` deep links.
 - Headings without ids get stable GitHub-style ids when served, so Markdown section links work.
+- Bundles Mermaid 12.2.0, which ships DOMPurify 3.4.17 and KaTeX 0.18.10 and clears the critical advisories npm reported against Mermaid 11.17.2.
 - Builds with Go 1.26.10, which fixes standard-library vulnerabilities in `html/template`, `net/http` and `crypto/x509` reported by govulncheck.
 - Fixed in-report section links that did nothing on phones, and runaway frame heights for HTML reports without a doctype.
 
