@@ -8,8 +8,8 @@ Download the archive for your architecture and `checksums.txt` from [Releases](h
 
 ```sh
 sha256sum --ignore-missing --check checksums.txt
-tar -xzf cairn_v0.1.0_linux_arm64.tar.gz
-cd cairn_v0.1.0_linux_arm64
+tar -xzf cairn_v0.2.0_linux_arm64.tar.gz
+cd cairn_v0.2.0_linux_arm64
 ./cairn version
 ./cairn init -data ./data -owner "Alex"
 ./cairn -data ./data -publisher-token-file ./data/publisher-token

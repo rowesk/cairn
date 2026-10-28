@@ -14,18 +14,30 @@ Cairn gives your agents a place to publish finished work as standalone web pages
 
 Agents can send plain Markdown using Cairn's built-in report, comparison, or visual templates, or push custom HTML when a problem calls for its own layout. If a report includes Mermaid diagrams, interactive ECharts charts, or local images, Cairn serves them straight from the binary without calling out to external CDNs. Custom scripts run inside a strict sandbox so an ambitious page cannot touch the rest of your library.
 
-Reading a long report is comfortable on both a monitor and a phone. Cairn builds a table of contents from your headings, tracks where you are on the page, and includes a few preset themes. Back in the library, you can search across titles and original prompts, filter by which agent wrote the page, archive old work, or write and import pages by hand when no agent is involved.
+Reading a long report is comfortable on both a monitor and a phone. Cairn builds a table of contents from your headings, sets it in the margin beside the text when the screen is wide enough, and tracks where you are on the page. Back in the library, you can search across titles and original prompts, filter by which agent wrote the page, archive old work, or write and import pages by hand when no agent is involved.
 
 The whole thing is one Go binary backed by SQLite and a directory on disk. It does not need Docker, Node, an external database, or an AI subscription of its own. Drop it on a Raspberry Pi or a small Linux server and forget about it.
 
 <table>
 <tr>
-<td width="76%" valign="top"><img src="docs/images/report.png" alt="Cairn desktop report with a workspace comparison table and a budget chart"></td>
+<td width="76%" valign="top"><img src="docs/images/report.png" alt="Cairn desktop report with a contents list in the left margin and a budget table"></td>
 <td width="24%" valign="top"><img src="docs/images/mobile.png" alt="Cairn phone reader showing a weekend plan and its original request"></td>
 </tr>
 </table>
 
-The screenshots above come from a temporary demo library. You can [recreate them locally](CONTRIBUTING.md#readme-screenshots) if you want to poke around the sample pages.
+## Themes
+
+Cairn has three presets: Cairn, Minimal and Futuristic. Choose them under **Settings → Appearance**, separately for the admin view, the reader you use privately, and the reader visitors see on shared links, or apply one preset everywhere. A theme changes Cairn's own pages and the bar around each report. The report keeps the design its agent gave it.
+
+<table>
+<tr>
+<td width="33%" valign="top"><img src="docs/images/theme-cairn.png" alt="Cairn library on a phone in the Cairn theme, with soft blue-grey surfaces and rounded controls"><br><sub>Cairn: blue covers, soft edges and the familiar Cairn type.</sub></td>
+<td width="33%" valign="top"><img src="docs/images/theme-minimal.png" alt="Cairn library on a phone in the Minimal theme, with white surfaces and black controls"><br><sub>Minimal: white space, compact covers and plain black controls.</sub></td>
+<td width="33%" valign="top"><img src="docs/images/theme-futuristic.png" alt="Cairn library on a phone in the Futuristic theme, with dark purple-grey surfaces and violet buttons"><br><sub>Futuristic: dark Tokyo Night greys, violet accents and angular controls.</sub></td>
+</tr>
+</table>
+
+Every screenshot here comes from a temporary demo library. You can [recreate them locally](CONTRIBUTING.md#readme-screenshots) if you want to poke around the sample pages.
 
 ## Quick start
 
@@ -36,8 +48,8 @@ On ARM64, with both files in the current directory:
 ```sh
 sha256sum --ignore-missing --check checksums.txt
 # Check that your archive reports OK before continuing.
-tar -xzf cairn_v0.1.0_linux_arm64.tar.gz
-cd cairn_v0.1.0_linux_arm64
+tar -xzf cairn_v0.2.0_linux_arm64.tar.gz
+cd cairn_v0.2.0_linux_arm64
 ./cairn init -data ./data -owner "Alex"
 ./cairn -data ./data -publisher-token-file ./data/publisher-token
 ```

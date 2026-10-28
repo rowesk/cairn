@@ -38,4 +38,4 @@ After building `cairn` and installing the browser-check dependencies above, run:
 node scripts/capture-demo.cjs
 ```
 
-The script starts Cairn on localhost with a temporary library, publishes fictional example reports, and captures the library and desktop/mobile readers using headless Chromium. It writes the images to `docs/images/`, closes the browser and server, then removes the demo data. It does not use your running Cairn instance or personal reports.
+The script starts Cairn on localhost with a temporary library, publishes fictional example reports, and captures the library, the desktop and mobile readers, and the library in each theme using headless Chromium. It writes the images to `docs/images/`, closes the browser and server, then removes the demo data. It does not use your running Cairn instance or personal reports.
