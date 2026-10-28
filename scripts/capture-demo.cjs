@@ -44,7 +44,7 @@ const path = require('node:path');
       {
         title: 'A weekend away, with room to stop', agent: 'Planning assistant', slug: 'w7K',
         original_request: 'Sketch a relaxed weekend with a walk, good food and no early starts.',
-        markdown: '# Leave the morning open\n\nTake a walk after lunch, then stop somewhere for tea. Keep Sunday free until you know the weather.\n\n## Before leaving\n\n- Check the forecast\n- Book somewhere for dinner\n- Download the route for offline use'
+        markdown: '# Leave the morning open\n\nTake a walk after lunch, then stop somewhere for tea. Keep Sunday free until you know the weather.\n\n## Before leaving\n\n- Check the forecast\n- Book somewhere for dinner\n- Download the route for offline use\n\n## Saturday\n\nArrive after lunch and walk the river path while it is still light. Eat early and leave the evening free.\n\n## Sunday\n\nSleep in. If it rains, swap the hill walk for the gallery and a long breakfast.'
       },
       {
         title: 'How the backup gets home', agent: 'Coding assistant', slug: 'b2M',
@@ -55,8 +55,7 @@ const path = require('node:path');
         title: 'The spare room, ready for work', agent: 'Research assistant', slug: 'd3S',
         original_request: 'Compare a few changes to the spare room. Keep the example budget under £200.',
         request_summary: 'Compare practical workspace improvements for a fictional £200 budget.',
-        template: 'comparison',
-        markdown: '# Start with the light\n\nMove the desk beside the window, then add a task lamp for evenings. Keep the rest of the budget for the changes you still notice after a week.\n\n## A small budget, deliberately spent\n\nIllustrative costs for this demo, not product recommendations.\n\n| Change | Why it earns its place | Budget |\n|---|---|---:|\n| Adjustable task lamp | Light where you read, without lighting the whole room | £45 |\n| Desk mat | A softer surface for the keyboard and mouse | £25 |\n| Cable tray | Clears the floor and makes cleaning easier | £20 |\n| Keep in reserve | Spend after trying the room for a week | £110 |\n\n## Where the £200 goes\n\n```echarts\n' + JSON.stringify({animation: false, color: ['#426b80'], grid: {left: 100, right: 30, top: 16, bottom: 30}, xAxis: {type: 'value', axisLabel: {formatter: '£{value}'}}, yAxis: {type: 'category', data: ['Cable tray', 'Desk mat', 'Task lamp', 'Reserve']}, series: [{type: 'bar', data: [20, 25, 45, 110], barWidth: 24, itemStyle: {borderRadius: [0, 5, 5, 0]}}]}) + '\n```'
+        markdown: '# Start with the light\n\nMove the desk beside the window, then add a task lamp for evenings. Keep the rest of the budget for the changes you still notice after a week.\n\n## What the room needs\n\nThe room gets good light until mid-afternoon. After that the desk sits in shadow, the floor collects cables and the chair faces a blank wall.\n\n### Light first\n\nA lamp fixes the evening problem without rewiring anything.\n\n### Then the floor\n\nA cable tray under the desk keeps the floor clear for cleaning.\n\n## A small budget, deliberately spent\n\nIllustrative costs for this demo, not product recommendations.\n\n| Change | Why it earns its place | Budget |\n|---|---|---:|\n| Adjustable task lamp | Light where you read, without lighting the whole room | £45 |\n| Desk mat | A softer surface for the keyboard and mouse | £25 |\n| Cable tray | Clears the floor and makes cleaning easier | £20 |\n| Keep in reserve | Spend after trying the room for a week | £110 |\n\n## Where the £200 goes\n\n```echarts\n' + JSON.stringify({animation: false, color: ['#426b80'], grid: {left: 100, right: 30, top: 16, bottom: 30}, xAxis: {type: 'value', axisLabel: {formatter: '£{value}'}}, yAxis: {type: 'category', data: ['Cable tray', 'Desk mat', 'Task lamp', 'Reserve']}, series: [{type: 'bar', data: [20, 25, 45, 110], barWidth: 24, itemStyle: {borderRadius: [0, 5, 5, 0]}}]}) + '\n```\n\n## After a week\n\nSit in the room for a few evenings before spending the reserve. Most people find the lamp and the tray solve more than they expected.'
       }
     ];
     for (const entry of examples) {
@@ -67,23 +66,40 @@ const path = require('node:path');
       if (response.status !== 201) throw Error(await response.text());
     }
     browser = await chromium.launch({headless: true});
-    const page = await browser.newPage({viewport: {width: 1440, height: 850}, deviceScaleFactor: 1});
-    fs.mkdirSync('docs/images', {recursive: true});
+    // Reduced motion skips the contents fade-in so the list is captured fully drawn.
+    const page = await browser.newPage({viewport: {width: 1440, height: 850}, deviceScaleFactor: 1, reducedMotion: 'reduce'});
+    const out = process.env.CAIRN_DEMO_OUT || 'docs/images';
+    fs.mkdirSync(out, {recursive: true});
+    const settle = async () => { for (const frame of page.frames()) await frame.evaluate(() => document.fonts.ready); };
+    const useTheme = async id => {
+      await page.goto(base + '/settings');
+      for (const view of ['admin', 'reader', 'public']) await page.selectOption('#' + view + '-theme', id);
+      await Promise.all([page.waitForURL('**/settings*'), page.locator('#theme-form button:not([type=button])').click()]);
+    };
+    await page.setViewportSize({width: 390, height: 844});
+    for (const theme of ['minimal', 'futuristic', 'cairn']) {
+      await useTheme(theme);
+      await page.goto(base + '/');
+      await settle();
+      await page.screenshot({path: path.join(out, 'theme-' + theme + '.png')});
+    }
+    await page.setViewportSize({width: 1440, height: 850});
     await page.goto(base + '/');
-    await page.evaluate(() => document.fonts.ready);
-    await page.screenshot({path: 'docs/images/library.png'});
-    await page.setViewportSize({width: 1440, height: 1340});
+    await settle();
+    await page.screenshot({path: path.join(out, 'library.png')});
+    await page.setViewportSize({width: 1440, height: 1100});
     await page.goto(base + '/d3S');
     await page.frameLocator('iframe').locator('canvas').waitFor();
-    for (const frame of page.frames()) await frame.evaluate(() => document.fonts.ready);
-    await page.screenshot({path: 'docs/images/report.png'});
+    await settle();
+    await page.locator('body.toc-floating').waitFor();
+    await page.screenshot({path: path.join(out, 'report.png')});
     await page.setViewportSize({width: 390, height: 844});
     await page.goto(base + '/w7K');
     await page.frameLocator('iframe').locator('h1').waitFor();
-    for (const frame of page.frames()) await frame.evaluate(() => document.fonts.ready);
+    await settle();
     await page.waitForFunction(() => document.querySelector('iframe').getBoundingClientRect().height > 400);
-    await page.screenshot({path: 'docs/images/mobile.png'});
-    console.log('Captured library, report and mobile screenshots from fictional demo data.');
+    await page.screenshot({path: path.join(out, 'mobile.png')});
+    console.log('Captured library, report, mobile and theme screenshots from fictional demo data.');
   } finally {
     if (browser) await browser.close();
     if (child.exitCode === null && child.signalCode === null) {
