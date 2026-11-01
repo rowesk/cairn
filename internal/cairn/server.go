@@ -45,6 +45,7 @@ type publication struct {
 	Share           bool              `json:"-"`
 	PublicSlug      string            `json:"-"`
 	Source          *sourceFile       `json:"-"`
+	File            bool              `json:"-"`
 	Capabilities    []string          `json:"capabilities"`
 	Markdown        string            `json:"markdown"`
 	Template        string            `json:"template"`
@@ -61,6 +62,8 @@ type savedPage struct {
 	ID, Slug, Title, Agent, OriginalRequest, CreatedAt, Object string
 	RequestSummary, RequestSource                              string
 	FileName                                                   string
+	File                                                       bool
+	FileSize                                                   int64
 }
 
 func Open(cfg Config) (*Server, error) {
@@ -144,6 +147,23 @@ func Open(cfg Config) (*Server, error) {
 			return nil, err
 		}
 	}
+	for column, definition := range map[string]string{"file_page": "INTEGER NOT NULL DEFAULT 0", "file_name": "TEXT NOT NULL DEFAULT ''", "file_size": "INTEGER NOT NULL DEFAULT 0"} {
+		if _, err := db.Exec("SELECT " + column + " FROM pages LIMIT 0"); err != nil {
+			if _, err := db.Exec("ALTER TABLE pages ADD COLUMN " + column + " " + definition); err != nil {
+				db.Close()
+				return nil, err
+			}
+		}
+	}
+	// Interrupted uploads leave only temporary files here; the lock is held.
+	if err := os.RemoveAll(filepath.Join(cfg.DataDir, "uploads")); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := os.Mkdir(filepath.Join(cfg.DataDir, "uploads"), 0700); err != nil {
+		db.Close()
+		return nil, err
+	}
 	if err := os.Chmod(filepath.Join(cfg.DataDir, "cairn.sqlite"), 0600); err != nil {
 		db.Close()
 		return nil, err
@@ -219,6 +239,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.publish(w, r)
 		return
 	}
+	if (r.URL.Path == "/api/files" && r.Method == http.MethodPost) || (strings.HasPrefix(r.URL.Path, "/api/files/") && r.Method == http.MethodPut) {
+		s.publishFile(w, r)
+		return
+	}
 	if r.URL.Path == "/api" {
 		s.apiIndex(w, r)
 		return
@@ -236,7 +260,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.mu.RLock()
-	defer s.mu.RUnlock()
+	unlocked := false
+	unlock := func() {
+		if !unlocked {
+			unlocked = true
+			s.mu.RUnlock()
+		}
+	}
+	defer unlock()
 	if r.URL.Path == "/" {
 		s.library(w, r)
 		return
@@ -276,7 +307,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Query().Get("download") == "1" {
-		s.downloadSource(w, r, p)
+		s.serveSource(w, r, p, unlock)
 		return
 	}
 	if content && r.URL.Query().Has("asset") {
@@ -304,7 +335,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) getPage(slug string) (savedPage, error) {
 	var p savedPage
-	err := s.db.QueryRow(`SELECT id,slug,title,agent,original_request,created_at,object,request_summary,request_source FROM pages WHERE slug=?`, slug).Scan(&p.ID, &p.Slug, &p.Title, &p.Agent, &p.OriginalRequest, &p.CreatedAt, &p.Object, &p.RequestSummary, &p.RequestSource)
+	err := s.db.QueryRow(`SELECT id,slug,title,agent,original_request,created_at,object,request_summary,request_source,file_page,file_size FROM pages WHERE slug=?`, slug).Scan(&p.ID, &p.Slug, &p.Title, &p.Agent, &p.OriginalRequest, &p.CreatedAt, &p.Object, &p.RequestSummary, &p.RequestSource, &p.File, &p.FileSize)
 	if err == nil {
 		p.FileName = s.sourceName(p)
 	}
@@ -378,7 +409,7 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 	replace := r.Method == http.MethodPut
 	var previous savedPage
 	if replace {
-		slug := strings.TrimPrefix(r.URL.Path, "/api/pages/")
+		slug := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/api/pages/"), "/api/files/")
 		if !validSlug(slug) {
 			writeAPIError(w, http.StatusNotFound, ErrNotFound, "no such page", false)
 			return
@@ -451,15 +482,20 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 			in.RequestSource = previous.RequestSource
 		}
 	}
+	var fileName string
+	var fileSize int64
+	if in.File && in.Source != nil {
+		fileName, fileSize = in.Source.Name, in.Source.Size
+	}
 	object, err := s.writeObject(in)
 	if err != nil {
 		writeAPIError(w, http.StatusInternalServerError, ErrStorageUnavailable, "storage unavailable", true)
 		return
 	}
 	if replace {
-		_, err = s.db.Exec(`UPDATE pages SET title=?,agent=?,original_request=?,object=?,preview=?,request_summary=?,request_source=? WHERE id=?`, in.Title, in.Agent, in.OriginalRequest, object, previewText(in.HTML), in.RequestSummary, in.RequestSource, id)
+		_, err = s.db.Exec(`UPDATE pages SET title=?,agent=?,original_request=?,object=?,preview=?,request_summary=?,request_source=?,file_page=?,file_name=?,file_size=? WHERE id=?`, in.Title, in.Agent, in.OriginalRequest, object, previewText(in.HTML), in.RequestSummary, in.RequestSource, in.File, fileName, fileSize, id)
 	} else {
-		_, err = s.db.Exec(`INSERT INTO pages (id,slug,title,agent,original_request,created_at,object,preview,request_summary,request_source,share_enabled,public_slug) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, id, in.Slug, in.Title, in.Agent, in.OriginalRequest, created, object, previewText(in.HTML), in.RequestSummary, in.RequestSource, in.Share, func() any {
+		_, err = s.db.Exec(`INSERT INTO pages (id,slug,title,agent,original_request,created_at,object,preview,request_summary,request_source,file_page,file_name,file_size,share_enabled,public_slug) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, in.Slug, in.Title, in.Agent, in.OriginalRequest, created, object, previewText(in.HTML), in.RequestSummary, in.RequestSource, in.File, fileName, fileSize, in.Share, func() any {
 			if in.Share {
 				return in.PublicSlug
 			}
@@ -506,11 +542,14 @@ func (s *Server) apiIndex(w http.ResponseWriter, r *http.Request) {
 			{"method": "GET", "path": "/api", "description": "This index: version, endpoints, limits and examples."},
 			{"method": "POST", "path": "/api/pages", "description": "Publish a private page. Body: title, agent or key byline, original_request, exactly one of html or markdown, optional slug, template, capabilities, assets, request_summary, request_source."},
 			{"method": "PUT", "path": "/api/pages/{slug}", "description": "Replace a page completely. The slug cannot change; omitted assets are removed."},
+			{"method": "POST", "path": "/api/files", "description": "Publish a private file page from multipart/form-data: one file part named file, plus original_request and optional title, slug, request_summary, request_source text fields."},
+			{"method": "PUT", "path": "/api/files/{slug}", "description": "Replace a page completely with a file page. The slug cannot change."},
 		},
 		"reading": map[string]string{
-			"reader":  "GET /{slug} renders the private owner reader with metadata.",
-			"content": "GET /_content/{slug} renders report HTML only, without private metadata.",
-			"asset":   "GET /_content/{slug}?asset=name.png or GET /_assets/{slug}/name.png serves that page's managed image.",
+			"reader":   "GET /{slug} renders the private owner reader with metadata.",
+			"content":  "GET /_content/{slug} renders report HTML only, without private metadata.",
+			"asset":    "GET /_content/{slug}?asset=name.png or GET /_assets/{slug}/name.png serves that page's managed image.",
+			"download": "GET /{slug}?download=1 downloads a file page's file or an imported page's original.",
 		},
 		"limits": map[string]any{
 			"request_bytes":      16 << 20,
@@ -518,6 +557,8 @@ func (s *Server) apiIndex(w http.ResponseWriter, r *http.Request) {
 			"markdown_bytes":     2 << 20,
 			"asset_bytes_each":   4 << 20,
 			"asset_count":        32,
+			"file_bytes":         maxFileBytes,
+			"file_request_bytes": maxUploadRequestBytes,
 			"default_slug_chars": 3,
 			"slug_chars":         s.preferences().LinkLength,
 		},

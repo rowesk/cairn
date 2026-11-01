@@ -8,6 +8,7 @@
 | Agent receives 403 on replacement | Its key can replace only pages with its exact author name. Browser-origin API requests are also refused. |
 | Publication returns 409 | The path is already used or reserved. Use another path or explicitly replace the intended page. Do not blindly retry creation after a timeout. |
 | Publication returns 413 | The JSON request exceeds 16 MiB, including base64 image overhead. Reduce the image payload. |
+| File upload returns 413 | The file exceeds 50 MiB. Split or compress it, or keep it elsewhere and link to it from a page. |
 | Address already in use | Select an unused loopback port and update Tailscale/proxy configuration to match. |
 | Listener address is refused | Use localhost or a Tailscale address assigned to the server. Do not use 0.0.0.0. |
 | Data directory is already in use | Another Cairn process owns it. Stop that process; do not remove the lock to bypass it. |

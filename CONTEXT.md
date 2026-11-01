@@ -8,6 +8,10 @@ Cairn keeps pages made from chat requests in the owner's private, searchable lib
 
 A saved answer intended to be read outside chat, with a title, its creating agent, creation date, and the request that prompted it.
 
+### File page
+
+A page whose content is one stored file, shown with a filetype icon, its name, size and a download button. Cairn keeps the file as uploaded and never opens or runs it.
+
 ### Library
 
 the owner's private collection of saved pages. Sharing a page does not grant access to the library.

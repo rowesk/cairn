@@ -27,19 +27,21 @@ type readerData struct {
 	Theme                                                                         string
 	Title, Agent, CreatedAt, Slug, FileName, Request, Link, Format, RequestSource string
 	Photo                                                                         template.URL
-	Owner, Shared, Protected                                                      bool
+	Owner, Shared, Protected, File                                                bool
+	FileSize                                                                      int64
 	Contents                                                                      []*contentsEntry
 }
 
 func (s *Server) renderReader(w http.ResponseWriter, r *http.Request, p savedPage, route string, owner, shared, protected bool, link string) {
-	d := readerData{Title: p.Title, Agent: p.Agent, CreatedAt: p.CreatedAt, Slug: route, FileName: p.FileName, Owner: owner, Shared: shared, Protected: protected, Link: link}
+	d := readerData{Title: p.Title, Agent: p.Agent, CreatedAt: p.CreatedAt, Slug: route, FileName: p.FileName, Owner: owner, Shared: shared, Protected: protected, Link: link, File: p.File && p.FileName != "", FileSize: p.FileSize}
 	themes := s.themes()
 	d.Theme = themes.Public
 	if owner {
 		d.Theme = themes.Reader
 	}
 	d.Photo = s.authorPhoto(p.Agent)
-	if data, err := os.ReadFile(filepath.Join(s.cfg.DataDir, "objects", p.Object, "page.html")); err == nil {
+	// A file page shows the file itself; its stored description has no sections.
+	if data, err := os.ReadFile(filepath.Join(s.cfg.DataDir, "objects", p.Object, "page.html")); err == nil && !d.File {
 		_, headings := reportHeadings(string(data))
 		d.Contents = reportContents(headings, route)
 	}

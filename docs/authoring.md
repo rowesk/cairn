@@ -6,7 +6,7 @@ Saved Markdown can be downloaded from the full-page reader. Cairn keeps the sour
 
 ## Imports
 
-The main upload limit is 10 MiB. Text input must be UTF-8 and at most 2 MiB. Images must fit 4 MiB each. The total multipart request, including supporting images, must fit 16 MiB.
+Import accepts any file up to 50 MiB. Cairn opens a file as a page when it can: UTF-8 text up to 2 MiB, images up to 4 MiB and DOCX up to 10 MiB. Everything else, including those types over their limits, becomes a file page with a filetype icon, the filename, size and a **Download** button. Tick **Save as a download page** to keep a file you could otherwise read as a page, such as a Markdown file you want to hand on unchanged. Supporting images must fit 4 MiB each.
 
 | File | Reading view |
 | --- | --- |
@@ -16,15 +16,15 @@ The main upload limit is 10 MiB. Text input must be UTF-8 and at most 2 MiB. Ima
 | Mermaid, MMD | Diagram using Cairn's bundled Mermaid runtime |
 | PHP, SVG | Escaped source text, never server execution |
 | DOCX | Extracted paragraph text; original retains formatting and embedded content |
-| PDF, DOC, ODT, RTF | Document page with the original available for download |
+| Anything else: ZIP, PDF, XLSX, PSD, video, large images | File page with icon, size and **Download** |
 
-A blank title uses the filename. Author and private context have defaults; optional details let you change them. All imports retain the original bytes. Full-page readers show **Download original**. Documents viewed in the library preview can be opened with **Open page** to reach the download.
+A blank title uses the filename. Author and private context have defaults; optional details let you change them. All imports retain the original bytes. Readers of rendered imports show **Download original**. File pages show their icon in the library, with the filename, type and size in place of an excerpt.
 
 ## Storage and access
 
 Original files use fixed internal names, `source.bin` and `source.json`, within the page's object directory. The uploaded filename is metadata and never a filesystem path. Cairn streams originals as `application/octet-stream` with attachment disposition, `nosniff`, a restrictive CSP and `no-store`.
 
-Public downloads pass the same explicit sharing and password checks as their page. Unsharing or deleting the page removes access to its original too. Deletion removes the entire stored object. No PHP interpreter, office conversion process, database migration or additional Pi service is required.
+Uploads stream to `uploads/` inside the data directory and are renamed into the page's object once complete, so a 50 MiB file never sits in memory. Cairn empties `uploads/` at startup. Public downloads pass the same explicit sharing and password checks as their page. Unsharing or deleting the page removes access to its original too. Deletion removes the entire stored object. File pages add three columns to the `pages` table at startup; existing pages are unchanged. No PHP interpreter, office conversion process or additional Pi service is required.
 
 ## Editor links, sharing and pasted images
 

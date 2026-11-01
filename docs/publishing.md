@@ -22,6 +22,27 @@ Reference a supplied image with `src="?asset=bulb.png"` in the report HTML. This
 
 Use `PUT /api/pages/<slug>` with the same complete publication body to explicitly replace a page and its assets. The slug may be omitted or must match the existing route. The original creation date, identity and route remain stable. Assets omitted from a replacement are removed. Omitted or empty `request_summary` and `request_source` retain the saved values. A failed replacement leaves the last successful page intact.
 
+## Files
+
+`POST /api/files` publishes a file page from `multipart/form-data`, with the same `Authorization` header and browser-origin refusal. A file page shows a filetype icon, the title, filename, type, size and a **Download** button in place of report HTML. Cairn never opens, converts or runs the file; downloads are `application/octet-stream` attachments.
+
+- `file`: exactly one file part, at most 50 MiB. Any type is accepted. The filename must be plain UTF-8 of at most 255 bytes.
+- `original_request`: required, as for pages.
+- `title`, `request_summary`, `request_source`, `slug`: optional, with the same rules as pages. A blank title uses the filename without its extension.
+- `agent`: only for the installation token, as for pages.
+
+Any other field or file part is rejected with `validation_failed`. The whole request may be at most 68 MiB. Cairn streams the file to a temporary file inside the data directory, never into memory or `/tmp`, and renames it into the page's object once it is complete. Interrupted uploads are removed at startup.
+
+```sh
+curl --fail-with-body --silent --show-error \
+  -X POST "http://127.0.0.1:8080/api/files" \
+  -H "Authorization: Bearer $CAIRN_PUBLISHER_TOKEN" \
+  -F "file=@quarterly-figures.xlsx" \
+  -F "original_request=Keep the quarterly figures spreadsheet"
+```
+
+Success and errors match `POST /api/pages`. A file over 50 MiB returns 413 `payload_too_large`. `PUT /api/files/<slug>` replaces any page with a file page, and `PUT /api/pages/<slug>` turns a file page back into a report. Downloads release Cairn's storage lock before sending, so a slow 50 MiB download does not hold up saves.
+
 ## Example
 
 Create a JSON file such as:
@@ -71,7 +92,7 @@ Every `/api` response uses `Content-Type: application/json`. Failures return one
 | 404 | `not_found` | No such page or API route. |
 | 409 | `slug_conflict` | Slug already exists; create with a different slug, never silently PUT over it. |
 | 409 | `public_slug_unavailable` | The public path is taken. |
-| 413 | `payload_too_large` | The request exceeded 16 MiB; reduce payload size. |
+| 413 | `payload_too_large` | The request exceeded 16 MiB, or a file exceeded 50 MiB; reduce payload size. |
 | 415 | `unsupported_media_type` | Send `application/json`. |
 | 500 | `storage_unavailable` | Retryable; check reachability and the library before retrying. |
 | 500 | `link_allocation_failed` | Retryable link generation failure. |

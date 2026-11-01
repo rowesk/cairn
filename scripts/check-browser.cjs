@@ -80,6 +80,18 @@ const fs=require('node:fs');const os=require('node:os');const path=require('node
   await page.getByRole('button',{name:'Save private page'}).click();await page.waitForURL('**/import-check',{timeout:5000}).catch(async()=>{throw Error('Import failed at '+page.url()+': '+await page.locator('body').innerText())});
   await page.frameLocator('iframe').getByRole('heading',{name:'Imported from a file'}).waitFor();
   await page.goto(base+'/import');
+  await page.locator('[name=document]').setInputFiles({name:'Holiday photos.zip',mimeType:'application/zip',buffer:Buffer.alloc(3<<20,7)});
+  await page.locator('details summary').click();await page.locator('[name=slug]').fill('file-check');
+  await page.getByRole('button',{name:'Save private page'}).click();await page.waitForURL('**/file-check');
+  for(const width of [390,1280]){
+   await page.setViewportSize({width,height:844});await page.goto(base+'/file-check');await page.locator('.file-page .file-icon-archive').waitFor();
+   const card=await page.evaluate(()=>({frame:!!document.querySelector('iframe'),wide:document.documentElement.scrollWidth>innerWidth+1,name:document.querySelector('.file-name').textContent,facts:document.querySelector('.file-facts').textContent,icon:document.querySelector('.file-page .file-icon').getBoundingClientRect().width}));
+   if(card.frame||card.wide||card.name!=='Holiday photos.zip'||card.facts!=='ZIP archive · 3 MB'||card.icon<40)throw Error('file page: '+JSON.stringify(card));
+  }
+  const [saved]=await Promise.all([page.waitForEvent('download'),page.getByRole('link',{name:'Download',exact:true}).click()]);
+  if(saved.suggestedFilename()!=='Holiday photos.zip')throw Error('file download named '+saved.suggestedFilename());
+  await page.goto(base+'/');await page.locator('.report-row .file-mark .file-icon-archive').waitFor();
+  await page.goto(base+'/import');
   await page.locator('[name=document]').setInputFiles({name:'custom.html',mimeType:'text/html',buffer:Buffer.from('<h1>Custom HTML import</h1>')});
   await page.locator('[name=title]').fill('Custom HTML');await page.locator('details summary').click();await page.locator('[name=agent]').fill('the owner');await page.locator('[name=original_request]').fill('Private HTML request');await page.locator('[name=slug]').fill('html-import');
   await page.getByRole('button',{name:'Save private page'}).click();await page.waitForURL('**/html-import');await page.frameLocator('iframe').getByRole('heading',{name:'Custom HTML import'}).waitFor();

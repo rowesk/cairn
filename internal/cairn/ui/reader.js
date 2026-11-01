@@ -47,6 +47,7 @@
 
 (() => {
  const root=document.documentElement,body=document.body,frame=document.querySelector('.reading-shell>iframe'),bar=document.querySelector('.compact-reader'),nav=document.querySelector('.reading-nav'),toggle=bar.querySelector('.compact-title'),details=document.querySelector('#reader-details'),scrim=document.querySelector('.reader-scrim'),progress=bar.querySelector('.reading-progress'),reduced=matchMedia('(prefers-reduced-motion: reduce)');
+ if(!frame)return;
  const toc=document.querySelector('.reader-toc'),contentsButton=bar.querySelector('.compact-contents'),section=bar.querySelector('.compact-section'),panel=toc?.querySelector('.toc-panel');
  const links=toc?[...toc.querySelectorAll('a[data-id]')]:[],controls=[...bar.querySelectorAll('a,button')];
  // Bar height plus breathing room, so a jumped-to heading is not hidden under the bar.

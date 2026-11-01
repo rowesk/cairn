@@ -31,7 +31,12 @@ func (s *Server) writeObject(in publication) (object string, err error) {
 		if err = writeSynced(filepath.Join(dir, "source.json"), metadata); err != nil {
 			return "", err
 		}
-		if err = writeSynced(filepath.Join(dir, "source.bin"), in.Source.Data); err != nil {
+		if in.Source.Path != "" {
+			err = os.Rename(in.Source.Path, filepath.Join(dir, "source.bin"))
+		} else {
+			err = writeSynced(filepath.Join(dir, "source.bin"), in.Source.Data)
+		}
+		if err != nil {
 			return "", err
 		}
 	}
