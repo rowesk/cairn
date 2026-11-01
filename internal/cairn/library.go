@@ -15,7 +15,9 @@ import (
 
 type libraryItem struct {
 	Slug, Title, Agent, OriginalRequest, CreatedAt, Preview string
-	Archived, Shared, Protected                             bool
+	FileName                                                string
+	Archived, Shared, Protected, File                       bool
+	FileSize                                                int64
 	Photo                                                   template.URL
 }
 type libraryViewData struct {
@@ -30,14 +32,14 @@ type libraryViewData struct {
 func (s *Server) library(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	data := libraryViewData{Theme: s.themes().Admin, Query: q.Get("q"), Agent: q.Get("agent"), Archived: q.Get("archived") == "1", Shared: q.Get("shared") == "1" && q.Get("archived") != "1"}
-	rows, err := s.db.Query(`SELECT slug,title,agent,coalesce(nullif(request_summary,''),original_request),created_at,preview,archived,share_enabled,coalesce(password_hash,'')!='' FROM pages WHERE archived=? AND (?=0 OR share_enabled=1) AND (?='' OR agent=?) AND (?='' OR instr(lower(title),lower(?))>0 OR instr(lower(original_request),lower(?))>0 OR instr(lower(request_summary),lower(?))>0) ORDER BY created_at DESC,rowid DESC`, data.Archived, data.Shared, data.Agent, data.Agent, data.Query, data.Query, data.Query, data.Query)
+	rows, err := s.db.Query(`SELECT slug,title,agent,coalesce(nullif(request_summary,''),original_request),created_at,preview,archived,share_enabled,coalesce(password_hash,'')!='',file_page,file_name,file_size FROM pages WHERE archived=? AND (?=0 OR share_enabled=1) AND (?='' OR agent=?) AND (?='' OR instr(lower(title),lower(?))>0 OR instr(lower(original_request),lower(?))>0 OR instr(lower(request_summary),lower(?))>0) ORDER BY created_at DESC,rowid DESC`, data.Archived, data.Shared, data.Agent, data.Agent, data.Query, data.Query, data.Query, data.Query)
 	if err != nil {
 		http.Error(w, "library unavailable", 500)
 		return
 	}
 	for rows.Next() {
 		var p libraryItem
-		if err := rows.Scan(&p.Slug, &p.Title, &p.Agent, &p.OriginalRequest, &p.CreatedAt, &p.Preview, &p.Archived, &p.Shared, &p.Protected); err != nil {
+		if err := rows.Scan(&p.Slug, &p.Title, &p.Agent, &p.OriginalRequest, &p.CreatedAt, &p.Preview, &p.Archived, &p.Shared, &p.Protected, &p.File, &p.FileName, &p.FileSize); err != nil {
 			rows.Close()
 			http.Error(w, "library unavailable", 500)
 			return

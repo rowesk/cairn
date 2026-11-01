@@ -50,12 +50,28 @@ Disable shell tracing and avoid verbose request logging. Prefer your HTTP client
 
 Success is HTTP 201 with JSON containing id and url, for example {"id":"...","url":"/AbC"}. Resolve the returned url against the private origin, fetch that page and check the saved content before claiming success. Preview custom layouts, diagrams and images when a headless renderer is available. If the response includes a warning, preserve and report it.
 
+## Publish a file
+
+When the owner wants a file kept rather than a report, such as a ZIP, spreadsheet, PDF, Photoshop file or large image, POST it to {{ORIGIN}}/api/files as multipart/form-data with the same Authorization header. Cairn makes a file page: a filetype icon, the title, filename, size and a Download button. It never opens or runs the file.
+
+Send one file part named file, at most 50 MiB, and text fields original_request (required), plus optional title, request_summary, request_source and slug with the same rules as a page. A blank title uses the filename without its extension. Any other field is rejected.
+
+curl --fail-with-body --silent --show-error \
+  -X POST "$CAIRN_BASE_URL/api/files" \
+  -H "Authorization: Bearer $CAIRN_API_KEY" \
+  -F "file=@quarterly-figures.xlsx" \
+  -F "original_request=Keep the quarterly figures spreadsheet" \
+  -F "request_summary=Keep the quarterly figures spreadsheet." \
+  -F "request_source=Codex CLI"
+
+The response matches a page: HTTP 201 with id and url. A file over 50 MiB returns 413 payload_too_large. Only replace a file when the owner asks, with PUT /api/files/{existing-slug} and a complete new upload.
+
 ## Reading pages and images
 
 - `GET /{slug}` is the private owner reader: title, byline, date and private request context around the report.
 - `GET /_content/{slug}` is the rendered report HTML only, without private metadata. It is the content route, not the page metadata API.
 - `GET /_content/{slug}?asset=name.png` serves that page's own managed image, independent of knowing a generated slug at publish time. `GET /_assets/{slug}/name.png` serves the same bytes once the slug is known.
-- `GET /{slug}?download=1` downloads the submitted source file where one exists.
+- `GET /{slug}?download=1` downloads a file page's file, or the submitted source file of an imported page where one exists.
 
 ## Images, diagrams and interactive content
 

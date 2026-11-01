@@ -1,0 +1,63 @@
+/* File page icons. Hues mix toward --ink so they darken on light themes and lift on dark ones. */
+.file-icon {
+  --file-hue: var(--muted);
+  display: block;
+  width: 72px;
+  height: auto;
+  flex: none;
+  overflow: visible;
+  color: color-mix(in oklab, var(--file-hue) 78%, var(--ink));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.file-icon-sheet {
+  fill: var(--paper);
+  stroke: color-mix(in oklab, currentColor 35%, var(--line));
+  stroke-width: 1.5;
+}
+.file-icon-fold {
+  fill: color-mix(in oklab, currentColor 14%, var(--paper));
+  stroke: color-mix(in oklab, currentColor 35%, var(--line));
+  stroke-width: 1.5;
+}
+.file-icon-glyph {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.file-icon-band { fill: currentColor; }
+.file-icon-label {
+  fill: var(--paper);
+  font: 700 9.5px/1 var(--ui-font, sans-serif);
+  letter-spacing: .04em;
+}
+.file-icon-archive { --file-hue: #b7791f; }
+.file-icon-spreadsheet { --file-hue: #2f9e5b; }
+.file-icon-document { --file-hue: #3b7dd8; }
+.file-icon-presentation { --file-hue: #e0702f; }
+.file-icon-image { --file-hue: #1f9ab0; }
+.file-icon-design { --file-hue: #8a5cd6; }
+.file-icon-audio { --file-hue: #d6487e; }
+.file-icon-video { --file-hue: #c2453a; }
+.file-icon-code { --file-hue: #4f6bd1; }
+.file-icon-data { --file-hue: #6b8a2e; }
+.file-icon-pdf { --file-hue: #d43c3c; }
+.file-icon-other { --file-hue: var(--muted); }
+
+/* File page: one card in place of the report frame. */
+.file-page { padding: clamp(28px, 6vw, 72px) 4vw 96px; }
+.file-card { max-width: 720px; margin: 0 auto; padding: 28px; display: flex; align-items: center; gap: 24px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; }
+.file-details { flex: 1; min-width: 0; }
+.file-name { font-size: 17px; font-weight: 500; overflow-wrap: anywhere; }
+.file-facts { margin-top: 4px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.file-download { flex: none; padding: 12px 20px; font-size: 14px; }
+.doc-mark.file-mark { padding: 0; background: none; align-items: center; justify-content: center; }
+.doc-mark.file-mark .file-icon { width: 52px; height: 61px; margin: 0; }
+@media (max-width: 650px) {
+  .file-card { flex-wrap: wrap; padding: 22px; gap: 18px; }
+  .file-card .file-icon { width: 56px; }
+  .file-download { width: 100%; }
+  .doc-mark.file-mark .file-icon { width: 40px; height: 47px; }
+}
+.form-page label.check { display: flex; align-items: center; gap: 10px; margin: 4px 0 20px; font-size: 13px; color: var(--muted); }
+.form-page label.check input { display: inline; width: auto; margin: 0; }

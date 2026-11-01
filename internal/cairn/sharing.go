@@ -64,7 +64,14 @@ func (s *Server) servePublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.mu.RLock()
-	defer s.mu.RUnlock()
+	unlocked := false
+	unlock := func() {
+		if !unlocked {
+			unlocked = true
+			s.mu.RUnlock()
+		}
+	}
+	defer unlock()
 	var slug string
 	var hash sql.NullString
 	var revision int64
@@ -85,7 +92,7 @@ func (s *Server) servePublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Query().Get("download") == "1" {
-		s.downloadSource(w, r, p)
+		s.serveSource(w, r, p, unlock)
 		return
 	}
 	if kind == "asset" {

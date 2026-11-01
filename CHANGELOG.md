@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- File pages: keep any file up to 50 MiB, such as a ZIP, spreadsheet, PDF or Photoshop file, as a page with a filetype icon, filename, size and download button. The library shows the icon and size in place of an excerpt.
+- `POST /api/files` and `PUT /api/files/{slug}` let agents publish file pages with multipart uploads.
+- Import accepts any file up to 50 MiB. Files Cairn cannot show as a page, including PDFs and images over 4 MiB, become file pages instead of being refused. A checkbox keeps any file as a download.
+- Uploads stream to disk inside the data directory instead of memory, and downloads no longer hold the storage lock while they send.
+- Adds `file_page`, `file_name` and `file_size` columns to `pages` at startup. Existing pages are unchanged.
+
 ## v0.2.0
 
 - Saved preset themes (Cairn, Minimal, Futuristic) for the admin view, private reader and public reader.
