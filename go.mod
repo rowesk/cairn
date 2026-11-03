@@ -3,7 +3,7 @@ module github.com/rowesk/cairn
 go 1.26.10
 
 require (
-	github.com/yuin/goldmark v1.8.6
+	github.com/yuin/goldmark v1.8.7
 	golang.org/x/crypto v0.58.0
 	golang.org/x/net v0.62.0
 	golang.org/x/sys v0.49.0
