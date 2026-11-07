@@ -70,7 +70,7 @@ If you are wiring up an integration yourself, read the [publishing contract](doc
 
 By default, everything stays private. If you want to send a single report to a friend or colleague without exposing the rest of your library, you can start Cairn with an optional public listener and point a tunnel or reverse proxy at that port alone.
 
-When you flip sharing on for a page, it becomes available on your public domain at the same short path it uses privately, defaulting to three random mixed-case characters. Your original prompt stays hidden on the private side, and you can put a password on any shared page if you do not want it open to anyone with the link. Agents cannot turn public sharing on through the API; only you can do that from the UI. See the [sharing guide](docs/sharing.md) for the setup details.
+When you flip sharing on for a page, it becomes available on your public domain at the same short path it uses privately, defaulting to three random mixed-case characters. Your original prompt stays hidden on the private side, and you can put a password on any shared page if you do not want it open to anyone with the link. Agents publish privately by default. If you explicitly ask for a public report, they can create it with `share_enabled: true` and return its saved public URL. You still control sharing, aliases and passwords from the UI. See the [sharing guide](docs/sharing.md) for the setup details.
 
 Cairn is built for a single owner. It intentionally skips multi-user accounts, comment threads, draft workflows, and revision history. Updating a page replaces it in place.
 

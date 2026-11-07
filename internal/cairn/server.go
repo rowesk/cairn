@@ -42,6 +42,7 @@ type Server struct {
 	mu             sync.RWMutex
 }
 type publication struct {
+	ShareEnabled    json.RawMessage   `json:"share_enabled"`
 	Share           bool              `json:"-"`
 	PublicSlug      string            `json:"-"`
 	Source          *sourceFile       `json:"-"`
@@ -377,6 +378,21 @@ func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	if len(in.ShareEnabled) != 0 {
+		if r.Method == http.MethodPut {
+			writeAPIErrorField(w, http.StatusBadRequest, ErrValidationFailed, "share_enabled", "share_enabled is only supported when creating a report; replacement preserves sharing and passwords", false)
+			return
+		}
+		// Decode explicitly so null, strings and numbers cannot opt in or hide mistakes.
+		switch strings.TrimSpace(string(in.ShareEnabled)) {
+		case "true":
+			in.Share = true
+		case "false":
+		default:
+			writeAPIErrorField(w, http.StatusBadRequest, ErrValidationFailed, "share_enabled", "share_enabled must be a boolean", false)
+			return
+		}
+	}
 	if author != "" {
 		in.Agent = author
 		r = r.WithContext(context.WithValue(r.Context(), publisherAuthorKey{}, author))
@@ -518,6 +534,11 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 		w.WriteHeader(http.StatusCreated)
 	}
 	result := map[string]any{"id": id, "url": "/" + in.Slug}
+	if in.Share && !replace {
+		// The INSERT succeeded under the write lock, with sharing enabled and this path.
+		// Never infer a public origin from the request's Host or forwarding headers.
+		result["public_url"] = strings.TrimRight(s.cfg.PublicBaseURL, "/") + "/" + in.PublicSlug
+	}
 	if s.cleanupPending {
 		result["warning"] = "page saved; temporary storage cleanup pending"
 	}
@@ -540,8 +561,8 @@ func (s *Server) apiIndex(w http.ResponseWriter, r *http.Request) {
 		"version": APIVersion,
 		"endpoints": []map[string]string{
 			{"method": "GET", "path": "/api", "description": "This index: version, endpoints, limits and examples."},
-			{"method": "POST", "path": "/api/pages", "description": "Publish a private page. Body: title, agent or key byline, original_request, exactly one of html or markdown, optional slug, template, capabilities, assets, request_summary, request_source."},
-			{"method": "PUT", "path": "/api/pages/{slug}", "description": "Replace a page completely. The slug cannot change; omitted assets are removed."},
+			{"method": "POST", "path": "/api/pages", "description": "Publish a report, private by default. Optional share_enabled boolean opts into public sharing on creation only, when the owner asks. Body: title, agent or key byline, original_request, exactly one of html or markdown, optional slug, template, capabilities, assets, request_summary, request_source."},
+			{"method": "PUT", "path": "/api/pages/{slug}", "description": "Replace content and assets. The slug cannot change; omitted assets are removed. Sharing, public aliases and passwords stay unchanged. Omit share_enabled; any supplied value is rejected."},
 			{"method": "POST", "path": "/api/files", "description": "Publish a private file page from multipart/form-data: one file part named file, plus original_request and optional title, slug, request_summary, request_source text fields."},
 			{"method": "PUT", "path": "/api/files/{slug}", "description": "Replace a page completely with a file page. The slug cannot change."},
 		},
@@ -568,6 +589,11 @@ func (s *Server) apiIndex(w http.ResponseWriter, r *http.Request) {
 			ErrSlugConflict, ErrPublicSlugUnavailable, ErrNotFound,
 			ErrMethodNotAllowed, ErrPayloadTooLarge, ErrStorageUnavailable,
 			ErrCleanupPending, ErrSharingUnavailable, ErrLinkAllocationFailed,
+		},
+		"public_example": map[string]any{
+			"request":  map[string]any{"method": "POST", "path": "/api/pages", "body": map[string]any{"title": "Public report", "original_request": "Publish this report publicly", "markdown": "# Public report", "share_enabled": true}},
+			"response": map[string]string{"id": "...", "url": "/AbC", "public_url": "https://reports.example.com/AbC"},
+			"note":     "Requires configured public sharing and owner permission. The public_url uses the configured public origin, not the request Host. File creation stays private.",
 		},
 		"example": map[string]any{
 			"request":  map[string]string{"method": "POST", "path": "/api/pages"},
