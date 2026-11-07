@@ -80,7 +80,7 @@ func TestAPIErrorContract(t *testing.T) {
 		{"malformed JSON", "POST", "/api/pages", "application/json", `{oops`, token, "", 400, "invalid_json"},
 		{"trailing JSON", "POST", "/api/pages", "application/json", `{} {}`, token, "", 400, "invalid_json"},
 		{"validation", "POST", "/api/pages", "application/json", `{"title":"","agent":"ExampleAgent","original_request":"x","html":"<p>x</p>"}`, token, "", 400, "validation_failed"},
-		{"unknown field", "POST", "/api/pages", "application/json", `{"title":"x","agent":"ExampleAgent","original_request":"x","html":"<p>x</p>","share_enabled":true}`, token, "", 400, "invalid_json"},
+		{"unknown field", "POST", "/api/pages", "application/json", `{"title":"x","agent":"ExampleAgent","original_request":"x","html":"<p>x</p>","public_slug":"alias"}`, token, "", 400, "invalid_json"},
 		{"unknown route", "GET", "/api/nope", "", "", token, "", 404, "not_found"},
 		{"wrong method", "DELETE", "/api/pages", "", "", token, "", 405, "method_not_allowed"},
 	}

@@ -1,6 +1,6 @@
 # Public sharing
 
-Public sharing is optional. Private reading and agent publishing work without a public domain.
+Public sharing is optional. Private reading and agent publishing work without a public domain. Reports stay private by default. When the owner explicitly asks for a public report, an agent can send `share_enabled: true` to the private `POST /api/pages` endpoint. Cairn saves it as shared and returns both its private `url` and absolute `public_url`. Without a configured public origin, the request fails without saving a page. The API cannot change existing sharing, aliases or passwords; replacements preserve those settings. File creation stays private. See [publishing](publishing.md) for the request and error contract.
 
 Cairn uses two listeners. Port 8080 in the examples is the private library, editor, Settings and publishing API. Port 8081 serves only shared pages and their content, downloads and assets. Never route a public hostname to the private listener.
 

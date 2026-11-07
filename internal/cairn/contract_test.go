@@ -18,6 +18,11 @@ func TestAPIIndexMirrorsCanonicalContract(t *testing.T) {
 	if status != 200 {
 		t.Fatalf("index: %d %s", status, body)
 	}
+	for _, want := range []string{"share_enabled", "public_url", "public_example", "Sharing, public aliases and passwords stay unchanged"} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("index missing public publishing contract %q", want)
+		}
+	}
 	var index struct {
 		Version   string `json:"version"`
 		Endpoints []struct {

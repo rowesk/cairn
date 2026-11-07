@@ -4,7 +4,7 @@ Use GitHub's private vulnerability reporting on the Security tab to report a vul
 
 The private listener has no application login. Network access to it grants owner-level library and management access. Keep it on localhost or behind owner-restricted Tailscale access. Do not expose it to the public internet or a tailnet containing untrusted members.
 
-The public listener serves explicitly shared pages only. Short public paths are discoverable. Password protection is optional and uses one shared password. Public sharing can include imported original files as well as the rendered report. Agents may replace their own author's shared content, so grant keys only to trusted publishers.
+The public listener serves explicitly shared pages only. Short public paths are discoverable. Password protection is optional and uses one shared password. Public sharing can include imported original files as well as the rendered report. Agents can explicitly opt into public report creation with `share_enabled: true`. Omission or `false` keeps reports private. Agents may replace their own author's shared content, but replacement cannot change sharing, public aliases or passwords. Grant keys only to trusted publishers and instruct them to publish publicly only when asked.
 
 The data directory contains private request metadata and credentials. Use a dedicated OS account, preserve backup permissions, and keep it away from untrusted local users. Cairn assumes its data directory and host are trusted. It does not provide encrypted storage, multi-user isolation or version history.
 

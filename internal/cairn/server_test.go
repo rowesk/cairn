@@ -93,7 +93,7 @@ func TestPublishAndReadPrivatePage(t *testing.T) {
 	}
 }
 
-func TestPublishingRequiresCredentialAndRejectsSharing(t *testing.T) {
+func TestPublishingRequiresCredentialAndConfiguredSharing(t *testing.T) {
 	srv, close := start(t, t.TempDir())
 	defer close()
 	for _, credential := range []string{"", "wrong"} {
@@ -105,8 +105,8 @@ func TestPublishingRequiresCredentialAndRejectsSharing(t *testing.T) {
 	in := page("Private")
 	in["share_enabled"] = true
 	status, _, _ := request(t, srv, "POST", "/api/pages", in, token)
-	if status != 400 {
-		t.Errorf("sharing field got %d, want 400", status)
+	if status != 503 {
+		t.Errorf("unconfigured sharing got %d, want 503", status)
 	}
 	req, _ := http.NewRequest("POST", srv.URL+"/api/pages", strings.NewReader(`{}`))
 	req.Header.Set("Authorization", "Bearer "+token)
