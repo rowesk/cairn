@@ -334,16 +334,24 @@ const fs=require('node:fs');const os=require('node:os');const path=require('node
   const themeNotice=name=>name+' is on everywhere, shared pages included.';
   const setThemes=async(theme,reader='',shared='')=>{
    await page.goto(base+'/settings');
+   // Each selector autosaves. Wait for its own reply so an earlier toast cannot
+   // let this helper leave Settings while the final save is still in flight.
+   const saveTheme=async action=>{
+    const response=page.waitForResponse(r=>r.url()===base+'/settings'&&r.request().method()==='POST');
+    await action();
+    const saved=await response;
+    if(!saved.ok()||!(await saved.json()).ok)throw Error('theme save failed');
+   };
    if(reader||shared){
     await page.evaluate(()=>{document.querySelector('.theme-views').open=true;});
-    await page.getByLabel('Reading your pages',{exact:true}).selectOption(reader===theme?'':reader);
-    await page.getByLabel('Shared pages',{exact:true}).selectOption(shared===theme?'':shared);
+    await saveTheme(()=>page.getByLabel('Reading your pages',{exact:true}).selectOption(reader===theme?'':reader));
+    await saveTheme(()=>page.getByLabel('Shared pages',{exact:true}).selectOption(shared===theme?'':shared));
    }
    const card=page.locator('.theme-choice[data-choice="'+theme+'"]');
    if(await card.locator('input').isChecked()){
     // Already chosen: choosing it again changes nothing, so save the per-view choices directly.
-    await page.evaluate(()=>document.querySelector('#theme-form').requestSubmit());
-   }else await card.click();
+    await saveTheme(()=>page.evaluate(()=>document.querySelector('#theme-form').requestSubmit()));
+   }else await saveTheme(()=>card.click());
    await page.locator('.toast.is-success').last().waitFor();
    await page.waitForFunction(theme=>document.documentElement.dataset.theme===theme,theme);
   };
