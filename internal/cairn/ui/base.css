@@ -1,0 +1,353 @@
+/* Base: element defaults every Cairn page shares. */
+
+* {
+  box-sizing: border-box;
+}
+
+/* Hidden means hidden, whatever display a component gives itself. */
+[hidden] {
+  display: none !important;
+}
+
+html {
+  accent-color: var(--accent);
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 var(--text-body)/1.6 var(--font-ui);
+}
+
+/* DM Sans ships at 400, 500 and 600. Bold text uses 600. */
+strong,
+b {
+  font-weight: 600;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-display);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -.04em;
+  text-wrap: balance;
+}
+
+h2 {
+  font-size: var(--text-heading);
+  font-weight: 500;
+}
+
+p {
+  overflow-wrap: anywhere;
+}
+
+summary {
+  min-height: var(--target);
+  padding-block: var(--space-1);
+  cursor: pointer;
+}
+
+::selection {
+  background: var(--selection);
+  color: var(--ink);
+}
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border-radius: var(--radius-control);
+}
+
+/* Controls */
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  font-size: var(--text-field);
+}
+
+button,
+a,
+input,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: max(var(--control-height), var(--target));
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--text-label);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button:hover,
+.button:hover {
+  filter: brightness(.96);
+}
+
+.quiet {
+  background: var(--control-bg);
+  color: var(--accent);
+}
+
+.danger {
+  background: var(--danger-bg);
+  color: var(--on-danger);
+}
+
+/* Icon-only close button, square at the compact control size. */
+.close {
+  min-width: max(var(--control-height-sm), var(--target));
+  min-height: max(var(--control-height-sm), var(--target));
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+}
+
+input,
+textarea,
+select {
+  max-width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--field-line);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+input:not([type=radio], [type=checkbox], [type=range]),
+select {
+  min-height: max(var(--control-height), var(--target));
+}
+
+/* Selects draw their own chevron, so they match in every browser and
+   theme: two strokes in the text colour. */
+select {
+  padding-right: var(--space-7);
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 17px) 52%, calc(100% - 12px) 52%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  text-overflow: ellipsis;
+  appearance: none;
+  cursor: pointer;
+}
+
+/* A focused field draws its ring on its own edge, so the edge and the ring
+   read as one line rather than two boxes. */
+input:not([type=radio], [type=checkbox], [type=range], [type=file]):focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-offset: -1px;
+}
+
+input,
+textarea {
+  caret-color: var(--accent);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+}
+
+input[type=file]::file-selector-button {
+  margin-right: var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--control-bg);
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  summary {
+    padding-block: var(--space-3);
+  }
+
+  /* Radio buttons in a choice list take a full touch target of their own,
+     drawn as an 18px ring. They lay out as if they were 18px wide, so the
+     label beside them stays put. */
+  :is(.access-choice, .theme-name) input[type=radio] {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    width: var(--target);
+    height: var(--target);
+    margin: calc((18px - var(--target)) / 2);
+    border: 0;
+    background: transparent;
+    appearance: none;
+    cursor: pointer;
+  }
+
+  :is(.access-choice, .theme-name) input[type=radio]::before {
+    box-sizing: border-box;
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid var(--field-line);
+    border-radius: var(--radius-round);
+    background: var(--paper);
+    content: "";
+  }
+
+  :is(.access-choice, .theme-name) input[type=radio]:checked::before {
+    border: 5px solid var(--accent);
+    background: var(--paper);
+  }
+
+  :is(.access-choice, .theme-name) input[type=radio]:disabled::before {
+    opacity: .5;
+  }
+}
+
+/* Linked wordmarks are controls too. */
+a.brand {
+  min-height: var(--target);
+}
+
+/* Drawn pieces */
+
+.icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The cairn mark scales with the wordmark beside it. */
+.mark {
+  width: .92em;
+  height: 1.07em;
+  fill: currentColor;
+}
+
+/* Initials avatars take a tint chosen from the author's name, so two
+   authors who share an initial still look different. A photo covers it. */
+.tint-1 {
+  background-color: var(--tint-1-bg);
+  color: var(--tint-1-ink);
+}
+
+.tint-2 {
+  background-color: var(--tint-2-bg);
+  color: var(--tint-2-ink);
+}
+
+.tint-3 {
+  background-color: var(--tint-3-bg);
+  color: var(--tint-3-ink);
+}
+
+.tint-4 {
+  background-color: var(--tint-4-bg);
+  color: var(--tint-4-ink);
+}
+
+.tint-5 {
+  background-color: var(--tint-5-bg);
+  color: var(--tint-5-ink);
+}
+
+.tint-6 {
+  background-color: var(--tint-6-bg);
+  color: var(--tint-6-ink);
+}
+
+:is(.tint-1, .tint-2, .tint-3, .tint-4, .tint-5, .tint-6) {
+  box-shadow: inset 0 0 0 1px var(--avatar-ring);
+}
+
+.settings-avatar img,
+.avatar img,
+.author-portrait img {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-round);
+  object-fit: cover;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The first stop for keyboard users on every page. */
+.skip-link {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  min-height: max(var(--control-height), var(--target));
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-control);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--text-label);
+  text-decoration: none;
+  transform: translateY(calc(-100% - var(--space-4)));
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

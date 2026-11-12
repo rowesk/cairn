@@ -1,0 +1,98 @@
+{{template "owner" .}}
+
+{{- define "title" -}}Import file · Cairn{{end}}
+
+{{- define "main-class" -}}form-page{{end}}
+
+{{- define "main" -}}
+<h1>Import file</h1>
+<p class="form-lead">Cairn turns the file into a private page in your library and keeps the original for you to download.</p>
+<form method="post" enctype="multipart/form-data" class="stacked-form" novalidate>
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<div class="field">
+<label class="field-label" for="document">File</label>
+<div class="dropzone{{if .Errors.document}} has-error{{end}}" data-limit="{{.Limit}}" data-unsupported="{{.Unsupported}}" data-too-large="{{.TooLarge}}" data-error="document-error">
+<input class="dropzone-input" type="file" id="document" name="document" accept="{{.Accept}}" required data-missing="Choose a file to import." aria-describedby="{{if .Errors.document}}document-error {{end}}document-hint"{{if .Errors.document}} aria-invalid="true"{{end}}{{if eq .Focus "document"}} autofocus{{end}}>
+<div class="dropzone-face" aria-hidden="true">
+<span class="dropzone-icon">{{icon "upload"}}{{icon "doc"}}</span>
+<span class="dropzone-empty"><span class="dropzone-title">Choose a file <span>or drop it here</span></span></span>
+<span class="dropzone-chosen"><span class="dropzone-name">File chosen</span><span class="dropzone-size">Save it to import, or choose another file</span></span>
+</div>
+</div>
+<p class="field-error" id="document-error"{{if .Errors.document}} role="alert"{{else}} hidden{{end}}>{{icon "alert"}}<span>{{.Errors.document}}</span></p>
+<p class="field-help" id="document-hint">Any file up to 50 MiB. Text up to 2 MiB, images up to 4 MiB and DOCX up to 10 MiB open as pages. Other files get a download page.</p>
+{{- with .Errors.rechoose}}
+<p class="field-note">{{icon "info"}}<span>{{if $.FileName}}Choose “{{$.FileName}}” again to import it.{{else}}{{.}}{{end}} Browsers don’t keep a chosen file when the form reloads.</span></p>
+{{- end}}
+</div>
+<div class="field">
+<label class="field-label" for="import-title">Title <span class="field-optional">Optional</span></label>
+<input id="import-title" name="title" value="{{.Title}}" maxlength="300" aria-describedby="{{if .Errors.title}}import-title-error {{end}}title-help"{{if .Errors.title}} aria-invalid="true"{{end}}{{if eq .Focus "title"}} autofocus{{end}}>
+{{- with .Errors.title}}
+<p class="field-error" id="import-title-error" role="alert">{{icon "alert"}}<span>{{.}}</span></p>
+{{- end}}
+<p class="field-help" id="title-help">Leave it blank to use the file’s first heading, or its name.</p>
+</div>
+<details class="more-fields"{{if .OpenDetails}} open{{end}}>
+<summary>More details <span>Optional</span></summary>
+<div class="more-fields-body">
+<div class="field">
+<label class="field-label" for="import-agent">Prepared by</label>
+<input id="import-agent" name="agent" value="{{.Agent}}" maxlength="100" aria-describedby="{{if .Errors.agent}}import-agent-error {{end}}agent-help"{{if .Errors.agent}} aria-invalid="true"{{end}}{{if eq .Focus "agent"}} autofocus{{end}}>
+{{- with .Errors.agent}}
+<p class="field-error" id="import-agent-error" role="alert">{{icon "alert"}}<span>{{.}}</span></p>
+{{- end}}
+<p class="field-help" id="agent-help">The byline on the page. Leave it blank to use {{.DefaultAuthor}}.</p>
+</div>
+<div class="field">
+<label class="field-label" for="import-request">Your request</label>
+<textarea id="import-request" name="original_request" rows="3" aria-describedby="{{if .Errors.original_request}}import-request-error {{end}}request-help"{{if .Errors.original_request}} aria-invalid="true"{{end}}{{if eq .Focus "original_request"}} autofocus{{end}}>{{.Request}}</textarea>
+{{- with .Errors.original_request}}
+<p class="field-error" id="import-request-error" role="alert">{{icon "alert"}}<span>{{.}}</span></p>
+{{- end}}
+<p class="field-help" id="request-help">What you asked for. Only you see it, even if you share the page.</p>
+</div>
+<div class="field">
+<label class="field-label" for="import-template">Template</label>
+<select id="import-template" name="template" aria-describedby="template-help">
+<option value="report"{{if eq .Template "report"}} selected{{end}}>Report · reading and notes</option>
+<option value="comparison"{{if eq .Template "comparison"}} selected{{end}}>Comparison · tables and choices</option>
+<option value="visual"{{if eq .Template "visual"}} selected{{end}}>Visual · images and diagrams</option>
+</select>
+<label class="file-import-choice"><input type="checkbox" name="as_file" value="1">Save as a file page, even if Cairn can open it</label>
+<p class="field-help" id="template-help">The layout for Markdown and text files. HTML files keep their own design.</p>
+</div>
+<div class="field">
+<label class="field-label" for="import-slug">Link name</label>
+<div class="address-input{{if .Errors.slug}} has-error{{end}}">
+<span aria-hidden="true">{{.Host}}/</span>
+<input id="import-slug" name="slug" value="{{.Slug}}" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_\-]{0,63}" data-mismatch="{{.LinkRule}}" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="{{if .Errors.slug}}import-slug-error {{end}}slug-help"{{if .Errors.slug}} aria-invalid="true"{{end}}{{if eq .Focus "slug"}} autofocus{{end}}>
+</div>
+{{- with .Errors.slug}}
+<p class="field-error" id="import-slug-error" role="alert">{{icon "alert"}}<span>{{.}}</span></p>
+{{- end}}
+<p class="field-help" id="slug-help">Leave it blank for a short random link. Letters, numbers, dashes and underscores.</p>
+</div>
+<div class="field">
+<label class="field-label" for="import-assets">Supporting images</label>
+<div class="dropzone is-compact{{if .Errors.assets}} has-error{{end}}" data-limit="4194304" data-unsupported="Choose PNG, JPEG, GIF or WebP images." data-too-large="Each image can be up to 4 MB." data-error="import-assets-error">
+<input id="import-assets" class="dropzone-input" type="file" name="assets" accept=".png,.jpg,.jpeg,.gif,.webp" multiple aria-describedby="{{if .Errors.assets}}import-assets-error {{end}}assets-help"{{if .Errors.assets}} aria-invalid="true"{{end}}{{if eq .Focus "assets"}} autofocus{{end}}>
+<div class="dropzone-face" aria-hidden="true">
+<span class="dropzone-icon">{{icon "upload"}}{{icon "check"}}</span>
+<span class="dropzone-empty"><span class="dropzone-title">Choose images <span>or drop them here</span></span></span>
+<span class="dropzone-chosen"><span class="dropzone-name">Images chosen</span><span class="dropzone-size"></span></span>
+</div>
+</div>
+<p class="field-error" id="import-assets-error"{{if .Errors.assets}} role="alert"{{else}} hidden{{end}}>{{icon "alert"}}<span>{{.Errors.assets}}</span></p>
+<p class="field-help" id="assets-help">Images the file refers to by name, such as chart.png. PNG, JPEG, GIF or WebP, up to 4 MB each.</p>
+</div>
+</div>
+</details>
+<div class="form-submit">
+<button>Save private page</button>
+<p>{{icon "lock"}}Only you can see it until you share it.</p>
+</div>
+</form>
+{{- end}}
+
+{{- define "script" -}}{{scriptURL "forms"}}{{end}}

@@ -50,10 +50,10 @@ func TestAgentKeyLifecycleAndIsolation(t *testing.T) {
 		t.Fatal("byline not bound")
 	}
 	other := keyAction("key_create", "Other agent", 200)
-	publish("PUT", "/api/pages/agent-one", other, "", 403)
+	publish("PUT", "/api/pages/agent-one", other, "", 404)
 	publish("PUT", "/api/pages/agent-one", first, "", 200)
 	_, _, body = request(t, srv, "GET", "/settings", nil, "")
-	if strings.Contains(string(body), first) || !strings.Contains(string(body), `data-key-used="20`) {
+	if strings.Contains(string(body), first) || !strings.Contains(string(body), `last used <time datetime="20`) || !strings.Contains(string(body), `data-key-used="just now"`) {
 		t.Fatal("secret exposed or last-used absent")
 	}
 	raw, err := os.ReadFile(filepath.Join(dir, "cairn.sqlite"))

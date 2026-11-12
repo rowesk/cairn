@@ -155,7 +155,7 @@ func TestFilePageAPIPublishReadAndDownload(t *testing.T) {
 		t.Fatalf("result: %s", body)
 	}
 	_, _, reader := request(t, srv, "GET", "/q3", nil, "")
-	for _, want := range []string{`<main class="file-page">`, "Q3 numbers.xlsx", "Excel spreadsheet", "2.9 KB", "/q3?download=1", "<h1>Q3 numbers</h1>"} {
+	for _, want := range []string{`class="file-page"`, "Q3 numbers.xlsx", "Excel spreadsheet", "2.9 KB", "/q3?download=1", `>Q3 numbers</h1>`} {
 		if !strings.Contains(string(reader), want) {
 			t.Errorf("reader lacks %q", want)
 		}
@@ -168,14 +168,14 @@ func TestFilePageAPIPublishReadAndDownload(t *testing.T) {
 		t.Fatalf("download: %d %v len=%d", code, h, len(got))
 	}
 	_, _, list := request(t, srv, "GET", "/", nil, "")
-	if !strings.Contains(string(list), "doc-mark file-mark") || !strings.Contains(string(list), "Q3 numbers.xlsx · Excel spreadsheet · 2.9 KB") {
+	if !strings.Contains(string(list), "doc-mark file-mark") || !strings.Contains(string(list), "XLSX · <span class=\"file-row-size\">2.9 KB</span>") {
 		t.Fatal("library row is not a file row")
 	}
 	// An explicit title wins over the filename.
 	if code, body := publishFilePage(t, srv, "POST", "/api/files", "raw.zip", data, [2]string{"title", "Raw exports"}, [2]string{"slug", "raw"}); code != 201 {
 		t.Fatal(code, string(body))
 	}
-	if _, _, r := request(t, srv, "GET", "/raw", nil, ""); !strings.Contains(string(r), "<h1>Raw exports</h1>") || !strings.Contains(string(r), "ZIP archive") {
+	if _, _, r := request(t, srv, "GET", "/raw", nil, ""); !strings.Contains(string(r), `>Raw exports</h1>`) || !strings.Contains(string(r), "ZIP archive") {
 		t.Fatal("explicit title")
 	}
 }
@@ -343,7 +343,7 @@ func TestFilePageReplacement(t *testing.T) {
 	if _, _, list := request(t, srv, "GET", "/", nil, ""); strings.Contains(string(list), `class="doc-mark file-mark"`) || strings.Contains(string(list), "plan-v2.pdf") {
 		t.Fatal("library still shows a file row")
 	}
-	if c, _, _ := request(t, srv, "GET", "/plan?download=1", nil, ""); c != 404 {
+	if c, _, b := request(t, srv, "GET", "/plan?download=1", nil, ""); c != 200 || string(b) != "# Written plan" {
 		t.Fatalf("old file still downloadable: %d", c)
 	}
 	if n := dirCount(t, filepath.Join(dir, "objects")); n != 1 {
@@ -378,7 +378,7 @@ func TestFilePagePublicSharing(t *testing.T) {
 	if c, h, got := request(t, public, "GET", "/files?download=1", nil, ""); c != 200 || !bytes.Equal(got, data) || !strings.Contains(h.Get("Content-Disposition"), "bundle.zip") {
 		t.Fatalf("public download: %d", c)
 	}
-	if c := ownerPost(t, private, "bundle", url.Values{"action": {"password"}, "password": {"secret"}}); c != 303 {
+	if c := ownerPost(t, private, "bundle", url.Values{"action": {"password"}, "password": {"secret-words"}}); c != 303 {
 		t.Fatal(c)
 	}
 	if c, _, got := request(t, public, "GET", "/files?download=1", nil, ""); c == 200 || bytes.Equal(got, data) {
@@ -387,7 +387,7 @@ func TestFilePagePublicSharing(t *testing.T) {
 	if _, _, page := request(t, public, "GET", "/files", nil, ""); strings.Contains(string(page), "bundle.zip") {
 		t.Fatal("locked page shows the file card")
 	}
-	req, _ := http.NewRequest("POST", public.URL+"/files", strings.NewReader(url.Values{"password": {"secret"}}.Encode()))
+	req, _ := http.NewRequest("POST", public.URL+"/files", strings.NewReader(url.Values{"password": {"secret-words"}}.Encode()))
 	req.Header.Set("Origin", public.URL)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	client := *public.Client()
@@ -495,7 +495,7 @@ func TestFilePageSurvivesRestartAndWipesUploads(t *testing.T) {
 	if c, _, got := request(t, srv, "GET", "/kept?download=1", nil, ""); c != 200 || !bytes.Equal(got, data) {
 		t.Fatal("download lost after restart")
 	}
-	if _, _, list := request(t, srv, "GET", "/", nil, ""); !strings.Contains(string(list), "kept.zip · ZIP archive · 2 KB") {
+	if _, _, list := request(t, srv, "GET", "/", nil, ""); !strings.Contains(string(list), "ZIP · <span class=\"file-row-size\">2 KB</span>") {
 		t.Fatal("library row lost after restart")
 	}
 }

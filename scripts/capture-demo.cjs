@@ -71,13 +71,25 @@ const path = require('node:path');
     const out = process.env.CAIRN_DEMO_OUT || 'docs/images';
     fs.mkdirSync(out, {recursive: true});
     const settle = async () => { for (const frame of page.frames()) await frame.evaluate(() => document.fonts.ready); };
+    // A theme is one click on its card in Settings, which applies and saves it.
     const useTheme = async id => {
       await page.goto(base + '/settings');
-      for (const view of ['admin', 'reader', 'public']) await page.selectOption('#' + view + '-theme', id);
-      await Promise.all([page.waitForURL('**/settings*'), page.locator('#theme-form button:not([type=button])').click()]);
+      const card = page.locator('.theme-choice[data-choice="' + id + '"]');
+      if (!await card.locator('input').isChecked()) {
+        await card.click();
+        await page.locator('#theme-notice .notice.is-success').waitFor();
+      }
+    };
+    const reader = async (slug, wide) => {
+      await page.goto(base + '/' + slug);
+      await page.frameLocator('iframe').locator(wide ? 'canvas' : 'h1').first().waitFor();
+      await settle();
+      if (wide) await page.locator('body.toc-floating').waitFor();
+      await page.waitForFunction(() => document.querySelector('iframe').getBoundingClientRect().height > 400);
+      await page.waitForTimeout(400);
     };
     await page.setViewportSize({width: 390, height: 844});
-    for (const theme of ['minimal', 'futuristic', 'cairn']) {
+    for (const theme of ['minimal', 'futuristic', 'dark', 'cairn']) {
       await useTheme(theme);
       await page.goto(base + '/');
       await settle();
@@ -88,18 +100,17 @@ const path = require('node:path');
     await settle();
     await page.screenshot({path: path.join(out, 'library.png')});
     await page.setViewportSize({width: 1440, height: 1100});
-    await page.goto(base + '/d3S');
-    await page.frameLocator('iframe').locator('canvas').waitFor();
-    await settle();
-    await page.locator('body.toc-floating').waitFor();
+    await reader('d3S', true);
     await page.screenshot({path: path.join(out, 'report.png')});
     await page.setViewportSize({width: 390, height: 844});
-    await page.goto(base + '/w7K');
-    await page.frameLocator('iframe').locator('h1').waitFor();
-    await settle();
-    await page.waitForFunction(() => document.querySelector('iframe').getBoundingClientRect().height > 400);
+    await reader('w7K', false);
     await page.screenshot({path: path.join(out, 'mobile.png')});
-    console.log('Captured library, report, mobile and theme screenshots from fictional demo data.');
+    await useTheme('dark');
+    await page.setViewportSize({width: 1440, height: 1100});
+    await reader('d3S', true);
+    await page.screenshot({path: path.join(out, 'report-dark.png')});
+    await useTheme('cairn');
+    console.log('Captured library, report, report-dark, mobile and theme screenshots from fictional demo data.');
   } finally {
     if (browser) await browser.close();
     if (child.exitCode === null && child.signalCode === null) {

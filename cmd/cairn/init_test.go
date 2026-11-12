@@ -10,7 +10,7 @@ import (
 func TestInitializePreservesInstallation(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "data")
 	credential := filepath.Join(dir, "publisher-token")
-	if err := initialize(dir, credential, "Alex"); err != nil {
+	if _, err := initialize(dir, credential, "Alex"); err != nil {
 		t.Fatal(err)
 	}
 	before, err := os.ReadFile(credential)
@@ -21,7 +21,7 @@ func TestInitializePreservesInstallation(t *testing.T) {
 	if info.Mode().Perm() != 0600 {
 		t.Fatal("credential permissions")
 	}
-	if err := initialize(dir, credential, "Someone else"); err != nil {
+	if _, err := initialize(dir, credential, "Someone else"); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := os.ReadFile(credential)
@@ -43,7 +43,7 @@ func TestInitializePreservesInstallation(t *testing.T) {
 	if err := os.Remove(credential); err != nil {
 		t.Fatal(err)
 	}
-	if err := initialize(dir, credential, "Alex"); err == nil {
+	if _, err := initialize(dir, credential, "Alex"); err == nil {
 		t.Fatal("regenerated missing credential for existing database")
 	}
 }
@@ -68,7 +68,7 @@ func TestInitializeRejectsUnsafeCredential(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := initialize(dir, credential, "Alex"); err == nil {
+			if _, err := initialize(dir, credential, "Alex"); err == nil {
 				t.Fatal("unsafe credential accepted")
 			}
 		})

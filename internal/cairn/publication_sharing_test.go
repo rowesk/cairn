@@ -47,7 +47,7 @@ func TestPublicationSharingOptIn(t *testing.T) {
 			if code != 201 {
 				t.Fatalf("create: %d %s", code, body)
 			}
-			var result map[string]string
+			var result map[string]any
 			if err := json.Unmarshal(body, &result); err != nil {
 				t.Fatal(err)
 			}
@@ -140,7 +140,7 @@ func TestPublicationSharingFieldValidation(t *testing.T) {
 		code, _, body := request(t, private, "POST", "/api/pages", in, token)
 		var failure apiErr
 		json.Unmarshal(body, &failure)
-		if code != 400 || failure.Code != "invalid_json" {
+		if code != 400 || failure.Code != "validation_failed" {
 			t.Errorf("%s: %d %s", field, code, body)
 		}
 	}
@@ -262,7 +262,7 @@ func TestPublicCreationGeneratedLinkSurvivesRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	req, _ := http.NewRequest("POST", private.URL+"/api/pages", strings.NewReader(string(data)))
-	req.Host = "untrusted.example"
+	req.Host = "adversarial"
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Forwarded-Host", "also-untrusted.example")
@@ -270,14 +270,14 @@ func TestPublicCreationGeneratedLinkSurvivesRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var result map[string]string
+	var result map[string]any
 	err = json.NewDecoder(res.Body).Decode(&result)
 	res.Body.Close()
 	private.Close()
 	if closeErr := app.Close(); closeErr != nil {
 		t.Fatal(closeErr)
 	}
-	if err != nil || res.StatusCode != 201 || len(result["url"]) != 4 || result["public_url"] != "https://reports.example.com"+result["url"] {
+	if err != nil || res.StatusCode != 201 || len(result["url"].(string)) != 4 || result["public_url"] != "https://reports.example.com"+result["url"].(string) {
 		t.Fatalf("generated public URL: %d %v %v", res.StatusCode, result, err)
 	}
 	app, err = cairn.Open(cfg)
@@ -287,7 +287,7 @@ func TestPublicCreationGeneratedLinkSurvivesRestart(t *testing.T) {
 	defer app.Close()
 	public := httptest.NewServer(app.PublicHandler())
 	defer public.Close()
-	if code, _, body := request(t, public, "GET", result["url"], nil, ""); code != 200 || !strings.Contains(string(body), "Generated public report") {
+	if code, _, body := request(t, public, "GET", result["url"].(string), nil, ""); code != 200 || !strings.Contains(string(body), "Generated public report") {
 		t.Fatalf("restarted share: %d %s", code, body)
 	}
 }
@@ -316,7 +316,7 @@ func TestAgentKeyCanOptIntoPublicCreationButNotChangeSharing(t *testing.T) {
 	}
 	delete(in, "share_enabled")
 	in["html"] = "<h1>Updated by publisher</h1>"
-	if code, _, _ := request(t, private, "PUT", "/api/pages/report", in, other); code != 403 {
+	if code, _, _ := request(t, private, "PUT", "/api/pages/report", in, other); code != 404 {
 		t.Fatal("other agent replaced public report", code)
 	}
 	if code, _, body := request(t, private, "PUT", "/api/pages/report", in, key); code != 200 {

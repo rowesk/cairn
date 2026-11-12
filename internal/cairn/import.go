@@ -3,134 +3,201 @@ package cairn
 import (
 	"archive/zip"
 	"bytes"
-	"crypto/subtle"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"html"
 	"html/template"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 )
 
-func (s *Server) ownerRequest(r *http.Request) bool {
-	return s.ownerToken(r, r.FormValue("csrf"))
+// An empty accept list lets the owner choose any file.
+const importAccept = ""
+
+// importLimit is the largest file the import form takes. The drop zone
+// checks the same limit and type list before uploading, with the same words.
+const importLimit = maxFileBytes
+
+const (
+	importUnsupported = "Choose a file to import."
+	importTooLarge    = "This file is larger than 50 MiB. Choose a smaller one."
+	importExpired     = "This form had expired, so nothing was imported. Choose the file again and import it."
+)
+
+type importData struct {
+	ownerChrome
+	// LinkRule is the link name rule, for the field's own check.
+	LinkRule                              string
+	Theme                                 string
+	CSRF                                  formToken
+	Title, Agent, Request, Template, Slug string
+	DefaultAuthor, Host, FileName         string
+	Accept, Unsupported, TooLarge         string
+	Limit                                 int
+	Errors                                fieldErrors
+	Notice                                *notice
+	OpenDetails                           bool
+	// Focus names the first field with an error.
+	Focus string
 }
-func (s *Server) ownerToken(r *http.Request, csrf string) bool {
-	return sameOrigin(r) && subtle.ConstantTimeCompare([]byte(csrf), []byte(s.csrf)) == 1
+
+func (s *Server) renderImport(w http.ResponseWriter, d importData, status int) {
+	formPageHeaders(w)
+	w.WriteHeader(status)
+	_ = importView.Execute(w, d)
 }
-func sameOrigin(r *http.Request) bool {
-	origin, err := url.Parse(r.Header.Get("Origin"))
-	return err == nil && origin.Host == r.Host && (origin.Scheme == "http" || origin.Scheme == "https")
-}
+
 func (s *Server) importPage(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Referrer-Policy", "same-origin")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; font-src data:; script-src 'sha256-"+focusScriptHash+"'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
-	if r.Method == http.MethodGet {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		importView.Execute(w, struct{ CSRF, Theme string }{s.csrf, s.themes().Admin})
+	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost {
+		s.methodNotAllowed(w, "GET, HEAD, POST")
 		return
 	}
+	d := importData{ownerChrome: s.chrome(), LinkRule: linkNameRule, Theme: s.themes().Admin, CSRF: s.formToken(), Template: "report", DefaultAuthor: s.preferences().Author, Host: r.Host, Accept: importAccept, Unsupported: importUnsupported, TooLarge: importTooLarge, Limit: importLimit, Errors: fieldErrors{}}
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", 405)
+		s.renderImport(w, d, http.StatusOK)
 		return
 	}
-	// Refuse cross-site posts before writing up to 50 MiB to disk.
 	if !sameOrigin(r) {
-		http.Error(w, "reload the import form and try again", 403)
+		s.showError(w, 403, problemForeignForm)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadRequestBytes)
 	u, err := s.readUpload(r, "document", 4<<20)
 	if err != nil {
+		status := 400
+		d.Errors["document"] = "Cairn could not read that upload. Choose the file again."
 		if errors.Is(err, errUploadTooLarge) {
-			http.Error(w, "the file must fit 50 MiB and each supporting image 4 MiB", 413)
-		} else {
-			http.Error(w, "invalid import", 400)
+			status = 413
+			d.Errors["document"] = "The file must fit 50 MiB and each supporting image 4 MiB."
 		}
+		s.renderImport(w, d, status)
 		return
 	}
 	defer u.remove()
-	if !s.ownerToken(r, u.fields["csrf"]) {
-		http.Error(w, "reload the import form and try again", 403)
+	r.Form = map[string][]string{}
+	for k, v := range u.fields {
+		r.Form[k] = []string{v}
+	}
+	d.Title, d.Agent, d.Request, d.Slug = r.FormValue("title"), r.FormValue("agent"), r.FormValue("original_request"), strings.TrimSpace(r.FormValue("slug"))
+	switch d.Template = r.FormValue("template"); d.Template {
+	case "report", "comparison", "visual":
+	default:
+		d.Template = "report"
+	}
+	if !s.freshToken(r) {
+		d.Notice = informed(importExpired)
+		s.renderImport(w, d, http.StatusForbidden)
 		return
 	}
-	if len(u.files["document"]) != 1 {
-		http.Error(w, "choose a file to import", 400)
-		return
+	status := http.StatusBadRequest
+	if strings.TrimSpace(d.Title) != "" {
+		if problem := titleProblem(d.Title); problem != "" {
+			d.Errors["title"] = problem
+		}
 	}
-	doc := u.files["document"][0]
-	in := publication{Title: u.fields["title"], Agent: u.fields["agent"], OriginalRequest: u.fields["original_request"], Slug: u.fields["slug"], Template: u.fields["template"], Assets: map[string][]byte{}}
+	if len(d.Agent) > 100 || !utf8.ValidString(d.Agent) {
+		d.Errors["agent"] = "Shorten the name to 100 characters or fewer."
+	}
+	if len(d.Request) > 32768 || !utf8.ValidString(d.Request) {
+		d.Errors["original_request"] = "Shorten the request to about 30,000 characters or fewer."
+	}
+	if code, problem := s.linkNameProblem(d.Slug, ""); problem != "" {
+		d.Errors["slug"], status = problem, code
+	}
+	in := publication{Title: d.Title, Agent: d.Agent, OriginalRequest: d.Request, Slug: d.Slug, Template: d.Template, Assets: map[string][]byte{}}
 	if strings.TrimSpace(in.Agent) == "" {
-		in.Agent = s.preferences().Author
+		in.Agent = d.DefaultAuthor
 	}
-	if strings.TrimSpace(in.OriginalRequest) == "" {
-		in.OriginalRequest = "Imported into Cairn"
-	}
-	images := u.files["assets"]
-	asFile := u.fields["as_file"] == "1" || !renderableImport(doc.Name, doc.Size)
-	if asFile && len(images) > 0 {
-		http.Error(w, "supporting images only apply to pages Cairn can open; remove them to save a download page", 400)
-		return
-	}
-	if !asFile {
-		if strings.TrimSpace(in.Title) == "" {
-			in.Title = strings.TrimSuffix(doc.Name, filepath.Ext(doc.Name))
+	in.OwnerWritten = true
+	if len(u.files["document"]) != 1 {
+		d.Errors["document"] = "Choose a file to import."
+	} else {
+		doc := u.files["document"][0]
+		d.FileName = doc.Name
+		images := u.files["assets"]
+		asFile := u.fields["as_file"] == "1" || !renderableImport(doc.Name, doc.Size)
+		if asFile && len(images) > 0 {
+			d.Errors["assets"] = "Supporting images only apply to pages Cairn can open. Remove them to save a file page."
 		}
-		var data []byte
-		if data, err = os.ReadFile(doc.Path); err == nil {
-			in.Source = &sourceFile{Name: doc.Name, Path: doc.Path, Size: doc.Size}
-			err = prepareImport(&in, doc.Name, data)
-		}
-		if err == nil {
-			// Dry run of the save checks, so a file that cannot become a page
-			// (non-UTF-8 text, HTML grown past 2 MiB) is kept as a download.
-			check := in
-			if err = preparePublication(&check); err == nil {
-				if err = addRuntime(&check); err == nil {
-					err = validatePublication(check)
+		if !asFile {
+			var data []byte
+			if data, err = os.ReadFile(doc.Path); err == nil {
+				if strings.TrimSpace(in.Title) == "" {
+					in.Title = importTitle(doc.Name, data)
 				}
+				in.Source = &sourceFile{Name: doc.Name, Path: doc.Path, Size: doc.Size}
+				err = prepareImport(&in, doc.Name, data)
+			}
+			if err == nil {
+				// Dry run of the save checks, so a file that cannot become a page
+				// (non-UTF-8 text, HTML grown past 2 MiB) is kept as a download.
+				check := in
+				err = validatePublication(check)
+			}
+			if err != nil && len(images) == 0 {
+				asFile, err = true, nil
+			}
+			for _, image := range images {
+				if err != nil {
+					break
+				}
+				if _, exists := in.Assets[image.Name]; exists {
+					err = fmt.Errorf("duplicate image name")
+				}
+				in.Assets[image.Name] = image.Data
 			}
 		}
-		if err != nil && len(images) == 0 {
-			asFile, err = true, nil
+		if asFile {
+			err = filePublication(&in, doc)
 		}
-		for _, image := range images {
-			if err != nil {
-				break
+		if err != nil {
+			d.Errors["document"] = err.Error()
+		}
+
+	}
+	if len(d.Errors) == 0 {
+		// The same publication path owns all validation and storage semantics.
+		result := httptest.NewRecorder()
+		s.savePublication(result, r, in)
+		if result.Code == http.StatusCreated {
+			var saved struct{ URL string }
+			if err := json.Unmarshal(result.Body.Bytes(), &saved); err == nil {
+				http.Redirect(w, r, saved.URL, http.StatusSeeOther)
+				return
 			}
-			if _, exists := in.Assets[image.Name]; exists {
-				err = fmt.Errorf("duplicate image name")
-			}
-			in.Assets[image.Name] = image.Data
+		}
+		status = result.Code
+		field, message := publishProblem(result.Body.Bytes())
+		switch field {
+		case "slug":
+			d.Errors["slug"] = message
+		case "images":
+			d.Errors["assets"] = message
+		default:
+			d.Notice = failed(message)
 		}
 	}
-	if asFile {
-		err = filePublication(&in, doc)
+	d.OpenDetails = d.Errors["agent"] != "" || d.Errors["original_request"] != "" || d.Errors["slug"] != "" || d.Errors["assets"] != ""
+	// Focus lands on the first field to fix, in the order they appear.
+	for _, name := range []string{"document", "title", "agent", "original_request", "slug", "assets"} {
+		if d.Errors[name] != "" {
+			d.Focus = name
+			break
+		}
 	}
-	if err != nil {
-		http.Error(w, err.Error(), 400)
-		return
+	if d.Errors["document"] == "" {
+		// Browsers never keep a chosen file when a form loads again.
+		d.Errors["rechoose"] = "Choose the file again to import it."
 	}
-	// The same publication path owns all validation and storage semantics.
-	result := httptest.NewRecorder()
-	s.savePublication(result, r, in)
-	if result.Code != http.StatusCreated {
-		http.Error(w, result.Body.String(), result.Code)
-		return
-	}
-	var saved struct{ URL string }
-	if err := json.Unmarshal(result.Body.Bytes(), &saved); err != nil {
-		http.Error(w, "could not read save result", 500)
-		return
-	}
-	http.Redirect(w, r, saved.URL, http.StatusSeeOther)
+	s.renderImport(w, d, status)
 }
 
 // renderableImport reports whether Cairn can show a file as a page. Anything
@@ -147,13 +214,14 @@ func renderableImport(name string, size int64) bool {
 	return false
 }
 
-var importView = template.Must(template.New("import").Parse(`<!doctype html><html lang="en" data-theme="{{.Theme}}"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Import file · Cairn</title><style>` + ownerCSS + `</style><body><main class="form-page"><a href="/">Back to library</a><h1>Import file</h1><p>Bring a page or a file worth keeping.</p><form method="post" enctype="multipart/form-data"><input type="hidden" name="csrf" value="{{.CSRF}}"><label>Choose a file<input type="file" name="document" required></label><p class="import-hint">Any file up to 50 MiB. Markdown, HTML, text, JSON, Mermaid and images under 4 MiB open as pages, and DOCX text is extracted. Everything else, such as ZIP, PDF, spreadsheets and Photoshop files, gets a download page. PHP is displayed as source and never executed.</p><label class="check"><input type="checkbox" name="as_file" value="1"> Save as a download page, even if Cairn can open it</label><label>Title<input name="title" maxlength="300" placeholder="Use the filename"></label><details><summary>Page details</summary><label>Prepared by<input name="agent" maxlength="100" placeholder="Use the default author"></label><label>Original request<textarea name="original_request" placeholder="Optional context for later"></textarea><small>This stays private.</small></label><label>Template<select name="template"><option value="report">Report</option><option value="comparison">Comparison</option><option value="visual">Visual</option></select></label><label>Short URL name<input name="slug" placeholder="Leave blank to generate one"></label><label>Supporting images<input type="file" name="assets" accept=".png,.jpg,.jpeg,.gif,.webp" multiple></label></details><button>Save private page</button></form></main>` + focusScriptTag + `</body></html>`))
-
 func prepareImport(in *publication, name string, data []byte) error {
 	ext := strings.ToLower(filepath.Ext(name))
 	text := func() error {
-		if len(data) > 2<<20 || !utf8.Valid(data) {
-			return fmt.Errorf("text files must be UTF-8 and fit 2 MiB")
+		if len(data) > 2<<20 {
+			return fmt.Errorf("Text files can be up to 2 MB. This one is larger.")
+		}
+		if !utf8.Valid(data) {
+			return fmt.Errorf("Cairn couldn’t read this file as text. Save it as UTF-8 and try again.")
 		}
 		return nil
 	}
@@ -175,7 +243,7 @@ func prepareImport(in *publication, name string, data []byte) error {
 		return importBody(in, `<pre><code class="language-mermaid">`+template.HTMLEscapeString(string(data))+`</code></pre>`)
 	case ".png", ".jpg", ".jpeg", ".gif", ".webp":
 		if len(data) > 4<<20 {
-			return fmt.Errorf("images must fit 4 MiB")
+			return fmt.Errorf("Images can be up to 4 MB. This one is larger.")
 		}
 		asset := "image" + ext
 		in.Assets[asset] = data
@@ -199,7 +267,7 @@ func prepareImport(in *publication, name string, data []byte) error {
 		}
 		return importBody(in, body)
 	default:
-		return fmt.Errorf("this file type is not supported; import Markdown, HTML, text, JSON, Mermaid, an image or a document")
+		return fmt.Errorf("%s", importUnsupported)
 	}
 	return nil
 }
@@ -221,23 +289,23 @@ func importBody(in *publication, body string) error {
 func docxText(data []byte) (string, error) {
 	z, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
-		return "", fmt.Errorf("could not read DOCX file")
+		return "", fmt.Errorf("Cairn couldn’t open this Word document. Save it again as .docx and try again.")
 	}
 	for _, f := range z.File {
 		if f.Name != "word/document.xml" {
 			continue
 		}
 		if f.UncompressedSize64 > 2<<20 {
-			return "", fmt.Errorf("DOCX text must fit 2 MiB")
+			return "", fmt.Errorf("This Word document holds more than 2 MB of text. Split it and import each part.")
 		}
 		r, err := f.Open()
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("Cairn couldn’t read the text in this Word document. Save it again as .docx and try again.")
 		}
 		defer r.Close()
 		raw, err := io.ReadAll(io.LimitReader(r, (2<<20)+1))
 		if err != nil || len(raw) > 2<<20 {
-			return "", fmt.Errorf("could not read DOCX text")
+			return "", fmt.Errorf("Cairn couldn’t read the text in this Word document. Save it again as .docx and try again.")
 		}
 		d := xml.NewDecoder(bytes.NewReader(raw))
 		var out strings.Builder
@@ -248,7 +316,7 @@ func docxText(data []byte) (string, error) {
 				break
 			}
 			if err != nil {
-				return "", fmt.Errorf("invalid DOCX text")
+				return "", fmt.Errorf("Cairn couldn’t read the text in this Word document. Save it again as .docx and try again.")
 			}
 			switch t := tok.(type) {
 			case xml.StartElement:
@@ -273,5 +341,44 @@ func docxText(data []byte) (string, error) {
 		}
 		return out.String(), nil
 	}
-	return "", fmt.Errorf("DOCX contains no document text")
+	return "", fmt.Errorf("This Word document has no text to import.")
+}
+
+// Titles from inside a file, as cairn publish reads them: a Markdown file's
+// first "# " heading, an HTML file's <title>.
+var (
+	importMarkdownTitle = regexp.MustCompile(`(?m)^#[ \t]+(.+?)[ \t#]*$`)
+	importHTMLTitle     = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)
+)
+
+// importTitle is the title of an import whose title field was left blank:
+// the file's own title when it has one, else its name without extension.
+func importTitle(name string, data []byte) string {
+	title := ""
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".md", ".markdown":
+		if m := importMarkdownTitle.FindSubmatch(data); m != nil {
+			title = string(m[1])
+		}
+	case ".html", ".htm":
+		if m := importHTMLTitle.FindSubmatch(data); m != nil {
+			title = html.UnescapeString(string(m[1]))
+		}
+	}
+	if title = strings.Join(strings.Fields(title), " "); title == "" || !utf8.ValidString(title) || len(title) > 300 {
+		return strings.TrimSuffix(name, filepath.Ext(name))
+	}
+	return title
+}
+
+// byteSize says a file's size the way the drop zone does: 240 KB, 1.4 MB.
+func byteSize(n int) string {
+	switch {
+	case n < 1024:
+		return fmt.Sprintf("%d bytes", n)
+	case n < 1<<20:
+		return fmt.Sprintf("%d KB", (n+512)/1024)
+	default:
+		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
+	}
 }

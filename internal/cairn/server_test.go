@@ -304,7 +304,7 @@ func TestCleanupFailureIsReportedAndRetried(t *testing.T) {
 		t.Fatal(err)
 	}
 	status, _, body = request(t, srv, "PUT", "/api/pages/report", page("After recovery"), token)
-	if status != 200 || strings.Contains(string(body), "warning") {
+	if status != 200 || strings.Contains(string(body), "cleanup") || strings.Contains(string(body), `"warning":`) {
 		t.Fatalf("cleanup recovery: %d %s", status, body)
 	}
 	status, _, body = request(t, srv, "GET", "/report", nil, "")
@@ -446,8 +446,11 @@ func TestLibrarySearchAndPageControls(t *testing.T) {
 		close()
 		t.Fatal(status)
 	}
+	// A row is the title and one line: where a search matched, else the
+	// page's first words.
 	status, _, body := request(t, srv, "GET", "/?q=bedroom&agent=ExampleAgent", nil, "")
-	if status != 200 || !strings.Contains(string(body), "Bulb comparison") || !strings.Contains(string(body), "Useful light report") {
+	_, _, plain := request(t, srv, "GET", "/", nil, "")
+	if status != 200 || !strings.Contains(string(body), "Bulb comparison") || !strings.Contains(string(body), `<span class="where">In your request:</span>`) || !strings.Contains(string(plain), `<p class="excerpt">Useful light report</p>`) {
 		close()
 		t.Fatalf("library: %d %s", status, body)
 	}
@@ -611,7 +614,7 @@ func TestPasswordShareScopeRestartAndRemoval(t *testing.T) {
 		in := page(slug)
 		in["slug"] = slug
 		request(t, private, "POST", "/api/pages", in, token)
-		for _, v := range []url.Values{{"action": {"share"}, "public_slug": {slug}}, {"action": {"password"}, "password": {"secret"}}} {
+		for _, v := range []url.Values{{"action": {"share"}, "public_slug": {slug}}, {"action": {"password"}, "password": {"secret-words"}}} {
 			if got := ownerPost(t, private, slug, v); got != 303 {
 				t.Fatal(got)
 			}
@@ -634,7 +637,7 @@ func TestPasswordShareScopeRestartAndRemoval(t *testing.T) {
 		t.Fatal(status)
 	}
 	time.Sleep(1100 * time.Millisecond)
-	status, cookies := unlock("secret")
+	status, cookies := unlock("secret-words")
 	if status != 303 || len(cookies) != 1 {
 		t.Fatal(status)
 	}
@@ -675,7 +678,7 @@ func TestPasswordShareScopeRestartAndRemoval(t *testing.T) {
 	if status, _, _ := request(t, public, "GET", "/_content/report", nil, ""); status != 200 {
 		t.Fatal("password removal")
 	}
-	if got := ownerPost(t, private, "report", url.Values{"action": {"password"}, "password": {"secret"}}); got != 303 {
+	if got := ownerPost(t, private, "report", url.Values{"action": {"password"}, "password": {"secret-words"}}); got != 303 {
 		t.Fatal(got)
 	}
 	if get("/_content/report") != 401 {

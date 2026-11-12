@@ -1,14 +1,28 @@
-:where(a,button,input,select,textarea,summary,iframe,[tabindex]):focus {
+/*
+ * Focus. Every control shows one ring in the theme's focus colour when
+ * focused from the keyboard. focus.js marks pointer use on <html>: after a
+ * click, buttons and links drop the ring, while text fields, selects and
+ * text areas keep it, because typing follows. Loaded last so components
+ * can only change the ring's colour or offset, not remove it.
+ */
+
+:where(a, button, input, select, textarea, summary, iframe, [tabindex]):focus {
   outline: none;
-  box-shadow: none;
 }
 
-:where(a,button,input,select,textarea,summary,iframe,[tabindex]):focus-visible {
-  outline: 2px solid var(--accent);
+:where(a, button, input, select, textarea, summary, iframe, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus);
   outline-offset: 4px;
 }
 
-:root[data-input-modality='pointer'] :where(a,button,input,select,textarea,summary,iframe,[tabindex]):focus-visible {
+:root[data-input-modality="pointer"] :where(a, button, summary, iframe, [tabindex]):not(input, select, textarea):focus-visible {
   outline: none;
-  box-shadow: none;
+}
+
+/* A frame cannot match :focus while its page holds focus, so focus.js marks
+   it: the editor's preview and the library's drawer show the ring inside
+   their edge. The reader draws its own (reader.css). */
+:root[data-input-modality="keyboard"] iframe.has-focus {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }

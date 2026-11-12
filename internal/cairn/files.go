@@ -177,12 +177,16 @@ func filePublication(in *publication, f uploadedFile) error {
 // publishFile is the agent API for file pages: multipart/form-data with one
 // file part named "file" and the page metadata as text fields.
 func (s *Server) publishFile(w http.ResponseWriter, r *http.Request) {
+	if !((r.URL.Path == "/api/files" && r.Method == http.MethodPost) || (strings.HasPrefix(r.URL.Path, "/api/files/") && validSlug(strings.TrimPrefix(r.URL.Path, "/api/files/")) && r.Method == http.MethodPut)) {
+		writeAPIError(w, http.StatusMethodNotAllowed, ErrMethodNotAllowed, "Use POST /api/files or PUT /api/files/{slug}.", false)
+		return
+	}
 	if r.Header.Get("Origin") != "" || (r.Header.Get("Sec-Fetch-Site") != "" && r.Header.Get("Sec-Fetch-Site") != "none") {
 		writeAPIError(w, http.StatusForbidden, ErrBrowserOriginForbidden, "browser publication is not permitted", false)
 		return
 	}
-	author, authenticated := s.publisherIdentity(r)
-	if !authenticated {
+	cred, failure := s.authenticate(r)
+	if failure != "" {
 		w.Header().Set("WWW-Authenticate", `Bearer realm="cairn"`)
 		writeAPIError(w, http.StatusUnauthorized, ErrAuthenticationRequired, "publisher credential required", false)
 		return
@@ -226,10 +230,10 @@ func (s *Server) publishFile(w http.ResponseWriter, r *http.Request) {
 		writeAPIErrorField(w, http.StatusBadRequest, ErrValidationFailed, "file", err.Error(), false)
 		return
 	}
-	if author != "" {
-		in.Agent = author
-		r = r.WithContext(context.WithValue(r.Context(), publisherAuthorKey{}, author))
+	if !cred.installation() {
+		in.Agent = cred.Agent
 	}
+	r = r.WithContext(context.WithValue(r.Context(), publishContextKey{}, &publishContext{cred: cred}))
 	s.savePublication(w, r, in)
 }
 
@@ -239,23 +243,31 @@ func (s *Server) publishFile(w http.ResponseWriter, r *http.Request) {
 func (s *Server) serveSource(w http.ResponseWriter, r *http.Request, p savedPage, unlock func()) {
 	if p.FileName == "" {
 		unlock()
-		http.NotFound(w, r)
+		s.sourceNotFound(w, r)
 		return
 	}
 	f, err := os.Open(filepath.Join(s.cfg.DataDir, "objects", p.Object, "source.bin"))
 	unlock()
 	if err != nil {
-		http.NotFound(w, r)
+		s.sourceNotFound(w, r)
 		return
 	}
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
-		http.NotFound(w, r)
+		s.sourceNotFound(w, r)
 		return
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": p.FileName}))
 	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
 	http.ServeContent(w, r, "", info.ModTime(), f)
+}
+
+func (s *Server) sourceNotFound(w http.ResponseWriter, r *http.Request) {
+	if p, ok := r.Context().Value(hostPolicyKey{}).(*hostPolicy); ok && p == s.publicHosts {
+		s.publicNotFound(w, r)
+	} else {
+		s.notFound(w, r)
+	}
 }

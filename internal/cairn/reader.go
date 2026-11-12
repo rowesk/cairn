@@ -1,14 +1,18 @@
 package cairn
 
 import (
-	"crypto/sha256"
 	_ "embed"
-	"encoding/base64"
 	"html/template"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
+	"unicode/utf8"
+
+	"golang.org/x/net/html"
 )
 
 //go:embed ui/reader.html
@@ -17,61 +21,299 @@ var readerHTML string
 //go:embed ui/reader.js
 var readerBodyJS string
 var readerJS = focusJS + "\n" + readerBodyJS
-var readerHash = func() string {
-	sum := sha256.Sum256([]byte(readerJS))
-	return base64.StdEncoding.EncodeToString(sum[:])
-}()
-var readerView = template.Must(template.New("reader").Funcs(uiFunctions).Funcs(template.FuncMap{"readerScript": func() template.JS { return template.JS(readerJS) }}).Parse(readerHTML))
+var readerView = pageView("reader", readerHTML, template.FuncMap{
+	"icon":        readerIcon,
+	"readerTitle": readerTitle,
+})
+
+// readerIcons are drawn in the same 24px, 1.6px-stroke family as uiIcon.
+var readerIcons = map[string]string{
+	"edit":     `<path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/>`,
+	"back":     `<path d="M19 12H5m6-6-6 6 6 6"/>`,
+	"keyboard": `<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M7.5 14h9"/>`,
+	"restore":  `<path d="M4 8v12h16V8"/><rect x="3" y="3" width="18" height="5" rx="1"/><path d="m9 15 3-3 3 3M12 12v6"/>`,
+	"share":    `<path d="M12 15V3m-4 4 4-4 4 4M5 11v9h14v-9"/>`,
+}
+
+func readerIcon(name string) template.HTML {
+	if path, ok := readerIcons[name]; ok {
+		return template.HTML(`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">` + path + `</svg>`)
+	}
+	return uiIcon(name)
+}
+
+// readerTitle keeps short hyphenated terms such as "27-inch" or "USB-C"
+// whole, so a narrow cover never breaks a title inside one.
+func readerTitle(title string) template.HTML {
+	var b strings.Builder
+	for i, word := range strings.Split(title, " ") {
+		if i > 0 {
+			b.WriteByte(' ')
+		}
+		inner := strings.Trim(word, "-")
+		if strings.Contains(inner, "-") && utf8.RuneCountInString(word) <= 24 && strings.IndexFunc(inner, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) >= 0 {
+			b.WriteString(`<span class="compound">` + template.HTMLEscapeString(word) + `</span>`)
+			continue
+		}
+		b.WriteString(template.HTMLEscapeString(word))
+	}
+	return template.HTML(b.String())
+}
+
+// readerPage is a neighbouring page in the library's default order.
+type readerPage struct{ Slug, Title string }
 
 type readerData struct {
-	Theme                                                                         string
-	Title, Agent, CreatedAt, Slug, FileName, Request, Link, Format, RequestSource string
-	Photo                                                                         template.URL
-	Owner, Shared, Protected, File                                                bool
-	FileSize                                                                      int64
-	Contents                                                                      []*contentsEntry
+	File                                                                  bool
+	FileSize                                                              int64
+	Theme                                                                 string
+	Title, Agent, CreatedAt, Slug, FileName, Request, Link, RequestSource string
+	Photo                                                                 template.URL
+	CSRF                                                                  formToken
+	Owner, Shared, Protected, Kindle, KindleReady                         bool
+	Notice                                                                *notice
+	Contents                                                              []*contentsEntry
+	// Template means Cairn rendered the report, so its text column is the
+	// known 43.5rem measure and the cover can line up with it. Layout names
+	// the template: report, comparison or visual.
+	Template bool
+	Layout   string
+	// Custom means the report is in its own design (custom HTML): the owner
+	// gets a slim neutral strip instead of the Blue Hour cover, so the page
+	// owns the canvas.
+	Custom bool
+	// Rail lets the contents float beside the text when there is room: Cairn
+	// template pages with contents, except comparisons, whose tables take the
+	// full width. Everywhere else the contents open from the bar.
+	Rail bool
+	// Download offers the original file: owner only, and only for imported
+	// files that are not Markdown the owner can simply edit, nor a document
+	// whose file card already has a Download button.
+	Download bool
+	// ReportLimit is the tallest the report could plausibly be, in CSS
+	// pixels. A report that claims more keeps its own scroll instead of
+	// stretching the reader.
+	ReportLimit int
+	// ShortcutsOff turns the single-key shortcuts off (Settings), so they
+	// never take a key the owner meant for something else.
+	ShortcutsOff bool
+	// OwnTitle means the report opens with a title the reader can see, so
+	// the cover keeps the page title for screen readers only.
+	OwnTitle bool
+	// LongTitle steps the cover title down a size.
+	LongTitle bool
+	// FrameSrc is the report's address, asking for the theme's colours.
+	FrameSrc template.URL
+	// FixedReport means the report keeps its own colours in every theme:
+	// custom HTML, and pages saved before reports followed the theme.
+	FixedReport bool
+	// Owner only: the editor can open the page, it sits in the archive, and
+	// its neighbours in the library list.
+	Editable, Archived bool
+	Previous, Next     *readerPage
+	// From carries the library view the owner came from to the neighbours'
+	// links; BackHref returns to it.
+	From, BackHref string
+}
+
+// followLibraryView makes previous and next follow the library view the
+// owner opened the page from (a search, an author, an order) rather than the
+// whole library. A page that is no longer in that view falls back to the
+// library's order.
+func (s *Server) followLibraryView(d *readerData, p savedPage, in string) {
+	if in == "" || len(in) > 600 {
+		return
+	}
+	v, err := url.ParseQuery(in)
+	if err != nil {
+		return
+	}
+	q := readLibraryQuery(v)
+	q.Offset, q.Limit = 0, 1000
+	if q.fromQuery() == "" {
+		return
+	}
+	items, _, err := s.listPages(q)
+	if err != nil {
+		return
+	}
+	for i, item := range items {
+		if item.Slug != p.Slug {
+			continue
+		}
+		d.Previous, d.Next = nil, nil
+		if i > 0 {
+			d.Previous = &readerPage{Slug: items[i-1].Slug, Title: items[i-1].Title}
+		}
+		if i+1 < len(items) {
+			d.Next = &readerPage{Slug: items[i+1].Slug, Title: items[i+1].Title}
+		}
+		d.From = q.fromQuery()
+		d.BackHref = q.href(nil)
+		return
+	}
 }
 
 func (s *Server) renderReader(w http.ResponseWriter, r *http.Request, p savedPage, route string, owner, shared, protected bool, link string) {
 	d := readerData{Title: p.Title, Agent: p.Agent, CreatedAt: p.CreatedAt, Slug: route, FileName: p.FileName, Owner: owner, Shared: shared, Protected: protected, Link: link, File: p.File && p.FileName != "", FileSize: p.FileSize}
 	themes := s.themes()
-	d.Theme = themes.Public
+	d.Theme = themes.public()
 	if owner {
-		d.Theme = themes.Reader
+		d.Theme = themes.reader()
 	}
 	d.Photo = s.authorPhoto(p.Agent)
-	// A file page shows the file itself; its stored description has no sections.
+	d.LongTitle = utf8.RuneCountInString(p.Title) > 80
+	d.FrameSrc = template.URL("/_content/" + route + reportSchemeFor(d.Theme).query())
+	d.FixedReport = true
 	if data, err := os.ReadFile(filepath.Join(s.cfg.DataDir, "objects", p.Object, "page.html")); err == nil && !d.File {
+		d.FixedReport = !adaptsToScheme(string(data))
 		_, headings := reportHeadings(string(data))
 		d.Contents = reportContents(headings, route)
+		d.Layout, d.Template = reportLayout(string(data))
+		d.ReportLimit = reportHeightLimit(string(data))
+		d.OwnTitle = reportShowsTitle(headings, p.Title, d.Template)
 	}
-	d.Format = "HTML"
-	if ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(p.FileName)), "."); ext != "" {
-		d.Format = strings.ToUpper(ext)
-		if ext == "md" || ext == "markdown" {
-			d.Format = "Markdown"
-		}
-	}
+	d.Custom = !d.Template && !d.File
+	d.Rail = len(d.Contents) > 0 && d.Template && d.Layout != "comparison"
 	if owner {
-		d.Request = p.OriginalRequest
-		if p.RequestSummary != "" {
-			d.Request = p.RequestSummary
+		d.Request = strings.TrimSpace(p.OriginalRequest)
+		if summary := strings.TrimSpace(p.RequestSummary); summary != "" {
+			d.Request = summary
 		}
 		d.RequestSource = p.RequestSource
+		d.CSRF, d.Kindle, d.KindleReady = s.formToken(), s.cfg.Mail.enabled() && !p.File, s.kindleAddress() != ""
+		d.Notice = s.kindleNotice(r.URL.Query().Get("kindle"), p.Slug, true)
+		if d.Notice == nil {
+			d.Notice = savedNotice(r)
+		}
+		d.ShortcutsOff = !s.preferences().Shortcuts
+		d.Editable = !p.File && editableSource(p.FileName)
+		// File pages offer Download in place of the content frame.
+		d.Download = p.FileName != "" && !d.Editable && !p.File
+		d.Archived, d.Previous, d.Next = s.readerNeighbours(p)
+		d.BackHref = "/"
+		if d.Archived {
+			d.BackHref = "/?archived=1"
+		}
+		s.followLibraryView(&d, p, r.URL.Query().Get("in"))
+	}
+	formAction := "'none'"
+	if owner {
+		// The end of the page archives and sends to Kindle with real form
+		// posts. Browsers send Origin: null under no-referrer, which fails
+		// the owner check, so owner pages keep the referrer on this origin.
+		formAction = "'self'"
+		w.Header().Set("Referrer-Policy", "same-origin")
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-src 'self'; style-src 'unsafe-inline'; font-src data:; img-src data:; script-src 'sha256-"+readerHash+"'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-src 'self'; "+uiAssetPolicy+"; img-src data:; base-uri 'none'; form-action "+formAction+"; frame-ancestors 'none'")
 	_ = readerView.Execute(w, d)
 }
+
+// reportLayout reads the template a report was rendered with from its
+// <main data-template="…">. Custom HTML has none.
+func reportLayout(doc string) (layout string, template bool) {
+	const marker = `<main data-template="`
+	i := strings.Index(doc, marker)
+	if i < 0 {
+		return "", false
+	}
+	rest := doc[i+len(marker):]
+	if end := strings.IndexByte(rest, '"'); end >= 0 && end <= 32 {
+		layout = rest[:end]
+	}
+	return layout, true
+}
+
+// reportHeightLimit is a generous upper bound on how tall a report's page
+// can be at the narrowest screen Cairn supports (320px), from what it holds:
+// its words, its blocks and its media. Real pages measure well under it; a
+// report whose script claims more is not believed (reader.js).
+func reportHeightLimit(doc string) int {
+	const most = 200000
+	words, blocks, media, skip := 0, 0, 0, 0
+	z := html.NewTokenizer(strings.NewReader(doc))
+	for {
+		switch z.Next() {
+		case html.ErrorToken:
+			if z.Err() != io.EOF {
+				return most
+			}
+			return min(most, 8000+3*words+120*blocks+1200*media)
+		case html.TextToken:
+			if skip == 0 {
+				words += utf8.RuneCount(z.Text())
+			}
+		case html.EndTagToken:
+			if name, _ := z.TagName(); skip > 0 && (string(name) == "style" || string(name) == "script" || string(name) == "template") {
+				skip--
+			}
+		case html.StartTagToken, html.SelfClosingTagToken:
+			name, more := z.TagName()
+			switch string(name) {
+			case "style", "script", "template":
+				skip++
+			case "img", "svg", "canvas", "video", "figure", "iframe", "object", "embed", "picture":
+				media++
+			case "p", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6", "div", "section", "article", "br", "hr", "pre", "blockquote", "dt", "dd", "table", "details":
+				blocks++
+			case "code":
+				for more {
+					var key, value []byte
+					key, value, more = z.TagAttr()
+					if string(key) == "class" && (strings.Contains(string(value), "language-mermaid") || strings.Contains(string(value), "language-echarts")) {
+						media++
+					}
+				}
+			}
+		}
+	}
+}
+
+// reportShowsTitle reports whether the report opens with a title the reader
+// can see. Cairn's templates hide an opening h1 that repeats the page title
+// (title-echo); pages saved before that rule, and custom HTML, show theirs.
+func reportShowsTitle(headings []outlineHeading, title string, template bool) bool {
+	if len(headings) == 0 || headings[0].Level != 1 || headings[0].Title {
+		return false
+	}
+	return !template || echoesTitle(headings[0].Text, title)
+}
+
+// readerNeighbours finds the pages either side of p in the library's default
+// order (newest first) within its own collection, so an archived page only
+// ever leads to other archived pages.
+func (s *Server) readerNeighbours(p savedPage) (archived bool, previous, next *readerPage) {
+	var rowid int64
+	if err := s.db.QueryRow(`SELECT archived,rowid FROM pages WHERE id=?`, p.ID).Scan(&archived, &rowid); err != nil {
+		return false, nil, nil
+	}
+	find := func(query string) *readerPage {
+		var n readerPage
+		if s.db.QueryRow(query, archived, p.CreatedAt, p.CreatedAt, rowid).Scan(&n.Slug, &n.Title) != nil {
+			return nil
+		}
+		return &n
+	}
+	previous = find(`SELECT slug,title FROM pages WHERE archived=? AND (created_at>? OR (created_at=? AND rowid>?)) ORDER BY created_at ASC,rowid ASC LIMIT 1`)
+	next = find(`SELECT slug,title FROM pages WHERE archived=? AND (created_at<? OR (created_at=? AND rowid<?)) ORDER BY created_at DESC,rowid DESC LIMIT 1`)
+	return archived, previous, next
+}
+
 func (s *Server) ownerReader(w http.ResponseWriter, r *http.Request, p savedPage) {
 	var shared, protected bool
-	if err := s.db.QueryRow(`SELECT share_enabled,coalesce(password_hash,'')!='' FROM pages WHERE id=?`, p.ID).Scan(&shared, &protected); err != nil {
-		http.Error(w, "page unavailable", 500)
+	var name string
+	if err := s.db.QueryRow(`SELECT share_enabled,coalesce(password_hash,'')!='',coalesce(public_slug,'') FROM pages WHERE id=?`, p.ID).Scan(&shared, &protected, &name); err != nil {
+		s.showError(w, http.StatusInternalServerError, problemStorage(r.URL.RequestURI()))
 		return
 	}
 	link := "/" + p.Slug
 	if shared {
-		link = strings.TrimRight(s.cfg.PublicBaseURL, "/") + "/" + p.Slug
+		// The address the owner named in Manage, which visitors also see.
+		if !validSlug(name) {
+			name = p.Slug
+		}
+		link = strings.TrimRight(s.cfg.PublicBaseURL, "/") + "/" + name
 	}
 	s.renderReader(w, r, p, p.Slug, true, shared, protected, link)
 }

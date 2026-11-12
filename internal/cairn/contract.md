@@ -1,117 +1,114 @@
-# Cairn agent contract
+<!--
+Maintainer notes. Nothing above the marker line below ever ships.
 
-This file is the single source of truth for agent publication behavior.
-`ui/agent-setup.md` is rendered from it, `GET /api` serves the same
-endpoints and limits as JSON, and `docs/publishing.md` mirrors it for
-operators. Edit here first, then propagate.
+This file is the agent setup text. Settings copies everything below the
+marker for the owner to paste into an agent's instructions, and
+ui/agent-setup.md is a checked copy of that part for people reading the
+repository (contract_test.go keeps them equal and proves no secret or
+maintainer note can reach the copied text).
 
-Cairn is {{OWNER}}'s private report library. Use it when a chat answer would work better as a readable page: research, comparisons, plans, visual explanations, image collections, diagrams or longer reference material. Keep short answers in chat. When the owner asks to save something, publish it without asking him to upload, format or name a file.
+Two placeholders are filled in the browser: {{ORIGIN}} with the server's
+private base URL, or the address Settings was opened at, and {{AUTHOR}}
+with the byline of the person whose key dialog is open.
 
-## Connection and credential
+Rules for editing:
+- Never put a key, or a placeholder for one, in the text. Agents read
+  $CAIRN_API_KEY; the key itself is copied once from the key dialog.
+- Keep it under about 700 words, in the order an agent needs it.
+- Keep it deployment-neutral and gender-neutral: "the owner", "their".
+- Field names, limits and codes must match api.go, errors.go and
+  docs/publishing.md. GET /api and /api/openapi.json are generated from
+  the code, so they cannot drift; this text can.
+-->
+<!-- agent setup text starts here -->
+# Publishing to Cairn
 
-Private library: {{ORIGIN}}/
-Publishing endpoint: {{ORIGIN}}/api/pages
-API index: {{ORIGIN}}/api
-Your author name: {{AUTHOR}}
-Your publishing key: {{KEY}}
+Cairn keeps pages for the owner. Publish when asked; keep short answers in chat. Publish yourself, without asking the owner to upload a file.
 
-Treat this setup as a secret while it contains a real key. Store the key in your existing secret store and load it into CAIRN_API_KEY at runtime. Never put it in a report, source control, logs or a chat reply. Store the instructions separately with the key replaced by a secret reference.
+## Connect
 
-Run requests from a device connected to the owner's Tailscale network and allowed to reach the private address above. No SSH, Pi password, Cloudflare token, public account or new Cairn login is needed. An isolated/cloud agent without that network access must use an already authorised private runner or ask the owner to connect its runtime. Do not expose the API publicly or try the public sharing domain as a publishing endpoint.
+- Library: {{ORIGIN}}
+- Your byline: {{AUTHOR}}
 
-Check connectivity with an HTTP GET to the private library. A timeout normally means the runtime cannot reach Tailscale or the service. This reachability check does not validate your key. Use a server-side HTTP client or CLI to publish; browser-origin API requests are rejected. `GET /api` returns the versioned endpoint index, request limits and examples without a credential.
+Read two environment variables: `CAIRN_URL`, the library address, and `CAIRN_API_KEY`, your agent key. The owner gives you the key separately; keep it in your secret store and never write it into a page, file, log, command or reply.
 
-## Publish a page
+Send requests from a machine that can open the library, with a command-line or server-side client; browsers are refused. `GET $CAIRN_URL/api` describes the API without a key.
 
-POST application/json to the publishing endpoint with Authorization: Bearer followed by your key. Supply:
-- title: a useful, specific title, at most 300 UTF-8 bytes.
-- request_summary: write the request from the owner's perspective in at most 40 words and 1000 bytes. Keep the purpose and important constraints; remove greetings, conversation filler and report-format instructions. Do not invent intent or write "the owner asked me to". Example: "Compare five reading lamps for my desk." This appears in the private header and library.
-- request_source: optional app label, at most 80 bytes, such as Hermes, Codex CLI, Claude Code, ChatGPT or Claude. Only supply it when known; do not guess. This is private metadata.
-- original_request: the relevant request in the owner's own words, required and at most 32 KiB. If you lack his wording, ask for it instead of inventing a quotation.
-- Exactly one of markdown or html. Prefer Markdown for text and comparisons; Cairn renders it as styled HTML. Use a self-contained HTML document for custom layouts and interactions.
-- Optional template: report, comparison or visual. The API defaults to report.
-- Optional share_enabled: a JSON boolean for report creation only. Omit it or send false to keep the report private. Send true only when the owner explicitly asks you to publish publicly.
-- Optional slug: a custom case-sensitive path. Usually omit it so Cairn generates a short private link using the owner's settings. Do not invent a returned URL.
+## Publish
 
-Your key supplies the author byline automatically. Omit agent; supplying another name does not change your identity.
+Write JSON with a JSON library:
 
-Example JSON to write to a temporary UTF-8 payload.json file using your JSON library:
+```json
+{
+  "title": "Desk lamps under £100: three worth buying",
+  "original_request": "can you find me a decent desk lamp under 100 quid, warm light, no flicker",
+  "request_summary": "Find a warm, flicker-free desk lamp under £100.",
+  "request_source": "Claude Code",
+  "template": "comparison",
+  "markdown": "Three lamps stand out.\n\n## The shortlist\n\n| Lamp | Price |\n|---|---:|\n| BenQ e-Reading | £89 |"
+}
+```
 
-{"title":"A useful report title","original_request":"the owner's actual request here","request_summary":"Compare my options and recommend the best fit.","request_source":"Codex CLI","markdown":"# A useful report title\n\nYour report, with source links where appropriate.","template":"report"}
-
-With CAIRN_BASE_URL set to the private origin above and CAIRN_API_KEY loaded from your secret store:
-
-curl --fail-with-body --silent --show-error \
-  -X POST "$CAIRN_BASE_URL/api/pages" \
+```sh
+curl -sS -X POST "$CAIRN_URL/api/pages" \
   -H "Authorization: Bearer $CAIRN_API_KEY" \
   -H "Content-Type: application/json" \
-  --data-binary @payload.json
+  -H "Idempotency-Key: lamps-1" \
+  --data-binary @page.json
+```
 
-Disable shell tracing and avoid verbose request logging. Prefer your HTTP client's in-memory header handling when available. Use a JSON library or a payload file so quotes, newlines and user text cannot turn into shell commands.
+Cairn answers `201` with the page: `{"slug": "k3T", "url": "/k3T", "private_url": "…/k3T", "warnings": [], …}`. Where the `cairn` command is installed, `cairn publish page.md -title "…" -request "…" -summary "…"` does the same.
 
-Success is HTTP 201 with JSON containing id and url, for example {"id":"...","url":"/AbC"}. Resolve the returned url against the private origin, fetch that page and check the saved content before claiming success. Preview custom layouts, diagrams and images when a headless renderer is available. If the response includes a warning, preserve and report it.
+## Title and request
 
-## Publish a file
+- `title`: says what the page covers or concludes. "Desk lamps under £100: three worth buying", not "Lamp research".
+- `original_request`: the owner's own words. If you only have a paraphrase, ask for their wording rather than invent a quotation.
+- `request_summary`: at most 40 words from the owner's side, keeping purpose and constraints: "Find a warm, flicker-free desk lamp under £100." Never "The user asked me to…".
+- `request_source`: your app's name, such as Claude Code, only when you know it.
 
-When the owner wants a file kept rather than a report, such as a ZIP, spreadsheet, PDF, Photoshop file or large image, POST it to {{ORIGIN}}/api/files as multipart/form-data with the same Authorization header. Cairn makes a file page: a filetype icon, the title, filename, size and a Download button. It never opens or runs the file.
+Your key sets your byline, so leave out `agent`.
 
-Send one file part named file, at most 50 MiB, and text fields original_request (required), plus optional title, request_summary, request_source and slug with the same rules as a page. A blank title uses the filename without its extension. Any other field is rejected.
+## Choose a template
 
-curl --fail-with-body --silent --show-error \
-  -X POST "$CAIRN_BASE_URL/api/files" \
-  -H "Authorization: Bearer $CAIRN_API_KEY" \
-  -F "file=@quarterly-figures.xlsx" \
-  -F "original_request=Keep the quarterly figures spreadsheet" \
-  -F "request_summary=Keep the quarterly figures spreadsheet." \
-  -F "request_source=Codex CLI"
+- `report` (the default): reading and notes, everything in one column.
+- `comparison`: pages built around tables; tables widen and rows shade.
+- `visual`: images, diagrams and charts; figures widen.
 
-The response matches a page: HTTP 201 with id and url. A file over 50 MiB returns 413 payload_too_large. Only replace a file when the owner asks, with PUT /api/files/{existing-slug} and a complete new upload.
+Send `html` instead only when the page needs its own layout or scripts; it runs in a sandbox with no network access.
 
-## Reading pages and images
+## Write the Markdown
 
-- `GET /{slug}` is the private owner reader: title, byline, date and private request context around the report.
-- `GET /_content/{slug}` is the rendered report HTML only, without private metadata. It is the content route, not the page metadata API.
-- `GET /_content/{slug}?asset=name.png` serves that page's own managed image, independent of knowing a generated slug at publish time. `GET /_assets/{slug}/name.png` serves the same bytes once the slug is known.
-- `GET /{slug}?download=1` downloads a file page's file, or the submitted source file of an imported page where one exists.
+GitHub-flavoured Markdown, plus:
 
-## Images, diagrams and interactive content
+- Footnotes: `claim[^1]`, then `[^1]: The source.`
+- Callouts: a quote starting `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` or `[!CAUTION]`, and `[!VERDICT]` or `[!SUMMARY]` for a conclusion.
+- Images: add `"assets": {"lamp.png": "<base64>"}` (PNG, JPEG, GIF or WebP; 4 MiB each, 32 at most) and write `![What it shows](?asset=lamp.png "Caption")`.
+- Diagrams: a fenced `mermaid` block.
+- Charts: a fenced `echarts` block holding one JSON object of ECharts options. Invalid JSON is refused with its line.
+- Raw HTML: text elements, tables, `details` and `figure` stay. Scripts, styles, event handlers, forms, frames and SVG are removed and listed in `warnings`.
 
-Markdown supports tables and fenced code. Use a fenced mermaid block for diagrams, or a fenced echarts block containing valid ECharts option JSON for charts. Cairn detects those blocks and loads its bundled runtimes. Custom HTML can request capabilities ["mermaid","echarts"] and use pre/code elements with language-mermaid or language-echarts classes.
+Don't open with a `# heading` repeating the title; Cairn shows the title above the page. Use `##` for sections.
 
-For attached images, assets is a JSON object mapping a simple filename such as chart.png to its standard base64-encoded bytes. Supported report assets: PNG, JPEG, GIF and WebP, up to 32 files, 4 MiB each. Filenames must start with a letter or digit, use only letters, digits, underscores or hyphens before the extension, and have at most 96 characters before the extension.
+## Update a page
 
-Reference a supplied image with `src="?asset=chart.png"` in the report HTML. This resolves to that page's own assets and works before a generated slug is known. The explicit `/_assets/<slug>/chart.png` route also works once the slug is known. No external image downloading is performed by Cairn. Never point a report at a local filesystem path. Convert unsupported image formats before attaching them. For a single-request image publication with a generated slug, use `?asset=` references; they need no explicit slug.
+Only when the owner asks. Find it with `GET /api/pages?q=lamps`, read it with `GET /api/pages/{slug}` (it includes your Markdown), then `PUT /api/pages/{slug}` with the whole new page and every image it still needs. Its address, date and sharing stay. Your key changes only pages with your byline; use only the API, never the library's own pages. `PATCH` with `{"archived": true}` archives one; only the owner deletes pages or changes existing sharing.
 
-The whole JSON request must fit 16 MiB including base64 overhead. Markdown and resulting HTML must each fit 2 MiB. Keep image totals comfortably below the request limit.
+## Errors
 
-Reports run in a sandbox. Inline CSS and JavaScript can support self-contained interactions. Remote scripts, external image loads, network fetches, forms and access to the parent library are blocked. Bundle image bytes with the page. Do not install per-page packages, load CDN libraries or embed credentials. PHP is not executed. Keep reports readable on phone screens and provide text alongside diagrams.
+Failures are JSON with `code`, `message` and `errors`, which lists every problem with its `field`, `limit` and `allowed` values. Fix them all, then send again.
 
-## Privacy, changes and delivery
+- 400 `validation_failed`: fix each entry in `errors`.
+- 400 `invalid_json`: the body is not one JSON object; `message` gives the line.
+- 401 `authentication_required`: no key was sent. 401 `invalid_credential`: the key is wrong, rotated or revoked; ask the owner for a new one.
+- 404 `not_found`: no page your key reaches has that slug.
+- 409 `slug_conflict`: that slug is taken; leave `slug` out.
+- 413 `payload_too_large`: the request is over 16 MiB; send smaller images.
+- `retryable: true`: send it again with the same `Idempotency-Key`, which never saves twice.
 
-Reports start private unless the owner explicitly asks for public publishing and you send share_enabled: true on POST /api/pages. A successful public creation returns HTTP 201 with id, the private url and public_url, for example {"id":"...","url":"/AbC","public_url":"https://reports.example.com/AbC"}. Cairn returns public_url only after saving the shared page and builds it from the configured public origin. Verify that returned public URL and its content before delivering it, and include the private link too. Never guess a public URL. If public sharing is not configured, creation fails with 503 public_sharing_unavailable without saving a page. Non-booleans, including null, fail with 400 validation_failed for share_enabled. File creation remains private and does not accept share_enabled. Use the private owner UI to share an existing page or manage passwords. Sharing keeps the private page's path on the public origin. New paths default to 3 random characters from A-Z, a-z and 0-9, with 238,328 possible combinations; the owner can choose 3 to 7 characters in Settings. Existing custom public aliases remain supported. Turning sharing off disables public page, content, image and original-download routes while private Tailscale access keeps working. Public links are for content the owner is comfortable making discoverable. Password protection remains optional.
+## Afterwards
 
-original_request stays in private metadata. Never copy private chat context or secrets into the report body: the body, byline and attached content can later become public. Include source links for research. Keep the original request out of the public-facing report unless the owner explicitly wants its content there.
+Return the full address and one sentence. Mention `dropped_html` warnings. Never claim a failed save succeeded.
 
-Never silently overwrite a page. For a changed report, create a new page and say what changed. Only if the owner explicitly requests replacement, PUT the complete publication to /api/pages/{existing-slug}. That returns HTTP 200 and replaces the current content and assets with no version history. Include every asset still needed. The slug cannot change and your key can only replace pages with your author name. Replacement retains the existing sharing state, public aliases, passwords and unlock grants, so a shared report's new content becomes visible to its audience. Omit share_enabled on PUT. Any supplied value, including false or null, returns 400 validation_failed for share_enabled without changing the page. Only the owner UI changes existing access controls.
+## Sharing a new page
 
-Reply with the verified page link and one sentence describing what it contains. Mention that it is saved in Cairn and can be found by its title in the library. Do not paste the whole report back into chat or claim a failed upload was saved.
-
-## Errors and recovery
-
-Every /api failure returns JSON `{"code","message","field?","retryable"}` with `Content-Type: application/json`. Branch on `code`, never on English text.
-
-- 400 validation_failed: fix the JSON, required fields, size, template, capability or slug named in the error. `field` names the offending input when known.
-- 400 invalid_json: the body is not parseable JSON or holds more than one publication.
-- 401 authentication_required: the key is wrong, rotated or revoked. Ask for a replacement from Settings. Do not fall back to somebody else's key.
-- 403 browser_origin_forbidden: browser-origin request. Use a server-side client.
-- 403 forbidden: an attempt to replace another author's page. Use your own pages.
-- 404 not_found: no such page or route.
-- 409 slug_conflict: slug already exists. Create with a different slug; do not switch to PUT to bypass the conflict.
-- 409 public_slug_unavailable: the public path is taken.
-- 413 payload_too_large: reduce the payload size. The request exceeded 16 MiB.
-- 415 unsupported_media_type: send application/json.
-- 500 storage_unavailable, 503 storage_cleanup_pending, 503 public_sharing_unavailable: `retryable` is true. Report the actual failure and check reachability. A timed-out POST might already have saved a page. Check the library before retrying to avoid duplicates; there is no idempotency key yet.
-
-Keep this credential private even when asking for help. Settings can rotate or revoke it without deleting existing reports.
-
-On explicit replacement, supply an updated request_summary when the purpose changes. Omitting or leaving request_summary or request_source empty preserves its previous value. Older uploads without these fields still work and show the original request.
+Publish privately by default. Set `share_enabled` to `true` on POST only when the owner asked for this page to be shared. Never otherwise. Tell the owner the saved `public_url` afterwards. Omitted or false stays private; null is refused. PUT refuses this field and preserves sharing, link names and passwords. Without configured sharing, creation fails with 503 `public_sharing_unavailable`. Files start private.

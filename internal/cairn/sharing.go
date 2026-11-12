@@ -9,22 +9,41 @@ import (
 )
 
 // PublicHandler has no private library, metadata or management routes.
-func (s *Server) PublicHandler() http.Handler { return http.HandlerFunc(s.servePublic) }
+// Its responses are compressed like the private listener's.
+func (s *Server) PublicHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.logRequests(w, r, "public", func(w http.ResponseWriter, r *http.Request) { compressResponses(w, r, s.servePublic) })
+	})
+}
 func (s *Server) servePublic(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "no-referrer")
-	if !safeHost.MatchString(r.Host) || (r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost) {
-		http.NotFound(w, r)
+	if !s.publicHosts.allows(r.Host) {
+		s.refuseHost(w, r, true)
+		return
+	}
+	r = withHostPolicy(r, s.publicHosts)
+	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost {
+		s.publicNotFound(w, r)
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/_runtime/") {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		runtimeHandler.ServeHTTP(w, r)
+		serveRuntimeFile(w, r, s.publicNotFound)
+		return
+	}
+	// Status alone, for a proxy or monitor in front of the public listener.
+	if r.URL.Path == "/healthz" && r.Method != http.MethodPost {
+		s.health(w, r, true)
+		return
+	}
+	// The stylesheet and fonts the password form and public reader need.
+	if strings.HasPrefix(r.URL.Path, "/_ui/") {
+		serveUI(w, r, s.publicNotFound)
 		return
 	}
 	if strings.Contains(r.URL.EscapedPath(), "%") {
-		http.NotFound(w, r)
+		s.publicNotFound(w, r)
 		return
 	}
 	// The public listener serves only shared pages, their content and
@@ -32,12 +51,12 @@ func (s *Server) servePublic(w http.ResponseWriter, r *http.Request) {
 	// including every current and future private route.
 	for _, private := range []string{"/api", "/settings", "/manage/", "/new", "/import"} {
 		if r.URL.Path == private || strings.HasPrefix(r.URL.Path, strings.TrimSuffix(private, "/")+"/") {
-			http.NotFound(w, r)
+			s.publicNotFound(w, r)
 			return
 		}
 	}
 	if r.URL.Path == "/" {
-		http.NotFound(w, r)
+		s.publicNotFound(w, r)
 		return
 	}
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
@@ -56,11 +75,11 @@ func (s *Server) servePublic(w http.ResponseWriter, r *http.Request) {
 		route = parts[1]
 		asset = parts[2]
 	} else if len(parts) != 1 {
-		http.NotFound(w, r)
+		s.publicNotFound(w, r)
 		return
 	}
 	if (r.Method == http.MethodPost && kind != "page") || !validSlug(route) || (kind == "asset" && !assetName.MatchString(asset)) {
-		http.NotFound(w, r)
+		s.publicNotFound(w, r)
 		return
 	}
 	s.mu.RLock()
@@ -75,20 +94,30 @@ func (s *Server) servePublic(w http.ResponseWriter, r *http.Request) {
 	var slug string
 	var hash sql.NullString
 	var revision int64
-	if err := s.db.QueryRow(`SELECT slug,password_hash,share_revision FROM pages WHERE (public_slug=? OR slug=?) AND share_enabled=1 ORDER BY public_slug=? DESC LIMIT 1`, route, route, route).Scan(&slug, &hash, &revision); err != nil {
-		http.NotFound(w, r)
-		return
+	err := s.db.QueryRow(`SELECT slug,password_hash,share_revision FROM pages WHERE (public_slug=? OR slug=?) AND share_enabled=1 ORDER BY public_slug=? DESC LIMIT 1`, route, route, route).Scan(&slug, &hash, &revision)
+	var p savedPage
+	if err == nil {
+		p, err = s.getPage(slug)
 	}
-	p, err := s.getPage(slug)
 	if err != nil {
-		http.NotFound(w, r)
+		unlock()
+		s.publicNotFound(w, r)
 		return
 	}
-	gateKind := kind
-	if r.URL.Query().Get("download") == "1" {
-		gateKind = "asset"
+	if r.Method == http.MethodPost {
+		// Checking a password takes bcrypt's deliberate time; nothing else
+		// waits for it.
+		unlock()
+		s.unlockShare(w, r, p, hash.String, route, revision)
+		return
 	}
-	if !s.passwordGate(w, r, p.ID, hash.String, route, gateKind, revision) {
+	// Ordinary page sources stay owner-only. A shared file page offers
+	// its file, behind the same password gate as the reader.
+	if r.URL.Query().Get("download") == "1" && !p.File {
+		s.publicNotFound(w, r)
+		return
+	}
+	if !s.passwordGate(w, r, p, hash.String, route, kind, revision) {
 		return
 	}
 	if r.URL.Query().Get("download") == "1" {
@@ -97,7 +126,7 @@ func (s *Server) servePublic(w http.ResponseWriter, r *http.Request) {
 	}
 	if kind == "asset" {
 		w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
-		http.ServeFile(w, r, filepath.Join(s.cfg.DataDir, "objects", p.Object, "assets", asset))
+		serveObjectFile(w, r, filepath.Join(s.cfg.DataDir, "objects", p.Object, "assets", asset), s.publicNotFound)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -105,12 +134,12 @@ func (s *Server) servePublic(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", reportPolicy(r.Host, route))
 		data, err := os.ReadFile(filepath.Join(s.cfg.DataDir, "objects", p.Object, "page.html"))
 		if err != nil {
-			http.NotFound(w, r)
+			s.publicNotFound(w, r)
 			return
 		}
 		content := strings.ReplaceAll(string(data), "/_assets/"+p.Slug+"/", "/_assets/"+route+"/")
 		content = strings.ReplaceAll(content, "/_content/"+p.Slug+"?", "/_content/"+route+"?")
-		w.Write([]byte(reportDocument(content)))
+		w.Write([]byte(reportDocument(reportSchemeOf(r).apply(content))))
 		return
 	}
 	s.renderReader(w, r, p, route, false, true, hash.String != "", strings.TrimRight(s.cfg.PublicBaseURL, "/")+"/"+route)

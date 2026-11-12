@@ -1,0 +1,177 @@
+/*
+ * Shell: the one top bar every owner page shares. The brand on the left,
+ * then the page's place (the library's collections, or a way back), and
+ * Settings on the right. The visitor variant, used by the password form
+ * and visitors' error pages, shows the brand and nothing private.
+ */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  min-height: 64px;
+  padding: var(--space-3) var(--gutter);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--text-title);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -.035em;
+  text-decoration: none;
+}
+
+/* The page's way back: a quiet control, never an underlined link. */
+.back-link {
+  display: inline-flex;
+  flex-shrink: 1;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 40ch;
+  min-height: max(var(--control-height-sm), var(--target));
+  padding: 0 var(--space-3) 0 var(--space-2);
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  font-size: var(--text-label);
+  text-decoration: none;
+}
+
+.back-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.back-link .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.back-link:hover,
+.topnav a:hover,
+.topbar-settings:hover {
+  background: var(--control-bg);
+  color: var(--ink);
+}
+
+/* Settings closes the bar on every owner page. */
+.topbar-settings {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: max(var(--control-height-sm), var(--target));
+  margin-left: auto;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  font-size: var(--text-label);
+  text-decoration: none;
+}
+
+.topbar-settings .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.topbar-settings[aria-current=page] {
+  background: var(--selected-bg);
+  color: var(--selected-ink);
+}
+
+/* Library collections */
+
+.topnav {
+  display: flex;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.topnav a {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: max(var(--control-height-sm), var(--target));
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  font-size: var(--text-label);
+  text-decoration: none;
+}
+
+.topnav a .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.topnav a[aria-current=page] {
+  background: var(--selected-bg);
+  color: var(--selected-ink);
+}
+
+.count {
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 650px) {
+  .topbar {
+    gap: var(--space-2);
+    min-height: 56px;
+    padding: var(--space-1) var(--space-4);
+  }
+
+  /* Phones keep the bar to one row: Settings shrinks to its icon and,
+     beside the collections, the brand to its mark. Both keep their words
+     for screen readers. */
+  .topbar-settings {
+    justify-content: center;
+    min-width: var(--target);
+    padding: 0 var(--space-2);
+  }
+
+  .topbar-settings-label,
+  .topbar:has(.topnav) .brand-word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .topbar:has(.topnav) .brand {
+    justify-content: center;
+    min-width: var(--target);
+  }
+
+  .topnav {
+    gap: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .topnav a {
+    padding: 0 var(--space-2);
+  }
+
+  .topnav a .icon {
+    display: none;
+  }
+}
+
+/* Three collections and their counts need every pixel at 320px. */
+@media (max-width: 360px) {
+  .topnav .count {
+    display: none;
+  }
+}

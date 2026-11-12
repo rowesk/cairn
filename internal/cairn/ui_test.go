@@ -1,9 +1,8 @@
 package cairn_test
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -20,18 +19,19 @@ func TestTideLibraryKeepsDirectLinksAndSandbox(t *testing.T) {
 	if status != 200 || !strings.Contains(html, `href="/report" data-preview`) || strings.Contains(html, `<script>alert(1)</script>`) {
 		t.Fatal("unsafe or missing direct link")
 	}
-	a := strings.LastIndex(html, "<script>") + len("<script>")
-	b := strings.LastIndex(html, "</script>")
-	sum := sha256.Sum256([]byte(html[a:b]))
-	hash := base64.StdEncoding.EncodeToString(sum[:])
-	if !strings.Contains(headers.Get("Content-Security-Policy"), "'sha256-"+hash+"'") {
-		t.Fatal("preview script blocked by CSP")
+	// The page's script is a cached file under /_ui/, allowed by script-src 'self', never inline.
+	script := regexp.MustCompile(`<script src="(/_ui/library\.[0-9a-f]{12}\.js)"></script>`).FindStringSubmatch(html)
+	if script == nil || strings.Contains(html, "<script>") || !strings.Contains(headers.Get("Content-Security-Policy"), "script-src 'self'") || strings.Contains(headers.Get("Content-Security-Policy"), "unsafe-inline") {
+		t.Fatal("preview script not served as a file under a strict policy")
+	}
+	if status, h, js := request(t, srv, "GET", script[1], nil, ""); status != 200 || !strings.Contains(h.Get("Content-Type"), "javascript") || !strings.Contains(string(js), "cairnFollowScheme") {
+		t.Fatal("library script missing", status)
 	}
 	if !strings.Contains(html, `sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"`) || strings.Contains(html, "allow-same-origin") {
 		t.Fatal("preview sandbox changed")
 	}
 	_, _, body = request(t, srv, "GET", "/report", nil, "")
-	if strings.Contains(string(body), "<dialog") || !strings.Contains(string(body), `src="/_content/report"`) {
+	if strings.Contains(string(body), "<dialog") || !strings.Contains(string(body), `src="/_content/report?scheme=auto"`) {
 		t.Fatal("direct link must be a full reading page")
 	}
 	_, _, body = request(t, srv, "GET", "/?shared=1", nil, "")
@@ -66,7 +66,7 @@ func TestRequestSummaryPublicationAndReplacement(t *testing.T) {
 		t.Fatal("replacement lost metadata")
 	}
 	_, _, body = request(t, srv, "GET", "/?q=dentist", nil, "")
-	if !strings.Contains(string(body), "Find my closest dentist.") {
+	if !strings.Contains(string(body), "Find my closest <mark>dentist</mark>.") {
 		t.Fatal("summary search failed")
 	}
 	in["request_summary"] = strings.Repeat("word ", 41)

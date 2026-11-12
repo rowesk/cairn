@@ -1,7 +1,225 @@
-{{define "byline"}}<div class="report-author" role="group" aria-label="Prepared by {{.Agent}}"><span class="author-portrait" role="img" aria-label="{{.Agent}} avatar">{{if .Photo}}<img src="{{.Photo}}" alt="">{{else}}{{initial .Agent}}{{end}}</span><div><strong class="signature-name">{{.Agent}}</strong><div class="signature-context"><span>Prepared by</span><span aria-hidden="true">·</span><time datetime="{{.CreatedAt}}">{{date .CreatedAt}}</time><span aria-hidden="true">·</span><span class="reader-format" title="Source format">{{.Format}}{{if .RequestSource}} via {{.RequestSource}}{{end}}</span>{{if .Protected}}<span aria-hidden="true">·</span><span class="reader-password">Password protected</span>{{end}}{{if and .FileName (not .File)}}<span aria-hidden="true">·</span><a class="reader-download" href="/{{.Slug}}?download=1">Download original</a>{{end}}</div></div></div>{{end}}{{define "contents"}}{{range .}}<li><a href="{{.Href}}" target="report" data-id="{{.ID}}">{{.Text}}</a>{{if .Children}}<ol>{{template "contents" .Children}}</ol>{{end}}</li>{{end}}{{end}}<!doctype html><html lang="en" data-theme="{{.Theme}}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{.Title}} · Cairn</title><style>{{css}}</style></head><body class="reading-shell{{if .Contents}} has-contents{{end}}">
-<header class="reading-header report-header blue-hour"><nav class="reading-nav">{{if .Owner}}<a class="brand" href="/">{{mark}}cairn</a>{{else}}<span class="brand">{{mark}}cairn</span>{{end}}<div class="reading-actions"><div class="report-access"><button type="button" id="copy-report-link" data-url="{{.Link}}" aria-describedby="report-address" aria-label="Copy {{if .Shared}}public{{else}}private{{end}} page link">{{if .Shared}}{{icon "link"}}{{else}}{{icon "lock"}}{{end}}<span>{{if .Shared}}Public{{else}}Private{{end}}</span>{{icon "copy"}}</button><span class="address-tooltip" id="report-address" role="tooltip">{{.Link}}</span></div>{{if .Owner}}<a class="button quiet" href="/manage/{{.Slug}}"><span>Manage<span class="wide-label"> page</span></span>{{icon "arrow"}}</a>{{end}}</div></nav>
-<div class="report-heading"><div class="report-title-block"><h1>{{.Title}}</h1>{{template "byline" .}}</div>{{if .Request}}<div class="report-request"><span title="Only visible on your devices">Your request · only you</span><p id="report-request-text">{{.Request}}</p><button type="button" class="request-toggle" aria-expanded="false" aria-controls="report-request-text" hidden>Show full request</button></div>{{end}}</div><span class="copy-feedback" id="copy-feedback" role="status"></span></header>
-<div class="compact-reader" aria-hidden="true">{{if .Owner}}<a class="brand" href="/" tabindex="-1" aria-label="Cairn library">{{mark}}<span>cairn</span></a>{{else}}<span class="brand">{{mark}}<span>cairn</span></span>{{end}}<button type="button" class="compact-title" tabindex="-1" aria-expanded="false" aria-controls="reader-details" aria-label="{{.Title}}: show page details"><span class="compact-page">{{.Title}}</span><span class="compact-section"></span>{{icon "chevron"}}</button><div class="compact-actions">{{if .Contents}}<button type="button" class="compact-contents" tabindex="-1" aria-label="Contents" aria-expanded="false" aria-controls="reader-contents">{{icon "list"}}<span>Contents</span></button>{{end}}<button type="button" class="compact-copy" tabindex="-1" aria-label="Copy {{if .Shared}}public{{else}}private{{end}} page link" title="Copy {{if .Shared}}public{{else}}private{{end}} link">{{if .Shared}}{{icon "link"}}{{else}}{{icon "lock"}}{{end}}<span class="compact-check">{{icon "check"}}</span></button>{{if .Owner}}<a class="compact-manage" href="/manage/{{.Slug}}" tabindex="-1">Manage {{icon "arrow"}}</a>{{end}}</div><span class="reading-progress" aria-hidden="true"></span></div>
-<div class="reader-scrim" hidden></div><section class="reader-details" id="reader-details" aria-label="Page details" hidden><p class="details-title">{{.Title}}</p>{{template "byline" .}}{{if .Request}}<div class="details-request"><span>Your request · only you</span><p>{{.Request}}</p></div>{{end}}</section>
-{{if .Contents}}<nav class="reader-toc" id="reader-contents" aria-labelledby="toc-label"><div class="toc-panel"><h2 id="toc-label">Contents</h2><ol id="toc-list">{{template "contents" .Contents}}</ol></div></nav>{{end}}
-{{if .File}}<main class="file-page"><div class="file-card">{{fileIcon .FileName}}<div class="file-details"><p class="file-name">{{.FileName}}</p><p class="file-facts">{{fileType .FileName}} · {{fileSize .FileSize}}</p></div><a class="button file-download" href="/{{.Slug}}?download=1" download>{{icon "download"}}<span>Download</span></a></div></main>{{else}}<iframe title="Report" name="report" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" src="/_content/{{.Slug}}"></iframe>{{end}}<script>{{readerScript}}</script></body></html>
+{{define "title"}}{{.Title}} · Cairn{{end}}
+
+{{- /* The byline's containers are flex or block, so line breaks between
+   its elements add no visible space. Its first line reads as a person
+   would say it; the owner's second line carries the page's status (shown
+   here on phones and in page details, where the toolbar has no room for
+   it) and, for imported files, the original. */ -}}
+{{- define "byline"}}
+<div class="report-author">
+<span class="author-portrait" aria-hidden="true">{{if .Photo}}<img src="{{.Photo}}" alt="">{{else}}{{initial .Agent}}{{end}}</span>
+<div class="byline">
+<p class="byline-credit"><span class="byline-who">Prepared by {{.Agent}}</span><span class="byline-sep" aria-hidden="true">·</span><time datetime="{{.CreatedAt}}" data-local="day">{{date .CreatedAt}}</time></p>
+{{- /* Only the owner downloads the source: sharing a page shares the page. */ -}}
+{{- if .Owner}}
+<p class="byline-extra{{if .Download}} has-download{{end}}">
+<span class="byline-access">{{template "access" .}}</span>
+{{- if .Download}}<span class="byline-sep" aria-hidden="true">·</span><a class="reader-download" href="/{{.Slug}}?download=1">Download original</a>{{end -}}
+</p>
+{{- end}}
+</div>
+</div>
+{{- end}}
+
+{{- define "request-label"}}<span class="request-name">Your request</span>{{if .RequestSource}}<span class="request-source"><span class="byline-sep" aria-hidden="true">·</span><span class="sr-only">, </span>via {{.RequestSource}}</span>{{end}}<span class="request-private"><span class="byline-sep" aria-hidden="true">·</span><span class="sr-only">, </span>only you see this</span>{{end}}
+
+{{- define "copy-label"}}<span class="copy-label"><span class="copy-ready">{{icon "copy"}}<span class="copy-text">Copy link</span></span><span class="copy-done" aria-hidden="true">{{icon "check"}}<span class="copy-text">Copied</span></span></span>{{end}}
+
+{{- /* Who can open the page, in words and icons, the way the library's badge says it. */ -}}
+{{- define "access"}}{{if .Shared}}{{icon "link"}}<span class="sr-only">This page is </span>{{if .Protected}}Shared with a password{{icon "lock"}}{{else}}Shared{{end}}{{else}}{{icon "lock"}}<span class="sr-only">This page is </span>Private{{end}}{{end}}
+
+{{- define "access-sentence"}}{{if .Shared}}{{if .Protected}}{{icon "lock"}}<span>Shared with a password. Visitors need the link and the password.</span>{{else}}{{icon "link"}}<span>Shared. Anyone with the link can read this page.</span>{{end}}{{else}}{{icon "lock"}}<span>Private. Only you can open this page.</span>{{end}}{{end}}
+
+{{- define "contents"}}{{range .}}<li><a href="{{.Href}}" target="report" data-id="{{.ID}}">{{.Text}}</a>{{if .Children}}<ol>{{template "contents" .Children}}</ol>{{end}}</li>{{end}}{{end}}
+
+{{- define "contents-fallback"}}
+{{- if .Contents}}
+<noscript><details class="contents-fallback"><summary>Contents</summary><ol>{{template "contents" .Contents}}</ol></details></noscript>
+{{- end}}
+{{- end}}
+
+{{- /* The owner's toolbar, the same on the cover and the slim strip: the
+   page's status, Copy link, and everything else in one More menu, as in
+   the bar. */ -}}
+{{- define "owner-nav"}}
+<div class="reading-nav reader-grid">
+<a class="brand" href="/">{{mark}}cairn</a>
+<div class="reading-actions">
+<p class="access-status">{{template "access" .}}</p>
+<button type="button" class="nav-button copy-link wide-action" data-copy-link hidden>{{template "copy-label"}}</button>
+<button type="button" class="nav-button more-button" popovertarget="reader-menu" aria-expanded="false">More{{icon "chevron"}}</button>
+</div>
+</div>
+{{- end}}
+
+{{- /* The reader keeps its own cover instead of the owner top bar. */ -}}
+<!doctype html>
+<html lang="en" data-theme="{{.Theme}}"{{if .ShortcutsOff}} data-shortcuts="off"{{end}}>
+<head>
+{{- template "head" .}}
+</head>
+<body class="reading-shell{{if .Contents}} has-contents{{end}}{{if .Rail}} rail-layout{{end}}{{if .Owner}} is-owner{{else}} is-public{{end}}{{if .Custom}} is-custom{{end}}{{if .Shared}} is-shared{{end}}{{if .Protected}} is-protected{{end}}{{if .FixedReport}} report-fixed{{end}}" data-link="{{.Link}}"{{with .ReportLimit}} data-report-limit="{{.}}"{{end}}>
+{{template "skip-link"}}
+{{- if and .Owner (not .Custom)}}
+<header class="reader-cover blue-hour{{if .OwnTitle}} has-own-title{{end}}" id="cover">
+{{- template "owner-nav" .}}
+<div class="report-heading reader-grid">
+<h1 class="report-title{{if .LongTitle}} is-long{{end}}{{if .OwnTitle}} sr-only{{end}}">{{readerTitle .Title}}</h1>
+{{template "byline" .}}
+{{- if .Request}}
+<section class="report-request" aria-labelledby="request-label">
+<h2 class="request-label" id="request-label">{{template "request-label" .}}</h2>
+<p class="request-text" id="report-request-text">{{.Request}}</p>
+<button type="button" class="request-toggle" aria-expanded="false" aria-controls="report-request-text" hidden>Show full request</button>
+</section>
+{{- end}}
+{{- template "contents-fallback" .}}
+</div>
+</header>
+{{- else if .Owner}}
+{{- /* A page in its own design gets a slim neutral strip, so the page owns the canvas. */}}
+<header class="reader-cover reader-strip owner-strip{{if .OwnTitle}} has-own-title{{end}}" id="cover">
+{{- template "owner-nav" .}}
+<div class="report-heading reader-grid">
+<h1 class="report-title{{if .LongTitle}} is-long{{end}}{{if .OwnTitle}} sr-only{{end}}">{{readerTitle .Title}}</h1>
+{{template "byline" .}}
+{{- if .Request}}
+<noscript><section class="report-request" aria-labelledby="request-label"><h2 class="request-label" id="request-label">{{template "request-label" .}}</h2><p class="request-text">{{.Request}}</p></section></noscript>
+{{- end}}
+{{- template "contents-fallback" .}}
+</div>
+</header>
+{{- else}}
+<header class="reader-cover reader-strip{{if .OwnTitle}} has-own-title{{end}}" id="cover">
+<div class="report-heading reader-grid">
+<h1 class="report-title{{if .LongTitle}} is-long{{end}}{{if .OwnTitle}} sr-only{{end}}">{{readerTitle .Title}}</h1>
+<div class="strip-row">
+{{template "byline" .}}
+<button type="button" class="button quiet copy-link strip-copy" data-copy-link hidden>{{template "copy-label"}}</button>
+</div>
+{{- template "contents-fallback" .}}
+</div>
+</header>
+{{- end}}
+<div class="compact-reader" aria-hidden="true">
+<div class="compact-inner reader-grid">
+{{- if .Owner}}
+<a class="brand" href="/" tabindex="-1" aria-label="Back to library" title="Back to library">{{mark}}<span>cairn</span></a>
+{{- end}}
+<button type="button" class="compact-title" tabindex="-1" aria-expanded="false" aria-controls="reader-details" aria-describedby="compact-title-hint">
+<span class="compact-page">{{.Title}}</span><span class="compact-section"></span>{{icon "chevron" -}}
+</button>
+<span class="sr-only" id="compact-title-hint">Shows page details</span>
+<div class="compact-actions">
+{{- if .Contents}}
+<button type="button" class="compact-contents" tabindex="-1" aria-expanded="false" aria-controls="reader-contents">{{icon "list"}}<span>Contents</span></button>
+{{- end}}
+<button type="button" class="compact-copy copy-link" data-copy-link tabindex="-1" hidden>{{template "copy-label"}}</button>
+{{- if .Owner}}
+<button type="button" class="compact-more more-button" popovertarget="reader-menu" aria-expanded="false" tabindex="-1">More{{icon "chevron"}}</button>
+{{- end}}
+</div>
+</div>
+<span class="reading-progress" aria-hidden="true"></span>
+</div>
+{{- if .Owner}}
+<div class="reader-menu" id="reader-menu" popover>
+<p class="menu-status">{{template "access-sentence" .}}</p>
+<button type="button" class="menu-copy copy-link" data-copy-link hidden>{{template "copy-label"}}</button>
+<button type="button" class="menu-details" hidden>{{icon "doc"}}Page details</button>
+{{- if .Contents}}
+<button type="button" class="menu-contents" aria-controls="reader-contents" hidden>{{icon "list"}}Contents</button>
+{{- end}}
+{{- if .Editable}}
+<a class="menu-edit" href="/edit/{{.Slug}}">{{icon "edit"}}Edit page</a>
+{{- end}}
+{{- if .Kindle}}
+{{- if .KindleReady}}
+<form class="menu-form" method="post" action="/manage/{{.Slug}}">
+<input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="action" value="kindle"><input type="hidden" name="return" value="reader">
+<button class="menu-kindle">{{icon "kindle"}}Send to Kindle</button>
+</form>
+{{- else}}
+<a class="menu-kindle" href="/settings#kindle">{{icon "kindle"}}<span>Send to Kindle<small>Add your Kindle address first</small></span></a>
+{{- end}}
+{{- end}}
+<a class="menu-manage" href="/manage/{{.Slug}}">{{icon "arrow"}}Manage page</a>
+<button type="button" class="menu-shortcuts" hidden>{{icon "keyboard"}}Keyboard shortcuts</button>
+</div>
+{{- end}}
+<div class="reader-scrim" hidden></div>
+<section class="reader-details" id="reader-details" aria-label="Page details" tabindex="-1" hidden>
+<div class="details-inner reader-grid">
+<p class="details-title">{{.Title}}</p>
+{{template "byline" .}}
+{{- if .Request}}
+<div class="details-request"><p class="request-label">{{template "request-label" .}}</p><p>{{.Request}}</p></div>
+{{- end}}
+</div>
+</section>
+<main id="main" class="{{if .File}}file-page{{else}}report-view{{end}}">
+{{- if .Contents}}
+<nav class="reader-toc" id="reader-contents" aria-labelledby="toc-label">
+<div class="toc-panel">
+<h2 id="toc-label">Contents</h2>
+<ol id="toc-list">{{template "contents" .Contents}}</ol>
+</div>
+</nav>
+{{- end}}
+{{if .File}}<div class="file-card">{{fileIcon .FileName}}<div class="file-details"><p class="file-name">{{.FileName}}</p><p class="file-facts">{{fileType .FileName}} · {{fileSize .FileSize}}</p></div><a class="button file-download" href="/{{.Slug}}?download=1" download>{{icon "download"}}<span>Download</span></a></div>{{else}}<iframe class="report-frame" title="{{.Title}}" name="report" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" src="{{.FrameSrc}}"></iframe>{{end}}
+</main>
+{{- if .Owner}}
+<footer class="reader-end">
+<div class="end-inner reader-grid">
+{{- if or .Previous .Next}}
+<nav class="end-pages" aria-label="{{if .Archived}}More in your archive{{else}}More in your library{{end}}">
+{{- with .Previous}}
+<a class="end-page is-previous" href="/{{.Slug}}{{$.From}}" rel="prev"{{if not $.ShortcutsOff}} aria-keyshortcuts="["{{end}}><span class="end-direction">{{icon "back"}}Previous page</span><span class="end-title">{{.Title}}</span></a>
+{{- end}}
+{{- with .Next}}
+<a class="end-page is-next" href="/{{.Slug}}{{$.From}}" rel="next"{{if not $.ShortcutsOff}} aria-keyshortcuts="]"{{end}}><span class="end-direction">Next page{{icon "arrow"}}</span><span class="end-title">{{.Title}}</span></a>
+{{- end}}
+</nav>
+{{- end}}
+<div class="end-actions">
+<form class="end-form" method="post" action="/_library/archive">
+<input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="slug" value="{{.Slug}}"><input type="hidden" name="archived" value="{{if .Archived}}0{{else}}1{{end}}"><input type="hidden" name="return" value="{{.BackHref}}">
+<button class="button quiet">{{if .Archived}}{{icon "restore"}}Restore page{{else}}{{icon "archive"}}Archive page{{end}}</button>
+</form>
+{{- if .Shared}}
+<button type="button" class="button quiet copy-link" data-copy-link hidden>{{template "copy-label"}}</button>
+{{- else}}
+<a class="button quiet" href="/manage/{{.Slug}}#sharing">{{icon "share"}}Share page</a>
+{{- end}}
+{{- if .Editable}}
+<a class="button quiet" href="/edit/{{.Slug}}">{{icon "edit"}}Edit page</a>
+{{- end}}
+<a class="end-back" href="{{.BackHref}}">{{icon "back"}}Back to {{if .Archived}}archive{{else}}library{{end}}</a>
+</div>
+</div>
+</footer>
+{{- else}}
+<footer class="reader-end is-public">
+<p class="shared-with">{{mark}}Shared with Cairn</p>
+</footer>
+{{- end}}
+{{- /* The same sheet, words and keys style as the library's. */}}
+<div class="key-sheet reader-keys" id="reader-shortcuts" popover role="dialog" aria-labelledby="shortcuts-title">
+<div class="key-sheet-head"><h2 id="shortcuts-title">Keyboard shortcuts</h2><button type="button" class="close" popovertarget="reader-shortcuts" popovertargetaction="hide" aria-label="Close keyboard shortcuts">{{icon "close"}}</button></div>
+<dl class="key-list">
+{{- if .Contents}}
+<div><dt><kbd>C</kbd></dt><dd>Open or close the contents</dd></div>
+{{- end}}
+{{- if .Owner}}
+<div><dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Previous or next page in your library</dd></div>
+{{- end}}
+<div><dt><kbd>Esc</kbd></dt><dd>Close the contents, page details or a menu</dd></div>
+<div><dt><kbd>?</kbd></dt><dd>Show these shortcuts</dd></div>
+</dl>
+<p class="key-note">Keys pressed inside the page itself go to the page.</p>
+</div>
+{{- template "toasts" .Notice}}
+<p class="copy-status" id="copy-status" role="status"></p>
+<script src="{{scriptURL "reader"}}"></script>
+</body>
+</html>

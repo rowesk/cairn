@@ -1,0 +1,83 @@
+{{/*
+  Shared page shell. Every page template starts with {{template "owner" .}}
+  or {{template "visitor" .}} and then defines the blocks it needs:
+
+    title       text of <title>, required
+    main        contents of <main id="main">, required
+    main-class  class list for <main>
+    body-class  class list for <body>
+    topbar      what follows the brand in the owner top bar
+                (default: a back link to the library; the library puts its
+                collections here, error pages nothing)
+    settings-current  ` aria-current="page"` on the Settings page only
+    after-main  dialogs and other content outside <main>
+    script      the page script's address, {{scriptURL "name"}}, from the
+                scripts assets.go publishes (default: the focus script)
+
+  Page data must carry .Theme and, on owner pages, .Notice (a *notice or
+  nil), which shows in the page's toast region. Owner page data embeds
+  ownerChrome, which carries the keyboard shortcut preference. The reader
+  builds its own body but still uses "head", "skip-link" and "toasts".
+*/}}
+{{- define "main-class"}}{{end}}
+{{- define "body-class"}}{{end}}
+{{- define "after-main"}}{{end}}
+{{- define "settings-current"}}{{end}}
+{{- define "topbar"}}<a class="back-link" href="/">{{icon "back"}}<span>Library</span></a>{{end}}
+{{- define "script"}}{{scriptURL "focus"}}{{end}}
+
+{{- define "head"}}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="{{colorScheme .Theme}}">
+{{- range themeColors .Theme}}
+<meta name="theme-color" content="{{.Color}}"{{if .Media}} media="{{.Media}}"{{end}}>
+{{- end}}
+<title>{{template "title" .}}</title>
+<link rel="stylesheet" href="{{stylesheet}}">
+{{- range fontPreloads .Theme}}
+<link rel="preload" href="{{.}}" as="font" type="font/woff2" crossorigin>
+{{- end}}
+{{- end}}
+
+{{- define "skip-link"}}<a class="skip-link" href="#main">Skip to content</a>{{end}}
+
+{{- define "owner"}}<!doctype html>
+<html lang="en" data-theme="{{.Theme}}"{{if shortcutsOff .}} data-shortcuts="off"{{end}}>
+<head>
+{{- template "head" .}}
+</head>
+<body class="{{template "body-class" .}}">
+{{template "skip-link"}}
+<header class="topbar">
+<a class="brand" href="/">{{mark}}<span class="brand-word">cairn</span></a>
+{{template "topbar" .}}
+<a class="topbar-settings" href="/settings"{{template "settings-current" .}}>{{icon "settings"}}<span class="topbar-settings-label">Settings</span></a>
+</header>
+{{template "toasts" .Notice}}
+<main id="main" class="{{template "main-class" .}}">
+{{- template "main" .}}
+</main>
+{{- template "after-main" .}}
+<script src="{{template "script" .}}"></script>
+</body>
+</html>
+{{- end}}
+
+{{- define "visitor"}}<!doctype html>
+<html lang="en" data-theme="{{.Theme}}">
+<head>
+{{- template "head" .}}
+</head>
+<body class="visitor {{template "body-class" .}}">
+{{template "skip-link"}}
+<header class="topbar">
+<span class="brand">{{mark}}cairn</span>
+</header>
+<main id="main" class="{{template "main-class" .}}">
+{{- template "main" .}}
+</main>
+<script src="{{template "script" .}}"></script>
+</body>
+</html>
+{{- end}}

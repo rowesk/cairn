@@ -92,7 +92,8 @@ func TestMarkdownAuthoring(t *testing.T) {
 	if code != 303 {
 		t.Fatal(code, body)
 	}
-	code, h, b := request(t, srv, "GET", h.Get("Location")+"?download=1", nil, "")
+	saved, _, _ := strings.Cut(h.Get("Location"), "?")
+	code, h, b := request(t, srv, "GET", saved+"?download=1", nil, "")
 	if code != 200 || string(b) != values.Get("markdown") || !strings.Contains(h.Get("Content-Disposition"), "attachment") {
 		t.Fatal("markdown download")
 	}
@@ -128,7 +129,7 @@ func TestImportedFilesAndDownloadAccess(t *testing.T) {
 		{"flow.mmd", []byte("graph TD; A-->B"), "/_runtime/mermaid.js"},
 		{"photo.png", png, "?asset=image.png"},
 		{"document.docx", doc.Bytes(), "Word text &amp; more"},
-		{"document.pdf", []byte("%PDF-1.4\nfixture"), "document.pdf · PDF document · 16 bytes"},
+		{"document.pdf", []byte("%PDF-1.4\nfixture"), "Open this page in Cairn to download the file."},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			slug := strings.ReplaceAll(tc.name, ".", "-")
@@ -152,10 +153,17 @@ func TestImportedFilesAndDownloadAccess(t *testing.T) {
 	if c := ownerPost(t, private, slug, url.Values{"action": {"share"}, "public_slug": {"source"}}); c != 303 {
 		t.Fatal(c)
 	}
-	if c, _, _ := request(t, public, "GET", "/source?download=1", nil, ""); c != 200 {
+	// Sharing shares the page, never the file it came from.
+	if c, _, _ := request(t, public, "GET", "/source", nil, ""); c != 200 {
 		t.Fatal(c)
 	}
-	if c := ownerPost(t, private, slug, url.Values{"action": {"password"}, "password": {"secret"}}); c != 303 {
+	if c, _, b := request(t, public, "GET", "/source?download=1", nil, ""); c != 404 || strings.Contains(string(b), "<?php") {
+		t.Fatal("shared page offered its source", c)
+	}
+	if _, _, b := request(t, public, "GET", "/source", nil, ""); strings.Contains(string(b), "download=1") {
+		t.Fatal("shared page links its source")
+	}
+	if c := ownerPost(t, private, slug, url.Values{"action": {"password"}, "password": {"secret-words"}}); c != 303 {
 		t.Fatal(c)
 	}
 	if c, _, _ := request(t, public, "GET", "/source?download=1", nil, ""); c == 200 {
@@ -169,6 +177,7 @@ func TestImportedFilesAndDownloadAccess(t *testing.T) {
 	if c, _, _ := request(t, private, "GET", "/"+slug+"?download=1", nil, ""); c != 404 {
 		t.Fatal("deleted source leaked")
 	}
+	// Files that fail the page checks are kept as inert download pages.
 	// Files that fail the page checks are kept as inert download pages.
 	if c, _ := importFile(t, private, "not.png", []byte("<?php bad ?>"), "fake-image"); c != 303 {
 		t.Fatal("fake image not kept as a download", c)
@@ -210,13 +219,16 @@ func TestEditorShortlinksSharingAndPastedImages(t *testing.T) {
 		t.Fatal("preview published")
 	}
 	code, h, body := authorForm(t, private, "/new", values, private.URL)
-	if code != 303 || h.Get("Location") != "/my-page" {
+	if code != 303 || h.Get("Location") != "/my-page?saved=1" {
 		t.Fatal(code, body)
 	}
-	for _, route := range []string{"/my-page", "/_content/my-page?asset=pasted.png", "/my-page?download=1"} {
+	for _, route := range []string{"/my-page", "/_content/my-page?asset=pasted.png"} {
 		if c, _, _ := request(t, public, "GET", route, nil, ""); c != 200 {
 			t.Fatal(route, c)
 		}
+	}
+	if c, _, _ := request(t, public, "GET", "/my-page?download=1", nil, ""); c != 404 {
+		t.Fatal("shared page offered its Markdown", c)
 	}
 	code, _, body = authorForm(t, private, "/new", values, private.URL)
 	if code != 409 || !strings.Contains(body, "pasted.png") {

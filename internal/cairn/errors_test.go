@@ -74,13 +74,13 @@ func TestAPIErrorContract(t *testing.T) {
 		code       string
 	}{
 		{"missing credential", "POST", "/api/pages", "application/json", `{}`, "", "", 401, "authentication_required"},
-		{"wrong credential", "POST", "/api/pages", "application/json", `{}`, "wrong", "", 401, "authentication_required"},
+		{"wrong credential", "POST", "/api/pages", "application/json", `{}`, "wrong", "", 401, "invalid_credential"},
 		{"browser origin", "POST", "/api/pages", "application/json", `{}`, token, "https://untrusted.example", 403, "browser_origin_forbidden"},
 		{"media type", "POST", "/api/pages", "text/plain", `{}`, token, "", 415, "unsupported_media_type"},
 		{"malformed JSON", "POST", "/api/pages", "application/json", `{oops`, token, "", 400, "invalid_json"},
 		{"trailing JSON", "POST", "/api/pages", "application/json", `{} {}`, token, "", 400, "invalid_json"},
 		{"validation", "POST", "/api/pages", "application/json", `{"title":"","agent":"ExampleAgent","original_request":"x","html":"<p>x</p>"}`, token, "", 400, "validation_failed"},
-		{"unknown field", "POST", "/api/pages", "application/json", `{"title":"x","agent":"ExampleAgent","original_request":"x","html":"<p>x</p>","public_slug":"alias"}`, token, "", 400, "invalid_json"},
+		{"unknown field", "POST", "/api/pages", "application/json", `{"title":"x","agent":"ExampleAgent","original_request":"x","html":"<p>x</p>","public_slug":"injected"}`, token, "", 400, "validation_failed"},
 		{"unknown route", "GET", "/api/nope", "", "", token, "", 404, "not_found"},
 		{"wrong method", "DELETE", "/api/pages", "", "", token, "", 405, "method_not_allowed"},
 	}
@@ -121,7 +121,7 @@ func TestAPIErrorContract(t *testing.T) {
 	if status, _, _ := request(t, srv, "POST", "/api/pages", map[string]any{"slug": "owned", "title": "Owned", "agent": "Ignored", "markdown": "Owned page", "original_request": "Owned request"}, woodhouse); status != 201 {
 		t.Fatalf("owned create: %d", status)
 	}
-	if status, _, failure := apiFailure(t, srv.URL, client, "PUT", "/api/pages/owned", "application/json", `{"title":"Owned","agent":"Ignored","markdown":"Hi","original_request":"Owned request"}`, other, ""); status != 403 || failure.Code != "forbidden" {
+	if status, _, failure := apiFailure(t, srv.URL, client, "PUT", "/api/pages/owned", "application/json", `{"title":"Owned","agent":"Ignored","markdown":"Hi","original_request":"Owned request"}`, other, ""); status != 404 || failure.Code != "not_found" {
 		t.Errorf("cross-author replace: %d %q", status, failure.Code)
 	}
 

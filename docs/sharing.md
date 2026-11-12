@@ -1,8 +1,8 @@
 # Public sharing
 
-Public sharing is optional. Private reading and agent publishing work without a public domain. Reports stay private by default. When the owner explicitly asks for a public report, an agent can send `share_enabled: true` to the private `POST /api/pages` endpoint. Cairn saves it as shared and returns both its private `url` and absolute `public_url`. Without a configured public origin, the request fails without saving a page. The API cannot change existing sharing, aliases or passwords; replacements preserve those settings. File creation stays private. See [publishing](publishing.md) for the request and error contract.
+Public sharing is optional. Private reading and agent publishing work without a public domain. Pages stay private by default. When the owner explicitly asks for a shared page, an agent can send `share_enabled: true` to the private `POST /api/pages` endpoint. Cairn saves it as shared and returns both its private `url` and absolute `public_url`. Without a configured public origin, the request fails without saving a page. The API cannot change existing sharing, link names or passwords; replacements preserve those settings. File creation stays private. See [publishing](publishing.md) for the request and error contract.
 
-Cairn uses two listeners. Port 8080 in the examples is the private library, editor, Settings and publishing API. Port 8081 serves only shared pages and their content, downloads and assets. Never route a public hostname to the private listener.
+Cairn uses two listeners. Port 8080 in the examples is the private library, editor, Settings and publishing API. Port 8081 serves only shared pages, their content and images, the password screen, and Cairn's own stylesheet, fonts and scripts. Never route a public hostname to the private listener.
 
 ## Configure the share-only listener
 
@@ -16,9 +16,9 @@ CAIRN_PUBLIC_BASE_URL=https://reports.example.com
 
 Restart Cairn. For a foreground process, use `-public-listen 127.0.0.1:8081 -public-base-url https://reports.example.com` alongside the usual data and credential flags.
 
-Configure your HTTPS reverse proxy to forward that hostname to `http://127.0.0.1:8081`. Preserve the original Host header and disable caching. Password cookies require HTTPS. Cairn does not provision DNS, certificates or proxy services.
+Configure your HTTPS reverse proxy to forward that hostname to `http://127.0.0.1:8081`. Preserve the original Host header and don't cache pages. The public listener answers only the host of `CAIRN_PUBLIC_BASE_URL` and loopback addresses, so a proxy that sends any other Host gets "This link isn’t working" and a `host refused` line in the log. Password cookies require HTTPS. Cairn does not provision DNS, certificates or proxy services.
 
-A Cloudflare Tunnel can route the hostname to `http://127.0.0.1:8081`; configure cache bypass for that hostname. For a Caddy server on the same host, a minimal example is:
+A Cloudflare Tunnel can route the hostname to `http://127.0.0.1:8081`; bypass the cache for that hostname. If you want a cache, only `/_ui/` and `/_runtime/` addresses that carry a version (`?v=`) are safe to keep: their names change whenever their contents do. For a Caddy server on the same host, a minimal example is:
 
 ```caddyfile
 reports.example.com {
@@ -30,14 +30,28 @@ Configure your DNS and firewall for the proxy you choose. The backend remains bo
 
 ## Verify before sharing
 
-The public root, `/settings`, `/new`, `/import`, `/api` and `/api/pages` must return 404. The root deliberately has no index of public reports.
+The public root, `/settings`, `/new`, `/import`, `/api` and `/api/pages` must return 404. The root deliberately has no index of shared pages.
 
-Create a disposable page privately. Enable sharing in Manage page and check that the same path works on the public domain. Add an image and verify it loads. Set a password and test using a fresh browser session. Turn sharing off: the public reader, content, images and original download must stop working, while the private address still works. Delete the disposable page afterward.
+Create a disposable page privately. Turn on Sharing in Manage page and check that its public link works with the same link name. Add an image and check it loads. Set a password of at least 8 characters and test it in a fresh browser session. Turn sharing off: the page, its content and its images must stop working on the public address, while the private address still works. Delete the disposable page afterward.
 
 ## What a public link grants
 
-Generated paths use three mixed-case alphanumeric characters by default. The owner can select 3 to 7 for future pages. Short URLs are discoverable, not secrets. Use a password if the shared content needs one. Password sharing is one shared password, not individual accounts.
+Link names Cairn picks are three letters and digits, mixed case, by default; you can choose 3 to 7 for future pages in Settings, or name any page yourself. Short links can be guessed, so they are not secrets: use a password if the page needs one. A password is one shared password, not individual accounts.
 
-Sharing keeps the private path on the public origin. Older custom public aliases remain supported. Unsharing disables both public routes and preserves private reading. Changing a password invalidates existing unlock cookies. Archiving hides a page from the main library; it does not revoke a public share.
+Sharing keeps the page's link name on the public address. A link name you change in Manage page replaces the old one; the page's original short address also keeps working while the page is shared. Stopping sharing turns off every public link to the page and leaves private reading alone. Changing a password signs out everyone who unlocked the page. Archiving hides a page from the library; it does not stop sharing.
 
-Original request metadata never appears in the public reader. The report body, author byline/photo, images and imported original can be public. Check the original file as well as the rendered report before sharing.
+Visitors see the page, its byline and the author's photo, and its images. They never see your request, its summary or source, your library, or the file the page was made from: Download original is offered only to you.
+
+## Security model
+
+Sharing opens one page to anyone with its link. It opens nothing else: the public listener has no library, Settings, editor or API, and its 404 looks the same for a missing page, a private page and a private route.
+
+The private library is a different matter. It has no sign-in, so anyone and any software that can reach its address can read every page and use every owner form, including the ones that share pages, change passwords and make agent keys. Agent keys give each agent its own byline and keep the API from changing other authors' pages; they do not protect the library from an agent that can reach the private address. Only run agents you trust on machines that can reach it, and keep the private listener on loopback or your own tailnet. An agent can replace the pages it wrote, including ones you have shared, and visitors see the new version at once.
+
+One wrong password costs nothing, so a visitor who mistypes and retypes gets straight in. From the second wrong password in a row the next try from the same address waits 1 second, then 2, 4 and so on up to 5 minutes, and the page says how long. Every wrong password also slows the page for everyone, but never by more than 10 seconds, so someone guessing cannot lock your readers out. Passwords set before Cairn asked for 8 characters still work; Manage page suggests setting a new one.
+
+[SECURITY.md](../SECURITY.md#security-model) has the full model.
+
+## Themes on shared pages
+
+Shared pages use the theme chosen in Settings → Appearance, or the one set for shared pages under **Customise per view**. With System, each visitor's own device decides between Cairn and Dark; Cairn stores nothing about them. Pages written in Markdown take the theme's colours; pages in a design of their own keep it.

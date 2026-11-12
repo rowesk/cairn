@@ -1,14 +1,148 @@
-<!doctype html><html lang="en" data-theme="{{.Theme}}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>New page · Cairn</title><style>{{css}}</style></head><body class="editor-body">
-<header class="topbar"><a class="brand" href="/">{{mark}}cairn</a><a class="editor-back" href="/">Back to library</a></header>
-<main class="editor-workspace"><form method="post" id="editor-form"><input type="hidden" name="csrf" value="{{.CSRF}}"><div class="editor-toolbar"><h1>New page</h1><div class="editor-actions"><button type="button" class="access-trigger" id="access-trigger" popovertarget="sharing-panel" aria-label="Page access and address" aria-expanded="false"><span id="access-private-icon">{{icon "lock"}}</span><span id="access-public-icon" hidden>{{icon "link"}}</span><span id="access-label">{{if .Shared}}Public link{{else}}Private{{end}}</span>{{icon "chevron"}}</button><button class="button quiet" id="preview-button" formaction="/new?preview=1" formtarget="editor-preview" formnovalidate>Preview</button><button id="save-button"><span id="save-label">{{if .Shared}}Save &amp; share{{else}}Save page{{end}}</span> {{icon "arrow"}}</button></div></div>
-{{if .Error}}<p class="editor-error" role="alert">{{.Error}} Your writing is still below.</p>{{end}}
-<section id="sharing-panel" class="sharing-panel" popover aria-labelledby="sharing-title" data-public-base="{{.PublicBase}}">
-<div class="sharing-heading"><h2 id="sharing-title">Page access</h2><button type="button" class="close" popovertarget="sharing-panel" popovertargetaction="hide" aria-label="Close page access">{{icon "close"}}</button></div>
-<fieldset class="access-choices"><legend class="sr-only">Who can open this page</legend>
-<label class="access-choice"><input type="radio" name="access" value="private" {{if not .Shared}}checked{{end}}><span>{{icon "lock"}}</span><span><strong>Only my devices</strong><small>Keep this page in your private library.</small></span></label>
-<label class="access-choice"><input type="radio" name="access" value="public" {{if .Shared}}checked{{end}} {{if not .PublicReady}}disabled{{end}}><span>{{icon "link"}}</span><span><strong>Anyone with the link</strong><small>{{if .PublicReady}}Share this page. Your library stays private.{{else}}Available once your public domain is connected.{{end}}</small></span></label>
+{{template "owner" .}}
+
+{{- define "title" -}}{{if .Editing}}Edit {{.Title}}{{else}}New page{{end}} · Cairn{{end}}
+
+{{- define "topbar" -}}
+{{if .Editing}}<a class="back-link" href="/{{.Page}}">{{icon "back"}}<span>{{.SavedTitle}}</span></a>{{else}}<a class="back-link" href="/">{{icon "back"}}<span>Library</span></a>{{end}}
+{{- end}}
+
+{{- define "body-class" -}}editor-body{{end}}
+
+{{- define "main-class" -}}editor-workspace{{end}}
+
+{{- define "main" -}}
+<form method="post" action="{{.Action}}" id="editor-form" class="editor" novalidate{{if .Editing}} data-page="{{.Page}}" data-draft-base="{{.DraftBase}}" data-draft-key="{{.DraftKey}}"{{end}}>
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<div class="editor-toolbar">
+<h1>{{if .Editing}}Edit page{{else}}New page{{end}}</h1>
+<div class="editor-actions">
+<div class="mode-switch" role="group" aria-label="View">
+<button type="button" class="mode" id="write-button" aria-pressed="true" aria-keyshortcuts="Meta+P Control+P" hidden>Write</button>
+<button class="mode" id="preview-button" formaction="{{.Action}}?preview=1" formtarget="editor-preview" formnovalidate aria-keyshortcuts="Meta+P Control+P">Preview</button>
+<button type="button" class="mode" id="split-button" aria-pressed="false" hidden>Side by side</button>
+</div>
+<button type="button" class="access-trigger" id="access-trigger" popovertarget="sharing-panel" aria-label="Page access and link name" aria-expanded="false">
+<span id="access-private-icon"{{if .Shared}} hidden{{end}}>{{icon "lock"}}</span>
+<span id="access-public-icon"{{if not .Shared}} hidden{{end}}>{{icon "link"}}</span>
+<span id="access-label">{{if .Shared}}Shared{{else}}Private{{end}}</span>
+{{icon "chevron"}}
+</button>
+<button id="save-button" aria-keyshortcuts="Meta+S Control+S"><span id="save-label">Save<span class="save-rest" id="save-rest">{{if .Editing}} changes{{else if .Shared}} &amp; share{{else}} page{{end}}</span></span></button>
+</div>
+</div>
+<section id="sharing-panel" class="sharing-panel" popover aria-labelledby="sharing-title" data-public-base="{{.PublicBase}}" data-host="{{.Host}}" data-csrf="{{.CSRF}}"{{if .Editing}} data-page="{{.Page}}"{{end}}>
+<div class="sharing-heading">
+<h2 id="sharing-title">Page access</h2>
+<button type="button" class="close" popovertarget="sharing-panel" popovertargetaction="hide" aria-label="Close page access">{{icon "close"}}</button>
+</div>
+<fieldset class="access-choices">
+<legend class="sr-only">Who can open this page</legend>
+<label class="access-choice">
+<input type="radio" name="access" value="private" {{if not .Shared}}checked{{end}}>
+<span>{{icon "lock"}}</span>
+<span><strong>Private</strong><small>Only your devices can open it.</small></span>
+</label>
+<label class="access-choice">
+<input type="radio" name="access" value="public" {{if .Shared}}checked{{end}} {{if not .PublicReady}}disabled{{end}}>
+<span>{{icon "link"}}</span>
+<span><strong>Shared</strong><small>{{if not .PublicReady}}Sharing needs a public address set up on the server first.{{else if .Protected}}Anyone with the link and its password can read it. Your library stays private.{{else}}Anyone with the link can read it. Your library stays private.{{end}}</small></span>
+</label>
 </fieldset>
-<div class="address-settings"><label for="page-slug">Page address</label><div class="address-field"><span id="address-origin">Private link /</span><input id="page-slug" name="slug" value="{{.Slug}}" placeholder="Automatic" maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_\-]{0,63}" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="address-hint"></div><p id="address-hint">Choose a short name, or leave it to us.</p></div>
-<p class="sharing-note" id="sharing-note">{{if .Shared}}Your page becomes public when you save and share.{{else}}Only your devices can open this page.{{end}}</p>
-</section><input type="hidden" name="images" id="pasted-images" value="{{.Images}}"><p id="image-status" class="image-status" role="status"></p><div class="editor-paper"><label class="sr-only" for="page-title">Title</label><input id="page-title" name="title" class="editor-title" placeholder="Give it a title" maxlength="300" required value="{{.Title}}" autocomplete="off"><label class="sr-only" for="markdown">Markdown</label><textarea id="markdown" name="markdown" class="markdown-canvas" placeholder="Start writing. A thought, a plan, something worth keeping…" required spellcheck="true">{{.Markdown}}</textarea><footer class="editor-foot"><span><span id="save-access">Markdown · Private when saved</span></span><details class="writing-help"><summary>Formatting help</summary><div><p><code># Heading</code> for a heading<br><code>**bold**</code> and <code>*italic*</code><br><code>- item</code> for a list<br><code>[label](https://…)</code> for a link</p><p>Paste images straight into your writing. Use a fenced <code>mermaid</code> block for a diagram.</p></div></details></footer></div></form>
-<section class="editor-preview-section" id="preview-section" aria-label="Page preview"><div class="preview-label"><h2>Preview</h2><button type="button" class="button quiet" id="close-editor-preview">Back to writing</button></div><iframe name="editor-preview" id="editor-preview" title="Markdown preview" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"></iframe></section></main><script>{{editorScript}}</script></body></html>
+<div class="address-settings">
+<label for="page-slug" id="address-label">Link name</label>
+<div class="address-field" id="address-field"{{if and .Editing (not .Shared)}} hidden{{end}}>
+<span class="address-prefix" id="address-origin">{{if .Shared}}{{.PublicHost}}{{else}}{{.Host}}{{end}}/</span>
+<input id="page-slug" name="slug" value="{{.Slug}}" placeholder="{{if .Editing}}{{.Page}}{{else}}Automatic{{end}}" maxlength="64" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="{{if .Errors.slug}}page-slug-error {{end}}address-full"{{if .Errors.slug}} aria-invalid="true"{{end}}>
+</div>
+{{- with .Errors.slug}}
+<p class="field-error" id="page-slug-error" role="alert">{{icon "alert"}}<span>{{.}}</span></p>
+{{- end}}
+<p class="address-full" id="address-full" aria-live="polite">{{if .Errors.slug}}{{else if and .Editing (not .Shared)}}This page stays at <strong>http://{{.Host}}/{{.Page}}</strong>{{else if .Slug}}The page will be at <strong>{{if .Shared}}{{.PublicOrigin}}{{else}}http://{{.Host}}{{end}}/{{.Slug}}</strong>{{else}}Cairn picks a short link name when you save. Type one to choose it.{{end}}</p>
+</div>
+</section>
+<input type="hidden" name="images" id="pasted-images" value="{{.Images}}">
+<p id="image-status" class="image-status" role="status"></p>
+<div class="editor-panes">
+<div class="editor-paper" id="write-pane">
+<label class="sr-only" for="page-title">Title</label>
+<textarea id="page-title" name="title" class="editor-title" rows="1" placeholder="Give it a title" maxlength="300" autocomplete="off" spellcheck="true"{{if .Errors.title}} aria-invalid="true" aria-describedby="page-title-error" autofocus{{end}}>{{.Title}}</textarea>
+<p class="field-error editor-field-error" id="page-title-error"{{if .Errors.title}} role="alert"{{else}} hidden{{end}}>{{icon "alert"}}<span>{{.Errors.title}}</span></p>
+<label class="sr-only" for="markdown">Markdown</label>
+<div class="markdown-field" id="markdown-field">
+<div class="markdown-highlight" id="markdown-highlight" aria-hidden="true"></div>
+<textarea id="markdown" name="markdown" class="markdown-canvas" placeholder="Start writing. A thought, a plan, something worth keeping…" spellcheck="true" aria-describedby="{{if .Errors.markdown}}markdown-error {{end}}writing-hint"{{if .Errors.markdown}} aria-invalid="true"{{if not .Errors.title}} autofocus{{end}}{{end}}>{{.Markdown}}</textarea>
+</div>
+<p class="field-error editor-field-error" id="markdown-error"{{if .Errors.markdown}} role="alert"{{else}} hidden{{end}}>{{icon "alert"}}<span>{{.Errors.markdown}}</span></p>
+<footer class="editor-foot">
+<p id="writing-hint"><span id="save-access">Markdown · {{if .Shared}}Shared{{else}}Private{{end}}{{if not .Editing}} when saved{{end}}</span></p>
+<button type="button" class="text-button help-button" popovertarget="format-help">{{icon "help"}}Formatting help</button>
+</footer>
+</div>
+<section class="editor-preview-section" id="preview-section" aria-labelledby="preview-heading">
+<div class="preview-label"><h2 id="preview-heading" class="sr-only">Preview</h2><p class="preview-title" id="preview-title" aria-hidden="true"></p></div>
+<iframe name="editor-preview" id="editor-preview" title="Preview of the page" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"></iframe>
+</section>
+</div>
+</form>
+{{- end}}
+
+{{- /* Formatting help: a reference sheet. It is a popover, so it opens
+       and closes without JavaScript too. */ -}}
+{{- define "after-main" -}}
+<section class="format-help" id="format-help" popover aria-labelledby="format-help-title">
+<div class="format-help-head"><h2 id="format-help-title">Formatting</h2><button type="button" class="close" popovertarget="format-help" popovertargetaction="hide" aria-label="Close formatting help">{{icon "close"}}</button></div>
+<div class="format-help-body">
+<section aria-labelledby="fh-text"><h3 id="fh-text">Text</h3><dl>
+<div><dt><code>**bold**</code></dt><dd><strong>Bold</strong></dd></div>
+<div><dt><code>*italic*</code></dt><dd><em>Italic</em></dd></div>
+<div><dt><code>~~struck~~</code></dt><dd><s>Struck through</s></dd></div>
+<div><dt><code>`code`</code></dt><dd>Code in a sentence</dd></div>
+<div><dt><code>[label](https://…)</code></dt><dd>A link</dd></div>
+</dl></section>
+<section aria-labelledby="fh-structure"><h3 id="fh-structure">Structure</h3><dl>
+<div><dt><code># Heading</code></dt><dd>A section heading; <code>##</code> and <code>###</code> go smaller. Headings make the page’s contents.</dd></div>
+<div><dt><code>- item</code></dt><dd>A list; <code>1. item</code> numbers it</dd></div>
+<div><dt><code>- [ ] task</code></dt><dd>A checklist item; <code>[x]</code> ticks it</dd></div>
+<div><dt><code>&gt; quote</code></dt><dd>A quotation</dd></div>
+<div><dt><code>---</code></dt><dd>A rule between sections</dd></div>
+</dl></section>
+<section aria-labelledby="fh-tables"><h3 id="fh-tables">Tables</h3>
+<pre class="format-sample"><code>| Plan  | Price |
+| ----- | ----: |
+| Basic |    £5 |</code></pre>
+<p>The second line sets the columns; a colon on the right aligns numbers.</p></section>
+<section aria-labelledby="fh-callouts"><h3 id="fh-callouts">Callouts</h3>
+<pre class="format-sample"><code>&gt; [!NOTE]
+&gt; Bring the booking reference.</code></pre>
+<p>Also <code>[!TIP]</code>, <code>[!IMPORTANT]</code>, <code>[!WARNING]</code> and <code>[!CAUTION]</code>. <code>[!VERDICT]</code> and <code>[!SUMMARY]</code> set a conclusion larger.</p></section>
+<section aria-labelledby="fh-footnotes"><h3 id="fh-footnotes">Footnotes</h3>
+<pre class="format-sample"><code>Fitted in 2019.[^1]
+
+[^1]: From the installer’s invoice.</code></pre>
+<p>Notes collect at the end, numbered, with links both ways.</p></section>
+<section aria-labelledby="fh-images"><h3 id="fh-images">Images</h3>
+<p>Paste an image straight into the writing. Cairn adds a line like this, which you can give alt text and a caption:</p>
+<pre class="format-sample"><code>![The boiler cupboard](?asset=photo.png "Before the service")</code></pre></section>
+<section aria-labelledby="fh-diagrams"><h3 id="fh-diagrams">Diagrams</h3>
+<pre class="format-sample"><code>```mermaid
+flowchart LR
+  Quote --&gt; Survey --&gt; Install
+```</code></pre>
+<p>Any Mermaid diagram, drawn in the page’s colours.</p></section>
+<section aria-labelledby="fh-charts"><h3 id="fh-charts">Charts</h3>
+<pre class="format-sample"><code>```echarts
+{"xAxis": {"data": ["Mon", "Tue"]},
+ "yAxis": {},
+ "series": [{"type": "bar", "data": [5, 8]}]}
+```</code></pre>
+<p>One JSON object of ECharts options: double quotes, no comments or trailing commas.</p></section>
+<section aria-labelledby="fh-code"><h3 id="fh-code">Code</h3>
+<pre class="format-sample"><code>```sh
+cairn publish notes.md
+```</code></pre>
+<p>Name the language after the fence and it shows above the block.</p></section>
+</div>
+</section>
+{{- end}}
+
+{{- define "script" -}}{{scriptURL "editor"}}{{end}}

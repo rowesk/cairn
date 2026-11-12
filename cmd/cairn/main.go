@@ -1,158 +1,228 @@
+// Command cairn runs a Cairn library and sets up its data directory.
 package main
 
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
-	"log"
-	"net"
-	"net/http"
-	"net/netip"
+	"io"
 	"os"
 	"os/signal"
+	"runtime"
+	"runtime/debug"
+	"slices"
+	"strings"
 	"syscall"
-	"time"
-
-	"github.com/rowesk/cairn/internal/cairn"
 )
-
-func main() {
-	if err := run(); err != nil {
-		log.Fatal(err)
-	}
-}
 
 var version = "dev"
 
-func run() error {
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "version", "--version", "-version":
-			fmt.Println("cairn " + version)
-			return nil
-		case "init":
-			return initCommand(os.Args[2:])
-		}
-	}
-
-	data := flag.String("data", "./data", "persistent data directory")
-	address := flag.String("listen", "127.0.0.1:8080", "loopback or local Tailscale IP:port")
-	publicAddress := flag.String("public-listen", "", "optional share-only loopback IP:port")
-	publicBase := flag.String("public-base-url", "", "public origin, for example https://reports.example.com")
-	tokenFile := flag.String("publisher-token-file", "", "file containing publisher token, or use CAIRN_PUBLISHER_TOKEN")
-	flag.Parse()
-	if (*publicAddress == "") != (*publicBase == "") {
-		return fmt.Errorf("public-listen and public-base-url must be supplied together")
-	}
-	if err := checkAddress(*address); err != nil {
-		return err
-	}
-	token := os.Getenv("CAIRN_PUBLISHER_TOKEN")
-	if *tokenFile != "" {
-		data, err := os.ReadFile(*tokenFile)
-		if err != nil {
-			return err
-		}
-		token = string(data)
-		for len(token) > 0 && (token[len(token)-1] == '\n' || token[len(token)-1] == '\r') {
-			token = token[:len(token)-1]
-		}
-	}
-	app, err := cairn.Open(cairn.Config{DataDir: *data, PublisherToken: token, PublicBaseURL: *publicBase})
-	if err != nil {
-		return err
-	}
-	defer app.Close()
-	listener, err := net.Listen("tcp", *address)
-	if err != nil {
-		return err
-	}
-	makeServer := func(handler http.Handler) *http.Server {
-		return &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
-	}
-	privateServer := makeServer(app)
-	servers := []*http.Server{privateServer}
-	listeners := []net.Listener{listener}
-	defer func() {
-		for _, server := range servers {
-			server.Close()
-		}
-		for _, listener := range listeners {
-			listener.Close()
-		}
-	}()
-	if *publicAddress != "" {
-		host, _, err := net.SplitHostPort(*publicAddress)
-		if err != nil {
-			return err
-		}
-		ip, err := netip.ParseAddr(host)
-		if err != nil || !ip.IsLoopback() {
-			return fmt.Errorf("public listener must be loopback")
-		}
-		if *publicBase == "" {
-			return fmt.Errorf("public-base-url is required with public-listen")
-		}
-		publicListener, err := net.Listen("tcp", *publicAddress)
-		if err != nil {
-			return err
-		}
-		servers = append(servers, makeServer(app.PublicHandler()))
-		listeners = append(listeners, publicListener)
-		log.Printf("Cairn public listener: %s", publicListener.Addr())
-	}
+func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	done := make(chan error, len(servers))
-	for i, server := range servers {
-		go func() { done <- server.Serve(listeners[i]) }()
-	}
-	log.Printf("Cairn private listener: %s", listener.Addr())
-	select {
-	case err := <-done:
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
-		}
-		return err
-	case <-ctx.Done():
-		shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		for _, server := range servers {
-			if err := server.Shutdown(shutdown); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
+	// After the first signal, restore the default handlers so a second Ctrl+C stops Cairn at once.
+	context.AfterFunc(ctx, stop)
+	c := &cli{prog: programName(os.Args), stdin: os.Stdin, stdout: os.Stdout, stderr: os.Stderr, getenv: os.Getenv}
+	code := c.run(ctx, os.Args[1:])
+	stop()
+	os.Exit(code)
 }
 
-func checkAddress(address string) error {
-	host, _, err := net.SplitHostPort(address)
-	if err != nil {
-		return fmt.Errorf("listen requires an explicit IP and port: %w", err)
+// cli carries everything a command touches outside its arguments, so tests can run commands in process.
+type cli struct {
+	prog           string // how the person invoked Cairn, used in suggested commands
+	stdin          io.Reader
+	stdout, stderr io.Writer
+	getenv         func(string) string
+}
+
+// usageError is a mistake in how Cairn was invoked. It exits with status 2, like the flag package.
+type usageError struct{ message string }
+
+func (e *usageError) Error() string { return e.message }
+
+func usagef(format string, args ...any) error {
+	return &usageError{fmt.Sprintf(format, args...)}
+}
+
+func programName(args []string) string {
+	if len(args) == 0 || args[0] == "" {
+		return "cairn"
 	}
-	ip, err := netip.ParseAddr(host)
-	if err != nil {
-		return fmt.Errorf("listen requires an explicit loopback or Tailscale IP")
+	return args[0]
+}
+
+var commands = []string{"serve", "init", "publish", "version", "help"}
+
+// commonGuesses maps words people try to the command they meant.
+var commonGuesses = map[string]string{"start": "serve", "run": "serve", "server": "serve", "setup": "init", "post": "publish", "upload": "publish", "send": "publish", "save": "publish"}
+
+func (c *cli) run(ctx context.Context, args []string) int {
+	err := c.dispatch(ctx, args)
+	if err == nil {
+		return 0
 	}
-	if ip.IsLoopback() {
-		return nil
+	if errors.As(err, new(silentFailure)) {
+		return 1
 	}
-	tail4 := netip.MustParsePrefix("100.64.0.0/10")
-	tail6 := netip.MustParsePrefix("fd7a:115c:a1e0::/48")
-	if !tail4.Contains(ip) && !tail6.Contains(ip) {
-		return fmt.Errorf("refusing non-loopback/non-Tailscale listen address")
+	fmt.Fprintln(c.stderr, err)
+	var usage *usageError
+	if errors.As(err, &usage) {
+		return 2
 	}
-	addresses, err := net.InterfaceAddrs()
-	if err != nil {
-		return err
+	return 1
+}
+
+func (c *cli) dispatch(ctx context.Context, args []string) error {
+	if len(args) == 0 {
+		return c.serve(ctx, nil, false)
 	}
-	for _, address := range addresses {
-		prefix, err := netip.ParsePrefix(address.String())
-		if err == nil && prefix.Addr() == ip {
-			return nil
+	switch name := args[0]; name {
+	case "serve":
+		return c.serve(ctx, args[1:], true)
+	case "init":
+		return c.initCommand(args[1:])
+	case "publish":
+		return c.publish(ctx, args[1:])
+	case "version", "-version", "--version":
+		return c.version(name, args[1:])
+	case "help":
+		return c.help(args[1:])
+	}
+	if strings.HasPrefix(args[0], "-") {
+		return c.serve(ctx, args, false)
+	}
+	return c.unknownCommand(args[0])
+}
+
+func (c *cli) unknownCommand(name string) error {
+	message := fmt.Sprintf("Unknown command %q.", name)
+	if guess := suggest(name, commands, commonGuesses); guess != "" {
+		message += fmt.Sprintf(" Did you mean %q?", guess)
+	}
+	return usagef("%s\nRun %s help to see the commands.", message, c.prog)
+}
+
+func (c *cli) version(name string, args []string) error {
+	if len(args) > 0 {
+		if name == "version" && isHelpArg(args[0]) {
+			return c.print(versionHelp)
+		}
+		return usagef("Unexpected argument %q. %s takes no arguments.\nRun %s version to print the version.", args[0], name, c.prog)
+	}
+	_, err := fmt.Fprintf(c.stdout, "cairn %s (%s/%s, %s)\n", versionString(), runtime.GOOS, runtime.GOARCH, runtime.Version())
+	return err
+}
+
+func (c *cli) help(args []string) error {
+	if len(args) == 0 || isHelpArg(args[0]) || args[0] == "help" {
+		return c.print(mainHelp())
+	}
+	if len(args) > 1 {
+		return usagef("Unexpected argument %q. help takes one command name.\nRun %s help %s.", args[1], c.prog, args[0])
+	}
+	switch args[0] {
+	case "serve":
+		return c.print(serveHelp())
+	case "init":
+		return c.print(initHelp())
+	case "publish":
+		return c.print(publishHelp())
+	case "version":
+		return c.print(versionHelp)
+	}
+	message := fmt.Sprintf("Unknown command %q.", args[0])
+	if guess := suggest(args[0], commands, commonGuesses); guess != "" {
+		message += fmt.Sprintf(" Did you mean %q?", guess)
+	}
+	return usagef("%s\nThe commands are %s.", message, commandsList())
+}
+
+func (c *cli) print(text string) error {
+	_, err := io.WriteString(c.stdout, text)
+	return err
+}
+
+func isHelpArg(arg string) bool {
+	return arg == "-h" || arg == "-help" || arg == "--help"
+}
+
+// versionString is the release version, or for a local build the commit it was built from.
+func versionString() string {
+	if version != "dev" {
+		return version
+	}
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return version
+	}
+	var revision string
+	var modified bool
+	for _, setting := range info.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			revision = setting.Value
+		case "vcs.modified":
+			modified = setting.Value == "true"
 		}
 	}
-	return fmt.Errorf("Tailscale listen address is not assigned to this device")
+	if revision == "" {
+		return version
+	}
+	result := version + "-" + revision[:min(7, len(revision))]
+	if modified {
+		result += "-modified"
+	}
+	return result
+}
+
+// suggest returns the candidate closest to word, if it is close enough to be a likely typo.
+func suggest(word string, candidates []string, guesses map[string]string) string {
+	if guess, ok := guesses[word]; ok {
+		return guess
+	}
+	best, bestDistance := "", 3
+	for _, candidate := range candidates {
+		if d := editDistance(word, candidate); d < bestDistance && d < len(candidate) {
+			best, bestDistance = candidate, d
+		}
+	}
+	return best
+}
+
+func editDistance(a, b string) int {
+	previous := make([]int, len(b)+1)
+	current := make([]int, len(b)+1)
+	for j := range previous {
+		previous[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		current[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			current[j] = slices.Min([]int{previous[j] + 1, current[j-1] + 1, previous[j-1] + cost})
+		}
+		previous, current = current, previous
+	}
+	return previous[len(b)]
+}
+
+// shellQuote returns s in a form a POSIX shell reads back as one word.
+func shellQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	safe := true
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("_@%+=:,./-", r)) {
+			safe = false
+			break
+		}
+	}
+	if safe {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

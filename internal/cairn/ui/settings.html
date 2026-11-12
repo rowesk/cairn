@@ -1,15 +1,277 @@
-<!doctype html><html lang="en" data-theme="{{.Theme}}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Settings · Cairn</title><style>{{css}}</style></head><body><header class="topbar"><a class="brand" href="/">{{mark}}cairn</a><a class="editor-back" href="/">Back to library</a></header><main class="settings-workspace"><div class="settings-heading"><h1>Make Cairn yours</h1><p>People, pages and the links you keep.</p></div>{{if .Error}}<p class="settings-feedback error" role="alert">{{.Error}}</p>{{end}}{{if .Message}}<p class="settings-feedback" role="status">{{.Message}}</p>{{end}}
-<section class="settings-section" aria-labelledby="appearance-title">
-<div class="settings-intro"><h2 id="appearance-title">Appearance</h2><p>Choose a preset for each view, or use one across Cairn.</p><p>Report themes change the header and controls around a report. The report itself keeps its original design.</p></div>
-<div class="appearance-content">
-<div class="theme-presets">{{range themes}}<figure class="theme-preset"><div class="theme-sample" data-preset="{{.ID}}" aria-hidden="true"><strong>{{.Name}}</strong><span></span><span></span></div><figcaption><strong>{{.Name}}</strong><br>{{.Description}}</figcaption></figure>{{end}}</div>
-<form class="settings-fields theme-controls" method="post" id="theme-form">
+{{template "owner" .}}
+
+{{- define "title" -}}Settings · Cairn{{end}}
+
+{{- define "settings-current"}} aria-current="page"{{end}}
+
+{{- define "main-class" -}}settings-workspace{{end}}
+
+{{- define "main" -}}
+<div class="settings-heading">
+<h1>Settings</h1>
+<p>Your authors and their keys, how Cairn looks, and the defaults for new pages.</p>
+</div>
+
+<section class="settings-section" id="people" aria-labelledby="people-title">
+<div class="settings-intro" id="agents">
+<h2 id="people-title">Authors</h2>
+<p>Each agent publishes with its own key, under its own name. Its pages arrive private, and sharing and deleting stay with you.</p>
+<p>Photos sit beside bylines in your library and on shared pages.</p>
+</div>
+<div class="settings-profiles">
+<form class="connect-agent" id="connect-agent" novalidate hidden data-owner="{{.OwnerName}}">
+<h3 id="connect-title">Connect an agent</h3>
+<p class="connect-help" id="connect-help">Name it the way its byline should read. Cairn makes its key straight away and shows you what to give it.</p>
+<div class="field">
+<label class="field-label" for="new-person-name">Agent name</label>
+<div class="field-row">
+<input id="new-person-name" name="name" maxlength="100" autocomplete="off" spellcheck="false" placeholder="For example, Claude Code" aria-describedby="connect-help">
+<button type="submit" id="new-person-key">Create key</button>
+</div>
+<p class="field-error" id="new-person-name-error" hidden>{{icon "alert"}}<span></span></p>
+</div>
+<button type="button" class="text-button" id="new-person-photo">Add a photo for an author without a key</button>
+</form>
+<noscript><p class="field-note">{{icon "info"}}<span>Agent keys and photos need JavaScript, which is off in this browser. Everything else in Settings works without it.</span></p></noscript>
+<ul class="people-list" aria-labelledby="people-title">
+{{- range $i, $profile := .Profiles}}
+{{- $own := sameName .Name $.OwnerName}}
+<li class="person-row">
+<button type="button" class="avatar-edit" data-pick="{{.Name}}" aria-label="{{if .Photo}}Change{{else}}Add{{end}} photo for {{.Name}}">
+<span class="settings-avatar{{if not .Photo}} tint-{{tint .Name}}{{end}}">{{if .Photo}}<img src="{{.Photo}}" alt="">{{else}}{{initial .Name}}{{end}}</span>
+<span class="avatar-edit-mark">{{icon "plus"}}</span>
+</button>
+<div class="person-main">
+<strong class="person-name">{{.Name}}</strong>
+{{- if and $own (not .KeyActive)}}
+<p class="key-status is-own"><span>You. The byline on pages you write and import; keys are for agents.</span></p>
+{{- else}}
+<p class="key-status{{if .KeyActive}} is-active{{end}}"><span class="key-dot" aria-hidden="true"></span><span>{{if .KeyActive}}Key active<span class="key-sep" aria-hidden="true"> · </span><span class="key-when">created <time datetime="{{.KeyCreated}}" title="{{.KeyCreatedFull}}" data-local="relative-lower">{{.KeyCreatedLabel}}</time></span><span class="key-sep" aria-hidden="true"> · </span><span class="key-when">{{if .KeyUsed}}last used <time datetime="{{.KeyUsed}}" title="{{.KeyUsedFull}}" data-local="relative-lower">{{.KeyUsedLabel}}</time>{{else}}not used yet{{end}}</span>{{else}}No key{{end}}</span></p>
+{{- end}}
+</div>
+{{- if .KeyActive}}
+<button type="button" class="quiet manage-key" data-key-name="{{.Name}}" data-key-active="true" data-key-created="{{.KeyCreatedLabel}}" data-key-used="{{.KeyUsedLabel}}" aria-label="Manage key for {{.Name}}" hidden>Manage key</button>
+{{- else if not $own}}
+<button type="button" class="quiet manage-key" data-key-name="{{.Name}}" data-key-active="false" data-key-create aria-label="Create key for {{.Name}}" hidden>Create key</button>
+{{- else}}
+<span class="manage-key-none"></span>
+{{- end}}
+<button type="button" class="person-menu-trigger" popovertarget="photo-menu-{{$i}}" aria-label="Photo options for {{.Name}}" hidden>{{icon "more"}}</button>
+<div class="person-menu" popover id="photo-menu-{{$i}}"><button type="button" data-pick="{{.Name}}">{{if .Photo}}Change photo{{else}}Add photo{{end}}</button>{{if .Photo}}<button type="button" class="remove-photo" data-remove="{{.Name}}">Remove photo</button>{{end}}</div>
+</li>
+{{- end}}
+</ul>
+<p class="photo-support">Photos: WebP, AVIF, PNG, JPEG and other images your browser can open, up to 4 MB.</p>
+<p id="photo-feedback" class="photo-feedback" role="status"></p>
+</div>
+</section>
+
+<section class="settings-section" id="appearance" aria-labelledby="appearance-title">
+<div class="settings-intro">
+<h2 id="appearance-title">Appearance</h2>
+<p>One theme for your library, the pages you read and the pages you share. Choose one and it applies straight away.</p>
+<p>Pages written in Cairn take the theme’s colours. Pages in a design of their own keep it.</p>
+</div>
+<form class="appearance" method="post" id="theme-form" data-theme-form>
 <input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="action" value="themes">
-<div class="theme-all" id="theme-all" hidden><div><label for="all-theme">One preset for all views</label><select id="all-theme">{{range themes}}<option value="{{.ID}}">{{.Name}}</option>{{end}}</select></div><button type="button" class="quiet" id="apply-all-themes">Use for all three</button></div>
-<div><label for="admin-theme">Admin view</label><select aria-describedby="admin-theme-help" id="admin-theme" name="admin_theme">{{$selected := .Themes.Admin}}{{range themes}}<option value="{{.ID}}" {{if eq .ID $selected}}selected{{end}}>{{.Name}}</option>{{end}}</select><small id="admin-theme-help">Library, settings, editor and page management.</small></div>
-<div><label for="reader-theme">Private report view</label><select aria-describedby="reader-theme-help" id="reader-theme" name="reader_theme">{{$selected := .Themes.Reader}}{{range themes}}<option value="{{.ID}}" {{if eq .ID $selected}}selected{{end}}>{{.Name}}</option>{{end}}</select><small id="reader-theme-help">The reader when you open a report from your library.</small></div>
-<div><label for="public-theme">Public report view</label><select aria-describedby="public-theme-help" id="public-theme" name="public_theme">{{$selected := .Themes.Public}}{{range themes}}<option value="{{.ID}}" {{if eq .ID $selected}}selected{{end}}>{{.Name}}</option>{{end}}</select><small id="public-theme-help">The reader and password screen visitors see on shared links.</small></div>
-<div class="theme-save"><p id="theme-status" role="status">Selections apply after you save.</p><button>Save themes</button></div>
-</form></div></section>
-<section class="settings-section"><div class="settings-intro"><h2>Writing &amp; links</h2><p>Defaults for your next page.<br>Existing pages keep their links and bylines.</p></div><form class="settings-fields" method="post"><input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="action" value="defaults"><label>Default author<input name="author" value="{{.Preferences.Author}}" maxlength="100" required list="author-names"><small>Used when you write a page or import without an author.</small></label><label>Writing template<select name="template"><option value="report" {{if eq .Preferences.Template "report"}}selected{{end}}>Report · reading and notes</option><option value="comparison" {{if eq .Preferences.Template "comparison"}}selected{{end}}>Comparison · tables and choices</option><option value="visual" {{if eq .Preferences.Template "visual"}}selected{{end}}>Visual · images and diagrams</option></select><small>Used by the Markdown editor. Imported pages retain their chosen template.</small></label><label>Random link length<div class="length-field"><input type="number" name="link_length" min="3" max="7" value="{{.Preferences.LinkLength}}" required><span>characters</span></div><small>3 to 7 characters, using A-Z, a-z and 0-9. Defaults to 3. Sharing keeps the same path on the public domain. Existing links stay the same.</small></label><div class="settings-save"><p>{{icon "lock"}}New pages always start private.</p><button>Save defaults</button></div></form></section>
-<section class="settings-section"><div class="settings-intro"><h2>People &amp; agents</h2><p>A familiar face beside every byline.</p><p>Photos appear in your library and on shared reports by that author. Choose a photo, frame it, then save. Removing a photo restores their initials.</p></div><div class="settings-profiles">{{range $i,$profile := .Profiles}}<div class="person-row"><button type="button" class="avatar-edit" data-pick="{{.Name}}" aria-label="{{if .Photo}}Change{{else}}Add{{end}} photo for {{.Name}}"><span class="settings-avatar">{{if .Photo}}<img src="{{.Photo}}" alt="">{{else}}{{initial .Name}}{{end}}</span><span class="avatar-edit-mark">{{icon "plus"}}</span></button><div class="person-name"><strong>{{.Name}}</strong><button type="button" class="photo-text" data-pick="{{.Name}}">{{if .Photo}}Change photo{{else}}Add photo{{end}}</button></div><button type="button" class="key-access" data-key-name="{{.Name}}" data-key-active="{{.KeyActive}}" data-key-created="{{.KeyCreated}}" data-key-used="{{.KeyUsed}}">{{if .KeyActive}}Key active{{else}}Set up key{{end}}</button>{{if .Photo}}<button type="button" class="person-menu-trigger" popovertarget="photo-menu-{{$i}}" aria-label="Photo options for {{.Name}}">{{icon "more"}}</button><div class="person-menu" popover id="photo-menu-{{$i}}"><button type="button" data-pick="{{.Name}}">Change photo</button><button type="button" class="remove-photo" data-remove="{{.Name}}">Remove photo</button></div>{{end}}</div>{{end}}<form class="new-person" id="new-person"><label for="new-person-name">Add a person or agent</label><div><input id="new-person-name" maxlength="100" required placeholder="Name used in their byline"><button type="submit" class="quiet">Choose photo {{icon "plus"}}</button><button type="button" class="quiet" id="new-person-key">Set up key</button></div></form><p class="photo-support">WebP, AVIF, PNG, JPEG and other images your browser can open. Up to 4 MiB.</p><p id="photo-feedback" class="photo-feedback" role="status"></p><noscript>Photo editing needs JavaScript enabled.</noscript></div></section><datalist id="author-names">{{range .Profiles}}<option value="{{.Name}}">{{end}}</datalist></main><input type="file" id="photo-picker" accept="image/*,.avif,.webp" hidden><dialog class="photo-dialog" id="photo-dialog" aria-labelledby="photo-dialog-title"><div class="photo-dialog-head"><h2 id="photo-dialog-title">Frame your photo</h2><button type="button" class="close" id="cancel-photo" aria-label="Cancel photo change">{{icon "close"}}</button></div><p id="photo-for"></p><div class="crop-stage"><canvas id="photo-canvas" width="256" height="256" aria-label="Photo crop preview"></canvas></div><p class="crop-hint">Drag to position. The circle shows your avatar.</p><label class="crop-zoom">Zoom<input type="range" id="photo-zoom" min="1" max="3" step="0.01" value="1"></label><p id="crop-status" role="status"></p><div class="crop-actions"><button type="button" class="photo-text" id="choose-another">Choose another</button><button type="button" id="save-photo">Save photo</button></div></dialog><dialog class="photo-dialog key-dialog" id="key-dialog" aria-labelledby="key-title"><div class="photo-dialog-head"><h2 id="key-title">Publishing access</h2><button type="button" class="close" id="key-close" aria-label="Close publishing access">{{icon "close"}}</button></div><p id="key-person"></p><p class="key-scope">Publishes private pages with this byline. Can replace this author's pages. Sharing stays in your hands.</p><p id="key-history"></p><div id="key-result" hidden><label for="key-secret">Copy this key now. Cairn cannot show it again.</label><textarea id="key-secret" readonly rows="2" spellcheck="false"></textarea><button type="button" class="quiet" id="key-copy">Copy key</button></div><div><label for="key-snippet">Agent instructions</label><textarea id="key-snippet" readonly rows="9" spellcheck="false"></textarea><button type="button" class="quiet" id="snippet-copy">Copy agent setup</button></div><p id="key-feedback" role="status"></p><div class="key-actions"><button type="button" id="key-primary">Create key</button><button type="button" class="photo-text" id="key-revoke">Revoke key</button></div><p id="key-warning"></p></dialog><textarea id="agent-setup-guide" data-owner="{{.Preferences.Author}}" hidden>{{setupGuide}}</textarea><script>{{settingsScript}}</script></body></html>
+<fieldset class="theme-choices">
+<legend class="sr-only">Theme</legend>
+{{- range themes}}
+<label class="theme-choice" data-choice="{{.ID}}">
+{{- if eq .ID "system"}}
+<span class="theme-sample is-split" aria-hidden="true">{{template "theme-face" "cairn"}}{{template "theme-face" "dark"}}</span>
+{{- else}}
+<span class="theme-sample" aria-hidden="true">{{template "theme-face" .ID}}</span>
+{{- end}}
+<span class="theme-text">
+<span class="theme-name"><input type="radio" name="theme" value="{{.ID}}"{{if eq .ID $.Themes.Admin}} checked{{end}} aria-describedby="theme-help-{{.ID}}">{{.Name}}</span>
+<span class="theme-help" id="theme-help-{{.ID}}">{{.Description}}</span>
+</span>
+</label>
+{{- end}}
+</fieldset>
+<details class="theme-views"{{if or .Themes.Reader .Themes.Public}} open{{end}}>
+<summary>Customise per view</summary>
+<div class="theme-view-fields">
+<div class="field">
+<label class="field-label" for="reader-theme">Reading your pages</label>
+<select id="reader-theme" name="reader_theme" aria-describedby="reader-theme-help">
+<option value=""{{if not .Themes.Reader}} selected{{end}}>Same as the theme above</option>
+{{- $reader := .Themes.Reader}}
+{{- range themes}}
+<option value="{{.ID}}"{{if eq .ID $reader}} selected{{end}}>{{.Name}}</option>
+{{- end}}
+</select>
+<p class="field-help" id="reader-theme-help">The reader, when you open a page from your library.</p>
+</div>
+<div class="field">
+<label class="field-label" for="public-theme">Shared pages</label>
+<select id="public-theme" name="public_theme" aria-describedby="public-theme-help">
+<option value=""{{if not .Themes.Public}} selected{{end}}>Same as the theme above</option>
+{{- $public := .Themes.Public}}
+{{- range themes}}
+<option value="{{.ID}}"{{if eq .ID $public}} selected{{end}}>{{.Name}}</option>
+{{- end}}
+</select>
+<p class="field-help" id="public-theme-help">What visitors see on a public link, password screen included. With System, each visitor’s own light or dark setting decides.</p>
+</div>
+</div>
+</details>
+<div class="settings-save" data-without-script><button>Save theme</button></div>
+</form>
+<template id="theme-colors">{{range themes}}{{$id := .ID}}{{range themeColors .ID}}<meta name="theme-color" data-for="{{$id}}" content="{{.Color}}"{{if .Media}} media="{{.Media}}"{{end}}>{{end}}{{end}}</template>
+</section>
+
+<section class="settings-section" id="keyboard" aria-labelledby="keyboard-title">
+<div class="settings-intro">
+<h2 id="keyboard-title">Keyboard</h2>
+<p>Single keys move around your library and pages. Turn them off if they get in the way of voice control or another keyboard tool.</p>
+</div>
+<form class="settings-fields" method="post" id="keyboard-form" data-autosave>
+<input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="action" value="shortcuts">
+<div class="toggle-row">
+<label class="toggle-text" for="shortcuts"><span class="field-label">Keyboard shortcuts<span class="save-state" data-for="shortcuts" aria-hidden="true"></span></span>
+<small id="shortcuts-help">In the library J and K move, E archives, / searches and ? lists the keys. In the reader C opens the contents and [ and ] turn the page. In the editor Command or Control S saves and P previews.</small></label>
+<input type="checkbox" class="toggle" role="switch" id="shortcuts" name="shortcuts" value="on" aria-describedby="shortcuts-help"{{if .Preferences.Shortcuts}} checked{{end}}>
+</div>
+<div class="settings-save" data-without-script><button>Save</button></div>
+</form>
+</section>
+
+<section class="settings-section" id="writing" aria-labelledby="writing-title">
+<div class="settings-intro">
+<h2 id="writing-title">Writing &amp; links</h2>
+<p>Defaults for your next page. Existing pages keep their links and bylines.</p>
+</div>
+<form class="settings-fields" method="post" id="writing-form" novalidate data-autosave>
+<input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="action" value="defaults">
+<div class="field">
+<label class="field-label" for="default-author">Default author<span class="save-state" data-for="default-author" aria-hidden="true"></span></label>
+<input id="default-author" name="author" value="{{.Preferences.Author}}" maxlength="100" required data-missing="Enter the name to use when a page has no author." list="author-names" aria-describedby="{{if .Errors.author}}default-author-error {{end}}default-author-help"{{if .Errors.author}} aria-invalid="true" autofocus{{end}}>
+<p class="field-error" id="default-author-error"{{if .Errors.author}} role="alert"{{else}} hidden{{end}}>{{icon "alert"}}<span>{{.Errors.author}}</span></p>
+<p class="field-help" id="default-author-help">The byline when you write a page, or import one without an author.</p>
+</div>
+<div class="field">
+<label class="field-label" for="default-template">Writing template<span class="save-state" data-for="default-template" aria-hidden="true"></span></label>
+<select id="default-template" name="template" aria-describedby="{{if .Errors.template}}default-template-error {{end}}default-template-help"{{if .Errors.template}} aria-invalid="true"{{end}}>
+<option value="report" {{if eq .Preferences.Template "report"}}selected{{end}}>Report · reading and notes</option>
+<option value="comparison" {{if eq .Preferences.Template "comparison"}}selected{{end}}>Comparison · tables and choices</option>
+<option value="visual" {{if eq .Preferences.Template "visual"}}selected{{end}}>Visual · images and diagrams</option>
+</select>
+<p class="field-error" id="default-template-error"{{if .Errors.template}} role="alert"{{else}} hidden{{end}}>{{icon "alert"}}<span>{{.Errors.template}}</span></p>
+<p class="field-help" id="default-template-help">The layout of pages you write. Imported pages keep the template you choose for them.</p>
+</div>
+<div class="field">
+<label class="field-label" for="link-length">Link name length<span class="save-state" data-for="link-length" aria-hidden="true"></span></label>
+<div class="length-field"><input id="link-length" type="number" name="link_length" min="3" max="7" inputmode="numeric" value="{{.LinkLength}}" required data-missing="Choose a length from 3 to 7 characters." data-range="Choose a length from 3 to 7 characters." aria-describedby="{{if .Errors.link_length}}link-length-error {{end}}link-length-help"{{if .Errors.link_length}} aria-invalid="true"{{end}}><span>characters</span></div>
+<p class="field-error" id="link-length-error"{{if .Errors.link_length}} role="alert"{{else}} hidden{{end}}>{{icon "alert"}}<span>{{.Errors.link_length}}</span></p>
+<p class="field-help" id="link-length-help">How many letters and digits Cairn uses when it picks a link name for a new page, from 3 to 7. Existing links stay the same.</p>
+</div>
+<p class="settings-aside">{{icon "lock"}}New pages always start private.</p>
+<div class="settings-save" data-without-script><button>Save defaults</button></div>
+</form>
+</section>
+
+<section class="settings-section" id="kindle" aria-labelledby="kindle-title">
+<div class="settings-intro">
+<h2 id="kindle-title">Send to Kindle</h2>
+<p>Email any page to your Kindle as an EPUB book.</p>
+<p>Find your address in Amazon under Manage Your Content and Devices, then Preferences, then Personal Document Settings.</p>
+</div>
+<form class="settings-fields" method="post" id="kindle-form" novalidate data-autosave>
+<input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="action" value="kindle">
+{{- if not .MailFrom}}
+<p class="field-note kindle-off">{{icon "info"}}<span>Sending needs a mail account on the server first. The <a href="{{kindleGuide}}">Kindle guide</a> says how to add one.</span></p>
+{{- end}}
+<div class="field">
+<label class="field-label" for="kindle-address">Kindle email address<span class="save-state" data-for="kindle-address" aria-hidden="true"></span></label>
+<input id="kindle-address" type="email" name="kindle_address" value="{{.KindleAddress}}" maxlength="254" placeholder="name@kindle.com" autocomplete="off" spellcheck="false" pattern="[^@\s]+@[^@\s]+\.[^@\s.]{2,}" data-mismatch="Enter one email address, such as name@kindle.com." aria-describedby="{{if .Errors.kindle_address}}kindle-address-error {{end}}{{if .KindleWarning}}kindle-address-warning {{end}}kindle-address-help"{{if .Errors.kindle_address}} aria-invalid="true" autofocus{{end}}{{if not .MailFrom}} disabled{{end}}>
+<p class="field-error" id="kindle-address-error"{{if .Errors.kindle_address}} role="alert"{{else}} hidden{{end}}>{{icon "alert"}}<span>{{.Errors.kindle_address}}</span></p>
+<p class="field-note is-warning" id="kindle-address-warning"{{if not .KindleWarning}} hidden{{end}}>{{icon "alert"}}<span>{{.KindleWarning}}</span></p>
+{{- if .MailFrom}}
+<p class="field-help" id="kindle-address-help">Cairn sends from <strong>{{.MailFrom}}</strong>. Add that address to the Approved Personal Document E-mail List on the same Amazon page, or Amazon discards the email.</p>
+{{- else}}
+<p class="field-help" id="kindle-address-help">You can add your address once the server can send.</p>
+{{- end}}
+</div>
+<p class="settings-aside">Scripts, charts drawn by scripts and embedded frames don’t reach the Kindle. Text, tables and the page’s own images do.</p>
+{{- if .MailFrom}}
+<div class="settings-save" data-without-script><button>Save Kindle address</button></div>
+{{- end}}
+</form>
+</section>
+
+<datalist id="author-names">{{range .Profiles}}<option value="{{.Name}}">{{end}}</datalist>
+{{- end}}
+
+{{- /* A real library row and reader cover, drawn in one theme's tokens. */ -}}
+{{- define "theme-face"}}<span class="sample-face" data-preset="{{.}}"><span class="sample-cover"><span class="sample-brand">{{mark}}cairn</span><span class="sample-title">Where the heat goes</span><span class="sample-byline">Prepared by Claude</span></span><span class="sample-sheet"><span class="sample-row"><span class="sample-dot"></span><span class="sample-row-title">Three routers, one obvious pick</span></span><span class="sample-excerpt">Buy the Archer BE550. It covers the loft.</span></span></span>{{end}}
+
+{{- define "after-main" -}}
+<input type="file" id="photo-picker" accept="image/*,.avif,.webp" hidden>
+<dialog class="photo-dialog" id="photo-dialog" aria-labelledby="photo-dialog-title">
+<div class="photo-dialog-head"><h2 id="photo-dialog-title">Frame your photo</h2><button type="button" class="close" id="cancel-photo" aria-label="Cancel photo change">{{icon "close"}}</button></div>
+<p id="photo-for"></p>
+<div class="crop-stage"><canvas id="photo-canvas" width="256" height="256" aria-label="Photo crop preview"></canvas></div>
+<p class="crop-hint">Drag to position. The circle shows your avatar.</p>
+<label class="crop-zoom">Zoom<input type="range" id="photo-zoom" min="1" max="3" step="0.01" value="1"></label>
+<p id="crop-status" role="status"></p>
+<div class="crop-actions"><button type="button" class="photo-text" id="choose-another">Choose another</button><button type="button" id="save-photo">Save photo</button></div>
+</dialog>
+<dialog class="photo-dialog key-dialog" id="key-dialog" aria-labelledby="key-title" aria-describedby="key-scope">
+<div class="photo-dialog-head"><h2 id="key-title">Key for <span id="key-person"></span></h2><button type="button" class="close" id="key-close" aria-label="Close">{{icon "close"}}</button></div>
+<p class="key-scope" id="key-scope"><span class="key-name"></span> can publish private pages under its name, and list, read, replace and archive those pages through the API. The key is a byline, not a lock: software that can reach your library can do anything you can, so connect only agents you trust.</p>
+<p class="key-state" id="key-state"></p>
+<ol class="key-steps">
+<li class="key-step" id="step-create">
+<h3>Create a key</h3>
+<p>Cairn shows the key once, here, for you to copy into the agent’s secret store.</p>
+<button type="button" id="key-create">Create key</button>
+</li>
+<li class="key-step" id="step-copy" hidden>
+<h3>Copy the key</h3>
+<div class="field">
+<label class="field-label" for="key-secret">Agent key</label>
+<div class="field-row">
+<input id="key-secret" class="key-value" readonly spellcheck="false" autocomplete="off" aria-describedby="key-once">
+<button type="button" class="copy-button" id="key-copy">{{icon "copy"}}<span class="copy-label">Copy key</span></button>
+</div>
+<p class="field-help" id="key-once">Save it in the agent’s secret store as <code>CAIRN_API_KEY</code>. You won’t see this key again: Cairn keeps only a fingerprint of it.</p>
+</div>
+</li>
+<li class="key-step" id="step-setup" hidden>
+<h3>Give the agent its instructions</h3>
+<p>The setup text says when and how to publish. It reads the key from <code>CAIRN_API_KEY</code> and holds no secret, so it’s safe to paste into a chat or a project file.</p>
+<div class="key-copies">
+<button type="button" class="quiet" id="setup-copy">{{icon "copy"}}<span class="copy-label">Copy setup text</span></button>
+</div>
+<details class="setup-preview"><summary>Read the setup text</summary><pre class="key-code setup-text" tabindex="0" aria-label="Setup text"><code id="setup-text"></code></pre></details>
+<p class="key-or">Or, where the <code>cairn</code> command is installed:</p>
+<pre class="key-code"><code id="command-text"></code></pre>
+<div class="key-copies">
+<button type="button" class="quiet" id="command-copy">{{icon "copy"}}<span class="copy-label">Copy command</span></button>
+</div>
+</li>
+<li class="key-step" id="step-test" hidden>
+<h3>Test it</h3>
+<p>Run this where the agent runs, with <code>CAIRN_API_KEY</code> set:</p>
+<pre class="key-code"><code id="test-command"></code></pre>
+<p>Success is a reply that starts <code>{"pages":</code> and lists the pages <span class="key-name"></span> has written. <code>invalid_credential</code> means the key didn’t reach the command.</p>
+</li>
+</ol>
+<div class="key-change" id="key-change" hidden>
+<p>Cairn can’t show this key again. If the agent lost it, or someone else may have it, rotate it for a new one or revoke it.</p>
+<div class="key-change-actions"><button type="button" class="quiet" id="key-rotate">Rotate key</button><button type="button" class="danger-quiet" id="key-revoke">Revoke key</button></div>
+</div>
+<div class="confirm-panel key-confirm" id="key-confirm" role="group" aria-labelledby="key-confirm-text" hidden>
+<p id="key-confirm-text"></p>
+<div class="confirm-actions"><button type="button" id="key-confirm-yes"></button><button type="button" class="quiet" id="key-confirm-no"></button></div>
+</div>
+<p class="field-error key-error" id="key-error" role="alert" hidden>{{icon "alert"}}<span></span></p>
+<p class="sr-only" id="key-status" role="status"></p>
+</dialog>
+<template id="save-tick">{{icon "check"}}<span>Saved</span></template>
+<textarea id="agent-setup-guide" data-origin="{{.SetupOrigin}}" hidden>{{setupGuide}}</textarea>
+{{- end}}
+
+{{- define "script" -}}{{scriptURL "settings"}}{{end}}

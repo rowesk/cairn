@@ -17,6 +17,9 @@ const outlineLimit = 300
 type outlineHeading struct {
 	Level    int
 	ID, Text string
+	// Title marks an opening h1 that repeats the page title (class
+	// title-echo). It keeps its id but never becomes a contents entry.
+	Title bool
 }
 
 type contentsEntry struct {
@@ -57,7 +60,7 @@ func reportHeadings(content string) (string, []outlineHeading) {
 	out.Grow(len(content) + 256)
 	var headings []outlineHeading
 	var start html.Token
-	startRaw, open, needsID, listed, level := "", "", false, false, 0
+	startRaw, open, needsID, listed, title, level := "", "", false, false, false, 0
 	skipped, inScript := 0, false
 	flush := func(end string) {
 		label := strings.Join(strings.Fields(text.String()), " ")
@@ -79,7 +82,7 @@ func reportHeadings(content string) (string, []outlineHeading) {
 			startRaw = start.String()
 		}
 		if listed && label != "" {
-			headings = append(headings, outlineHeading{Level: level, ID: id, Text: clip(label, 160)})
+			headings = append(headings, outlineHeading{Level: level, ID: id, Text: clip(label, 160), Title: title})
 		}
 		out.WriteString(startRaw)
 		out.WriteString(inner.String())
@@ -127,12 +130,15 @@ func reportHeadings(content string) (string, []outlineHeading) {
 			start = token
 			if n := headingLevels[start.Data]; n > 0 {
 				hidden, id := false, ""
+				title = false
 				for _, a := range start.Attr {
 					switch {
 					case a.Key == "id":
 						id = strings.TrimSpace(a.Val)
 					case a.Key == "hidden", a.Key == "aria-hidden" && a.Val == "true":
 						hidden = true
+					case a.Key == "class" && n == 1 && len(headings) == 0:
+						title = strings.Contains(" "+a.Val+" ", " title-echo ")
 					}
 				}
 				open, startRaw, level, needsID = start.Data, raw, n, id == ""
@@ -180,9 +186,10 @@ func uniqueID(base string, taken map[string]bool) string {
 }
 
 // reportContents nests headings under the nearest shallower heading, so a
-// skipped level never leaves a gap. A report's lone opening h1 repeats the
-// page title, which the cover already shows. Fewer than three entries is not
-// worth a contents list.
+// skipped level never leaves a gap. The cover already shows the page title,
+// so an opening h1 that Cairn marked as repeating it is dropped; in other
+// reports a lone opening h1 is assumed to be the title and dropped too. Fewer
+// than three entries is not worth a contents list.
 func reportContents(headings []outlineHeading, route string) []*contentsEntry {
 	ones := 0
 	for _, h := range headings {
@@ -190,7 +197,10 @@ func reportContents(headings []outlineHeading, route string) []*contentsEntry {
 			ones++
 		}
 	}
-	if ones == 1 && len(headings) > 0 && headings[0].Level == 1 {
+	switch {
+	case len(headings) > 0 && headings[0].Title:
+		headings = headings[1:]
+	case ones == 1 && len(headings) > 0 && headings[0].Level == 1:
 		headings = headings[1:]
 	}
 	if len(headings) < 3 {

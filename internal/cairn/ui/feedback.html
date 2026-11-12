@@ -1,0 +1,71 @@
+{{/*
+  Feedback pieces every page can use. Parsed into the shared layout.
+
+    toasts   the page's one notice region, fixed to the edge of the window
+             so it never moves the page. Pass a *notice (nil renders an
+             empty region). The region holds one persistent live region,
+             #toast-live, that focus.js fills with each message, so screen
+             readers announce it reliably; the visible toast carries the
+             icon, the words and any action (Undo, Try again, a link).
+             Without JavaScript the toast sits in the page under the top bar.
+             Scripts show a new one with cairnToast({kind, text, ...}).
+
+    notice   one message in place, for the rare notice that belongs inside a
+             form (the editor's restored draft). The icon and wording carry
+             the kind, so colour is never the only signal.
+
+  Inline field errors are written in place, next to their field:
+
+    <input id="x" ... aria-invalid="true" aria-describedby="x-error x-help">
+    <p class="field-error" id="x-error">{{icon "alert"}}<span>Message</span></p>
+
+  Inside a <label>, use <span class="field-error"> instead of <p>.
+*/}}
+{{- define "toasts"}}
+<div class="toasts" id="toasts">
+<p class="sr-only" id="toast-live" role="status" aria-live="polite" aria-atomic="true"></p>
+{{- with .}}
+{{template "toast" .}}
+{{- end}}
+<template id="toast-icons"><span data-kind="success">{{icon "check"}}</span><span data-kind="error">{{icon "alert"}}</span><span data-kind="info">{{icon "info"}}</span><span data-kind="close">{{icon "close"}}</span></template>
+</div>
+{{- end}}
+
+{{- define "toast"}}
+<div class="toast is-{{.Kind}}" data-toast>
+{{- if eq .Kind "error"}}{{icon "alert"}}{{else if eq .Kind "success"}}{{icon "check"}}{{else}}{{icon "info"}}{{end}}
+<div class="toast-body">
+<p class="toast-text">{{.Text}}</p>
+{{- if or .Retry .Link}}
+<div class="toast-actions">
+{{- with .Retry}}
+<form method="post" action="{{.Action}}">{{range $name, $value := .Fields}}<input type="hidden" name="{{$name}}" value="{{$value}}">{{end}}<button>{{.Label}}</button></form>
+{{- end}}
+{{- if .Link}}
+<a href="{{.Link}}">{{.LinkText}}</a>
+{{- end}}
+</div>
+{{- end}}
+</div>
+<button type="button" class="toast-close" aria-label="Dismiss" hidden>{{icon "close"}}</button>
+</div>
+{{- end}}
+
+{{- define "notice"}}{{with .}}
+<div class="notice is-{{.Kind}}" role="{{if eq .Kind "error"}}alert{{else}}status{{end}}">
+{{- if eq .Kind "error"}}{{icon "alert"}}{{else if eq .Kind "success"}}{{icon "check"}}{{else}}{{icon "info"}}{{end}}
+<div class="notice-body">
+<p>{{.Text}}</p>
+{{- if or .Retry .Link}}
+<div class="notice-actions">
+{{- with .Retry}}
+<form method="post" action="{{.Action}}">{{range $name, $value := .Fields}}<input type="hidden" name="{{$name}}" value="{{$value}}">{{end}}<button>{{.Label}}</button></form>
+{{- end}}
+{{- if .Link}}
+<a href="{{.Link}}">{{.LinkText}}</a>
+{{- end}}
+</div>
+{{- end}}
+</div>
+</div>
+{{- end}}{{end}}

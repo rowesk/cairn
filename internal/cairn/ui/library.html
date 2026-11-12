@@ -1,7 +1,213 @@
-<!doctype html><html lang="en" data-theme="{{.Theme}}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Your library · Cairn</title><style>{{css}}</style></head><body>
-<header class="topbar"><a class="brand" href="/">{{mark}}cairn</a><nav class="topnav" aria-label="Collection"><a href="/" {{if not (or .Archived .Shared)}}aria-current="page"{{end}}>{{icon "list"}}Library <span class="count">{{.LibraryCount}}</span></a><a href="/?shared=1" {{if .Shared}}aria-current="page"{{end}}>{{icon "link"}}Shared <span class="count">{{.SharedCount}}</span></a><a href="/?archived=1" {{if .Archived}}aria-current="page"{{end}}>{{icon "archive"}}Archive <span class="count">{{.ArchiveCount}}</span></a></nav><a class="settings-link" href="/settings">Settings</a><span class="private-note">{{icon "lock"}}Your private library</span></header>
-<main class="workspace"><div class="heading"><div><h1>{{if .Archived}}Archive{{else if .Shared}}Shared pages{{else}}Your library{{end}}</h1><p>Every good answer, within reach.</p></div><div class="split-create"><a class="button" href="/new" aria-label="New page">{{icon "plus"}}<span>New page</span></a><details class="create-menu"><summary aria-label="More ways to add a page">{{icon "chevron"}}</summary><div class="create-options"><a href="/new">{{icon "doc"}}<span>New page<small>Write in Markdown</small></span></a><a href="/import">{{icon "upload"}}<span>Import file<small>Bring something you've saved</small></span></a></div></details></div></div><section class="sheet" aria-label="Reports"><form class="filters" method="get"><label class="search">{{icon "search"}}<input id="search" type="search" name="q" aria-label="Search title or reason" placeholder="Find something worth keeping…" value="{{.Query}}"></label><select name="agent" aria-label="Agent"><option value="">All agents</option>{{range .Agents}}<option{{if eq . $.Agent}} selected{{end}}>{{.}}</option>{{end}}</select>{{if .Archived}}<input type="hidden" name="archived" value="1">{{end}}{{if .Shared}}<input type="hidden" name="shared" value="1">{{end}}<button>Search</button>{{if or .Query .Agent}}<a class="clear" href="{{if .Archived}}/?archived=1{{else if .Shared}}/?shared=1{{else}}/{{end}}">Clear</a>{{end}}</form>
-<div class="table-head" aria-hidden="true"><span>Report</span><span>Prepared by</span><span>Saved</span><span>Access</span><span></span></div>
-{{range .Items}}<article class="report-row"><div class="report-main">{{if .File}}<span class="doc-mark file-mark" aria-hidden="true">{{fileIcon .FileName}}</span>{{else}}<span class="doc-mark" aria-hidden="true">{{icon "doc"}}<i></i><i></i><i></i></span>{{end}}<div class="report-copy"><h2><a class="report-title" href="/{{.Slug}}" data-preview data-title="{{.Title}}" data-agent="{{.Agent}}" data-date="{{date .CreatedAt}}" data-request="{{.OriginalRequest}}">{{.Title}}</a></h2><p class="excerpt">{{if .File}}{{.FileName}} · {{fileType .FileName}} · {{fileSize .FileSize}}{{else}}{{.Preview}}{{end}}</p><p class="mobile-meta">{{.Agent}} · {{date .CreatedAt}} · {{access .}}</p></div></div><span class="agent-cell"><span class="avatar">{{if .Photo}}<img src="{{.Photo}}" alt="">{{else}}{{initial .Agent}}{{end}}</span><span class="agent-name">{{.Agent}}</span></span><time class="date" datetime="{{.CreatedAt}}">{{date .CreatedAt}}</time><span class="access-cell"><span class="badge {{if .Shared}}shared{{end}}">{{if .Shared}}{{icon "link"}}{{else}}{{icon "lock"}}{{end}}{{access .}}</span></span><a class="manage-link" href="/manage/{{.Slug}}" aria-label="Manage {{.Title}}">{{icon "more"}}</a></article>
-{{else}}<div class="empty"><h2>{{if or .Query .Agent}}No matching reports{{else}}No reports here yet{{end}}</h2><p>{{if or .Query .Agent}}Try another title, request or agent.{{else if .Archived}}Archived reports will appear here.{{else if .Shared}}Pages you choose to share will appear here.{{else}}Write a page, import a file, or ask an agent to publish one.{{end}}</p><a href="/">Return to your library</a></div>{{end}}</section><footer class="list-foot"><span>{{len .Items}} reports · Newest first</span><span>Private unless you choose to share.</span></footer></main>
-<dialog class="preview" id="preview" aria-labelledby="preview-title"><header class="preview-head"><div><h2 id="preview-title"></h2><p id="preview-byline"></p></div><a class="button" id="open-page">Open page {{icon "arrow"}}</a><button class="close" id="close-preview" aria-label="Close report preview">{{icon "close"}}</button></header><div class="preview-context"><a id="manage-preview">Manage page</a><details><summary>Original request · private</summary><p id="preview-request"></p></details></div><iframe id="preview-frame" title="Report preview" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"></iframe></dialog><script>{{script}}</script></body></html>
+{{template "owner" .}}
+
+{{- define "title" -}}{{if .Archived}}Archive{{else if .Shared}}Shared pages{{else}}Your library{{end}} · Cairn{{end}}
+
+{{- /* Collections show only when there is more than one to choose: Shared
+       while the server can share or still holds shared pages, Archive
+       once something is in it. A count shows only when it isn't zero. */ -}}
+{{- define "topbar" -}}
+{{- $shared := or .Sharing .SharedCount .Shared}}
+{{- $archive := or .ArchiveCount .Archived}}
+{{- if or $shared $archive}}
+<nav class="topnav" aria-label="Collections">
+<a href="/" {{if not (or .Archived .Shared)}}aria-current="page"{{end}}>{{icon "list"}}Library{{if .LibraryCount}} <span class="count">{{.LibraryCount}}</span>{{end}}</a>
+{{- if $shared}}
+<a href="/?shared=1" {{if .Shared}}aria-current="page"{{end}}>{{icon "link"}}Shared{{if .SharedCount}} <span class="count">{{.SharedCount}}</span>{{end}}</a>
+{{- end}}
+{{- if $archive}}
+<a href="/?archived=1" {{if .Archived}}aria-current="page"{{end}}>{{icon "archive"}}Archive{{if .ArchiveCount}} <span class="count">{{.ArchiveCount}}</span>{{end}}</a>
+{{- end}}
+</nav>
+{{- else}}
+<span class="topbar-spacer"></span>
+{{- end}}
+{{- end}}
+
+{{- define "main-class" -}}workspace{{end}}
+
+{{- define "main" -}}
+{{- $welcome := and .FirstRun (not .Archived) (not .Shared)}}
+<div class="heading">
+<div class="heading-text">
+<h1>{{if .Archived}}Archive{{else if .Shared}}Shared pages{{else if $welcome}}Welcome to Cairn{{else}}Your library{{end}}</h1>
+{{- if .Archived}}
+<p>Pages you’ve hidden from your library. Their links still work.</p>
+{{- else if .Shared}}
+<p>Pages anyone with their link can read.</p>
+{{- else if $welcome}}
+<p>Pages from your agents and from you collect here, private until you share one.</p>
+{{- end}}
+</div>
+{{- if not (or .Archived .Shared $welcome)}}
+<div class="create-dock">
+<div class="split-create">
+<a class="button" href="/new">{{icon "plus"}}<span>New page</span></a>
+<details class="create-menu">
+<summary aria-label="More ways to add a page">{{icon "chevron"}}</summary>
+<div class="create-options">
+<a href="/new">{{icon "pen"}}<span>Write a page<small>In Markdown, with images and diagrams</small></span></a>
+<a href="/import">{{icon "upload"}}<span>Import a file<small>Markdown, HTML, PDF, Word or an image</small></span></a>
+</div>
+</details>
+</div>
+</div>
+{{- end}}
+</div>
+{{- if $welcome}}
+<section class="sheet first-run" aria-labelledby="first-run-title">
+<h2 id="first-run-title" class="sr-only">Ways to add your first page</h2>
+<ul class="ways">
+<li><a class="way" href="/settings#agents"><span class="way-icon">{{icon "key"}}</span><span class="way-text"><strong>Connect an agent</strong><span>Create a key in Settings and give your agent its setup text. Every page it writes for you arrives here.</span></span>{{icon "arrow"}}</a></li>
+<li><a class="way" href="/new"><span class="way-icon">{{icon "pen"}}</span><span class="way-text"><strong>Write a page</strong><span>Write in Markdown, with tables, diagrams and pasted images.</span></span>{{icon "arrow"}}</a></li>
+<li><a class="way" href="/import"><span class="way-icon">{{icon "upload"}}</span><span class="way-text"><strong>Import a file</strong><span>Bring in Markdown, HTML, a PDF, a Word document or an image you already have.</span></span>{{icon "arrow"}}</a></li>
+</ul>
+</section>
+{{- else}}
+<section class="sheet" aria-label="Pages" id="pages" data-csrf="{{.CSRF}}" data-view="{{if .Archived}}archive{{else if .Shared}}shared{{else}}library{{end}}">
+<form class="filters" method="get" action="/" role="search" id="filters">
+<label class="search">{{icon "search"}}<input id="search" type="search" name="q" aria-label="Search your pages" placeholder="Search titles, requests and page text" data-short-placeholder="Search pages" value="{{.Query}}" autocomplete="off" spellcheck="false" enterkeyhint="search" aria-keyshortcuts="/ Meta+K Control+K"><kbd class="search-key" aria-hidden="true">/</kbd></label>
+<button type="button" class="filter-toggle" id="filter-toggle" aria-expanded="false" aria-controls="filter-selects" hidden>{{icon "filter"}}<span class="filter-toggle-label">Filters</span><span class="filter-dot" aria-hidden="true"></span></button>
+<div class="filter-selects" id="filter-selects">
+<select name="agent" aria-label="Author"><option value="">All authors</option>{{range .Agents}}<option{{if eq . $.Agent}} selected{{end}}>{{.}}</option>{{end}}</select>
+<select name="sort" aria-label="Order">{{range .Sorts}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+</div>
+{{- if .Archived}}<input type="hidden" name="archived" value="1">{{end}}
+{{- if .Shared}}<input type="hidden" name="shared" value="1">{{end}}
+<button class="search-submit">Search</button>
+</form>
+<div class="results" id="results">
+{{- template "list" .}}
+</div>
+</section>
+<p class="sr-only" id="list-status" role="status"></p>
+<footer class="list-foot"><span id="list-count">{{.CountText}}{{if .CountText}} · {{.OrderText}}{{end}}</span>{{if not .ShortcutsOff}}<button type="button" class="text-button shortcut-hint" id="show-shortcuts" hidden>Keyboard shortcuts <kbd>?</kbd></button>{{end}}</footer>
+{{- end}}
+{{- end}}
+
+{{- define "list" -}}
+<div class="list-body" data-count="{{.CountText}}{{if .CountText}} · {{.OrderText}}{{end}}" data-total="{{.Total}}">
+{{- if .Items}}
+<div class="table-head" aria-hidden="true"><span>Page</span><span>Prepared by</span><span>Saved</span><span></span></div>
+<div class="rows" id="rows">
+{{- template "rows" .}}
+</div>
+{{- template "more" .}}
+{{- else}}
+<div class="empty">
+{{- if .Query}}
+<h2>No pages match “{{.Query}}”</h2>
+<p>Cairn looked through the titles, your requests and the words of every {{if .Archived}}archived {{else if .Shared}}shared {{end}}page{{if .Agent}} from {{.Agent}}{{end}}. Try fewer words, or the start of a word.</p>
+<a class="button quiet" href="{{.ClearHref}}" data-clear-search>Clear search</a>
+{{- else if .Agent}}
+<h2>No pages from {{.Agent}} here</h2>
+<p>{{if .Archived}}None of {{.Agent}}’s pages are archived.{{else if .Shared}}None of {{.Agent}}’s pages are shared.{{else}}{{.Agent}}’s pages are all in the archive.{{end}}</p>
+<a class="button quiet" href="{{.ClearHref}}" data-clear-search>Show every author</a>
+{{- else if .Archived}}
+<h2>Nothing in the archive</h2>
+<p>Archive a page from its menu, or press E on it, to hide it from your library. Its links keep working, and you can restore it from here.</p>
+{{- else if .Shared}}
+<h2>No shared pages</h2>
+<p>{{if .Sharing}}Turn sharing on from a page’s Manage page and it appears here. Anyone with its link can read that page, and nothing else in your library.{{else}}This server has no public address, so pages can’t be shared yet. The sharing guide explains how to add one.{{end}}</p>
+{{- if not .Sharing}}
+<a class="button quiet" href="https://github.com/rowesk/cairn/blob/main/docs/sharing.md">Read the sharing guide</a>
+{{- end}}
+{{- else}}
+<h2>Your library is clear</h2>
+<p>Every page is in the archive. Restore one from there, or add a new page.</p>
+<a class="button quiet" href="/?archived=1">Open the archive</a>
+{{- end}}
+</div>
+{{- end}}
+</div>
+{{- end}}
+
+{{- define "more" -}}
+{{- if .MoreHref}}
+<div class="more"><a class="button quiet show-more" href="{{.MoreHref}}" data-offset="{{.MoreOffset}}">Show more pages</a></div>
+{{- end}}
+{{- end}}
+
+{{- /* One row: the title, then one line under it (where a search matched,
+       else the page's first words, else the request summary). Only what is
+       unusual gets a badge: Shared, with a lock when it has a password. */ -}}
+{{- define "rows" -}}
+{{- range .Items}}
+<article class="report-row{{if .Unread}} is-unread{{end}}" id="page-row-{{.Row}}" data-slug="{{.Slug}}" data-title="{{.Title}}" data-agent="{{.Agent}}" data-date="{{.WhenFull}}" data-link="{{.Link}}"{{if .Shared}} data-shared{{end}}{{if .Editable}} data-editable{{end}}>
+<div class="row-main{{if .File}} file-row-main{{end}}">
+{{if .File}}<span class="doc-mark file-mark" aria-hidden="true">{{fileIcon .FileName}}</span>{{end}}
+{{- if .Unread}}<span class="unread-dot" aria-hidden="true" title="Not opened yet"></span>{{end}}
+<div class="row-head">
+<h2><a class="row-title" href="/{{.Slug}}{{$.From}}" data-preview title="{{.Title}}">{{if .TitleHTML}}{{.TitleHTML}}{{else}}{{.Title}}{{end}}{{if .Unread}}<span class="sr-only">, not opened yet</span>{{end}}</a></h2>
+{{- /* Private is every page's default, so only sharing is announced. */}}
+{{- if .Shared}}
+<span class="row-badge" title="{{.AccessLong}}">{{if .Protected}}{{icon "lock"}}Shared with a password{{else}}{{icon "link"}}Shared{{end}}</span>
+{{- end}}
+</div>
+{{- if .Snippet}}
+<p class="snippet"><span class="where">{{.Where}}:</span> {{.Snippet}}</p>
+{{- else if .Preview}}
+<p class="excerpt">{{if .File}}{{fileShort .FileName}} · <span class="file-row-size">{{fileSize .FileSize}}</span>{{else}}{{.Preview}}{{end}}</p>
+{{- else if .Asked}}
+<p class="excerpt"><span class="sr-only">You asked: </span>“{{.Asked}}”</p>
+{{- end}}
+<p class="mobile-meta">{{.Agent}} · <time datetime="{{.CreatedAt}}" data-local="relative">{{.When}}</time></p>
+</div>
+<span class="agent-cell"><span class="avatar tint-{{tint .Agent}}">{{if .Photo}}<img src="{{.Photo}}" alt="" width="24" height="24">{{else}}{{initial .Agent}}{{end}}</span><span class="agent-name">{{if .AgentHTML}}{{.AgentHTML}}{{else}}{{.Agent}}{{end}}</span></span>
+<time class="date" datetime="{{.CreatedAt}}" title="{{.WhenFull}}" data-local="relative">{{.When}}<span class="sr-only">, {{.WhenFull}}</span></time>
+<a class="row-more" href="/manage/{{.Slug}}" aria-label="Manage {{.Title}}">{{icon "more"}}</a>
+</article>
+{{- end}}
+{{- end}}
+
+{{- define "after-main" -}}
+{{- if not (and .FirstRun (not .Archived) (not .Shared))}}
+<div class="row-menu" id="row-menu" popover role="menu" aria-label="Page actions"></div>
+<template id="row-menu-items">
+<a role="menuitem" data-act="edit">{{icon "pen"}}<span>Edit</span></a>
+<button type="button" role="menuitem" data-act="copy">{{icon "copy"}}<span>Copy link</span></button>
+{{- if .Kindle}}
+{{- if .KindleReady}}
+<form method="post" data-act="kindle"><input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="action" value="kindle"><button role="menuitem">{{icon "kindle"}}<span>Send to Kindle</span></button></form>
+{{- else}}
+<a role="menuitem" data-act="kindle-setup" href="/settings#kindle">{{icon "kindle"}}<span>Send to Kindle<small>Add your Kindle address first</small></span></a>
+{{- end}}
+{{- end}}
+<div class="menu-rule" role="separator"></div>
+<button type="button" role="menuitem" data-act="archive">{{icon "archive"}}<span>Archive</span></button>
+<button type="button" role="menuitem" data-act="restore">{{icon "restore"}}<span>Restore to library</span></button>
+<a role="menuitem" data-act="manage">{{icon "doc"}}<span>Manage page<small>Sharing, title, delete</small></span></a>
+</template>
+<dialog class="preview" id="preview" aria-labelledby="preview-title">
+<header class="preview-head">
+<div class="preview-heading"><h2 id="preview-title" tabindex="-1"></h2><p id="preview-byline"></p></div>
+<div class="preview-tools">
+<button type="button" class="quiet-control" id="preview-request-toggle" aria-expanded="false" aria-controls="preview-request" hidden>Your request {{icon "chevron"}}</button>
+<a class="quiet-control" id="manage-preview">Manage</a>
+<span class="preview-steps">
+<button type="button" class="step" id="preview-prev" aria-label="Previous page" aria-keyshortcuts="K">{{icon "up"}}</button>
+<button type="button" class="step" id="preview-next" aria-label="Next page" aria-keyshortcuts="J">{{icon "chevron"}}</button>
+</span>
+<a class="button" id="open-page">Open page {{icon "arrow"}}</a>
+<button type="button" class="close" id="close-preview" aria-label="Close preview">{{icon "close"}}</button>
+</div>
+</header>
+<div class="preview-request" id="preview-request" hidden><p class="preview-request-label">Your request · only you</p><p id="preview-request-text"></p></div>
+<iframe id="preview-frame" title="Page preview" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"></iframe>
+</dialog>
+<dialog class="key-sheet" id="shortcuts" aria-labelledby="shortcuts-title">
+<div class="key-sheet-head"><h2 id="shortcuts-title">Keyboard shortcuts</h2><button type="button" class="close" id="close-shortcuts" aria-label="Close keyboard shortcuts">{{icon "close"}}</button></div>
+<dl class="key-list">
+<div><dt><kbd>/</kbd> <span>or</span> <kbd data-mod>⌘</kbd><kbd>K</kbd></dt><dd>Search</dd></div>
+<div><dt><kbd>Esc</kbd></dt><dd>Clear the search</dd></div>
+<div><dt><kbd>J</kbd> <kbd>K</kbd> <span>or</span> <kbd>↓</kbd> <kbd>↑</kbd></dt><dd>Next or previous page</dd></div>
+<div><dt><kbd>Enter</kbd></dt><dd>Open the page</dd></div>
+<div><dt><kbd>Space</kbd> <span>or</span> <kbd>P</kbd></dt><dd>Preview the page, then step through with J and K</dd></div>
+<div><dt><kbd>E</kbd></dt><dd>Archive or restore, with undo</dd></div>
+<div><dt><kbd>?</kbd></dt><dd>Show these shortcuts</dd></div>
+</dl>
+<p class="key-sheet-note">Turn single-key shortcuts off in <a href="/settings#keyboard">Settings</a>.</p>
+</dialog>
+{{- end}}
+{{- end}}
+
+{{- define "script" -}}{{scriptURL "library"}}{{end}}
