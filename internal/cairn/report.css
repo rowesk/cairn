@@ -987,7 +987,7 @@ main[data-template] :is(h2, h3, h4, h5, h6) + :is(.table-frame, figure, .figure-
 
   th, td,
   [data-template="comparison"] :is(th, td) {
-    padding: 0.5rem 0.625rem;
+    padding: 0.5rem;
   }
 
   [data-template="comparison"] :is(th, td):first-child {
