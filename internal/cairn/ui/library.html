@@ -133,7 +133,8 @@
 {{- define "rows" -}}
 {{- range .Items}}
 <article class="report-row{{if .Unread}} is-unread{{end}}" id="page-row-{{.Row}}" data-slug="{{.Slug}}" data-title="{{.Title}}" data-agent="{{.Agent}}" data-date="{{.WhenFull}}" data-link="{{.Link}}"{{if .Shared}} data-shared{{end}}{{if .Editable}} data-editable{{end}}>
-<div class="row-main">
+<div class="row-main{{if .File}} file-row-main{{end}}">
+{{if .File}}<span class="doc-mark file-mark" aria-hidden="true">{{fileIcon .FileName}}</span>{{end}}
 {{- if .Unread}}<span class="unread-dot" aria-hidden="true" title="Not opened yet"></span>{{end}}
 <div class="row-head">
 <h2><a class="row-title" href="/{{.Slug}}{{$.From}}" data-preview title="{{.Title}}">{{if .TitleHTML}}{{.TitleHTML}}{{else}}{{.Title}}{{end}}{{if .Unread}}<span class="sr-only">, not opened yet</span>{{end}}</a></h2>
@@ -145,7 +146,7 @@
 {{- if .Snippet}}
 <p class="snippet"><span class="where">{{.Where}}:</span> {{.Snippet}}</p>
 {{- else if .Preview}}
-<p class="excerpt">{{.Preview}}</p>
+<p class="excerpt">{{if .File}}{{fileShort .FileName}} · <span class="file-row-size">{{fileSize .FileSize}}</span>{{else}}{{.Preview}}{{end}}</p>
 {{- else if .Asked}}
 <p class="excerpt"><span class="sr-only">You asked: </span>“{{.Asked}}”</p>
 {{- end}}

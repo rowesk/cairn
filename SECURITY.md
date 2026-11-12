@@ -16,12 +16,14 @@ An optional owner sign-in would change this model. [docs/owner-login-proposal.md
 
 ## Shared pages
 
-The public listener serves explicitly shared pages only. Short public paths are discoverable. Password protection is optional and uses one shared password. After repeated wrong passwords, the same address waits longer before each new try, up to 5 minutes, and everyone else waits at most 10 seconds. A single wrong password costs no wait. Shared pages never offer the file a page was made from.
+The public listener serves explicitly shared pages only. Short public paths are discoverable. Password protection is optional and uses one shared password. After repeated wrong passwords, the same address waits longer before each new try, up to 5 minutes, and everyone else waits at most 10 seconds. A single wrong password costs no wait. Shared file pages offer their file behind the same sharing and password checks. Other pages keep their source owner-only.
 
 ## The host and its data
 
 The data directory contains private request metadata and credentials. Use a dedicated OS account, preserve backup permissions, and keep it away from untrusted local users. Cairn assumes its data directory and host are trusted. It does not provide encrypted storage, multi-user isolation or version history.
 
-## Reports
+## Page content
 
-Reports can run scripts inside an opaque-origin iframe sandbox. Remote scripts, network requests, forms and access to the library document are restricted by CSP. Keep your reverse proxy's Host forwarding and no-cache settings intact. Test both listeners after changing proxy configuration.
+Pages can run scripts inside an opaque-origin iframe sandbox. Remote scripts, network requests, forms and access to the library document are restricted by CSP. Keep your reverse proxy's Host forwarding and no-cache settings intact. Test both listeners after changing proxy configuration.
+
+Publish privately by default. Set `share_enabled` to `true` on `POST /api/pages` only when the owner asked for this page to be shared. Never set it otherwise. Tell the owner the saved `public_url` afterwards, as well as the private address. Sharing must be configured or creation fails with 503 `public_sharing_unavailable` without saving. Omitted or `false` stays private. Any supplied value on PUT is refused; replacement preserves sharing, link names and passwords. Files start private.

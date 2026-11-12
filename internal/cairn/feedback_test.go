@@ -356,13 +356,12 @@ func TestFormsShowValidationBesideTheField(t *testing.T) {
 		}
 	}
 	code, body = postImport(t, private, map[string]string{"title": "Kept"}, "tool.exe", []byte("MZ"), csrf)
-	if code != 400 || !strings.Contains(body, "Cairn can’t import this type of file. Choose Markdown, HTML, text, an image, a PDF or a Word document.") || !strings.Contains(body, `value="Kept"`) || !strings.Contains(body, `id="document-error" role="alert">`) {
-		t.Errorf("unsupported import: %d\n%s", code, body)
+	if code != 303 {
+		t.Errorf("inert file import: %d", code)
 	}
-	// The drop zone checks before upload with the server's exact words.
 	_, _, form := request(t, private, "GET", "/import", nil, "")
-	if !strings.Contains(string(form), `data-unsupported="Cairn can’t import this type of file. Choose Markdown, HTML, text, an image, a PDF or a Word document."`) || !strings.Contains(string(form), `data-too-large="This file is larger than 10 MB. Choose a smaller one."`) || !strings.Contains(string(form), "Markdown, HTML, text, an image, a PDF or a Word document, up to 10 MB.") {
-		t.Error("drop zone lacks the server's limits and words")
+	if !strings.Contains(string(form), `data-too-large="This file is larger than 50 MiB. Choose a smaller one."`) || !strings.Contains(string(form), "Any file up to 50 MiB.") {
+		t.Error("drop zone lacks file limits")
 	}
 	code, body = postImport(t, private, map[string]string{"title": "No file"}, "", nil, csrf)
 	if code != 400 || !strings.Contains(body, "Choose a file to import.") || !strings.Contains(body, `value="No file"`) {
@@ -371,7 +370,7 @@ func TestFormsShowValidationBesideTheField(t *testing.T) {
 	tags := regexp.MustCompile(`(?s)<script>.*?</script>|<[^>]+>`)
 	for _, page := range []string{string(form), body} {
 		text := tags.ReplaceAllString(page, " ")
-		if strings.Contains(text, "MiB") || strings.Contains(text, "bytes") || strings.Contains(text, "slug") || strings.Contains(text, "PHP") {
+		if strings.Contains(text, "bytes") || strings.Contains(text, "slug") || strings.Contains(text, "PHP") {
 			t.Errorf("import still speaks in jargon: %s", text)
 		}
 	}

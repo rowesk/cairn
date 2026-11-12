@@ -5,29 +5,30 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"html"
 	"html/template"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"unicode/utf8"
 )
 
-// importAccept lists the file types the import form offers. prepareImport
-// turns exactly these into pages.
-const importAccept = ".html,.htm,.md,.markdown,.txt,.json,.mmd,.mermaid,.png,.jpg,.jpeg,.gif,.webp,.pdf,.doc,.docx,.odt,.rtf,.php,.csv,.xml,.yaml,.yml,.log,.svg"
+// An empty accept list lets the owner choose any file.
+const importAccept = ""
 
 // importLimit is the largest file the import form takes. The drop zone
 // checks the same limit and type list before uploading, with the same words.
-const importLimit = 10 << 20
+const importLimit = maxFileBytes
 
 const (
-	importUnsupported = "Cairn can’t import this type of file. Choose Markdown, HTML, text, an image, a PDF or a Word document."
-	importTooLarge    = "This file is larger than 10 MB. Choose a smaller one."
+	importUnsupported = "Choose a file to import."
+	importTooLarge    = "This file is larger than 50 MiB. Choose a smaller one."
 	importExpired     = "This form had expired, so nothing was imported. Choose the file again and import it."
 )
 
@@ -64,28 +65,26 @@ func (s *Server) importPage(w http.ResponseWriter, r *http.Request) {
 		s.renderImport(w, d, http.StatusOK)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 16<<20)
-	if err := r.ParseMultipartForm(16 << 20); err != nil {
-		if r.MultipartForm != nil {
-			defer r.MultipartForm.RemoveAll()
-		}
-		if !sameOrigin(r) {
-			s.showError(w, http.StatusForbidden, problemForeignForm)
-			return
-		}
-		status := http.StatusBadRequest
-		d.Errors["document"] = "Cairn couldn’t read that upload. Choose the file again."
-		if isPayloadTooLarge(err) {
-			status = http.StatusRequestEntityTooLarge
-			d.Errors["document"] = importTooLarge
+	if !sameOrigin(r) {
+		s.showError(w, 403, problemForeignForm)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadRequestBytes)
+	u, err := s.readUpload(r, "document", 4<<20)
+	if err != nil {
+		status := 400
+		d.Errors["document"] = "Cairn could not read that upload. Choose the file again."
+		if errors.Is(err, errUploadTooLarge) {
+			status = 413
+			d.Errors["document"] = "The file must fit 50 MiB and each supporting image 4 MiB."
 		}
 		s.renderImport(w, d, status)
 		return
 	}
-	defer r.MultipartForm.RemoveAll()
-	if !sameOrigin(r) {
-		s.showError(w, http.StatusForbidden, problemForeignForm)
-		return
+	defer u.remove()
+	r.Form = map[string][]string{}
+	for k, v := range u.fields {
+		r.Form[k] = []string{v}
 	}
 	d.Title, d.Agent, d.Request, d.Slug = r.FormValue("title"), r.FormValue("agent"), r.FormValue("original_request"), strings.TrimSpace(r.FormValue("slug"))
 	switch d.Template = r.FormValue("template"); d.Template {
@@ -114,54 +113,55 @@ func (s *Server) importPage(w http.ResponseWriter, r *http.Request) {
 		d.Errors["slug"], status = problem, code
 	}
 	in := publication{Title: d.Title, Agent: d.Agent, OriginalRequest: d.Request, Slug: d.Slug, Template: d.Template, Assets: map[string][]byte{}}
-	file, header, err := r.FormFile("document")
-	if err != nil {
+	if strings.TrimSpace(in.Agent) == "" {
+		in.Agent = d.DefaultAuthor
+	}
+	in.OwnerWritten = true
+	if len(u.files["document"]) != 1 {
 		d.Errors["document"] = "Choose a file to import."
 	} else {
-		defer file.Close()
-		d.FileName = filepath.Base(header.Filename)
-		data, err := io.ReadAll(io.LimitReader(file, importLimit+1))
-		switch {
-		case err != nil:
-			d.Errors["document"] = "Cairn couldn’t read that file. Choose it again."
-		case len(data) > importLimit:
-			d.Errors["document"], status = importTooLarge, http.StatusRequestEntityTooLarge
-		default:
-			if strings.TrimSpace(in.Title) == "" {
-				in.Title = importTitle(d.FileName, data)
+		doc := u.files["document"][0]
+		d.FileName = doc.Name
+		images := u.files["assets"]
+		asFile := u.fields["as_file"] == "1" || !renderableImport(doc.Name, doc.Size)
+		if asFile && len(images) > 0 {
+			d.Errors["assets"] = "Supporting images only apply to pages Cairn can open. Remove them to save a file page."
+		}
+		if !asFile {
+			var data []byte
+			if data, err = os.ReadFile(doc.Path); err == nil {
+				if strings.TrimSpace(in.Title) == "" {
+					in.Title = importTitle(doc.Name, data)
+				}
+				in.Source = &sourceFile{Name: doc.Name, Path: doc.Path, Size: doc.Size}
+				err = prepareImport(&in, doc.Name, data)
 			}
-			if strings.TrimSpace(in.Agent) == "" {
-				in.Agent = d.DefaultAuthor
+			if err == nil {
+				// Dry run of the save checks, so a file that cannot become a page
+				// (non-UTF-8 text, HTML grown past 2 MiB) is kept as a download.
+				check := in
+				err = validatePublication(check)
 			}
-			// The owner brought this file in; a request is optional.
-			in.OwnerWritten = true
-			in.Source = &sourceFile{Name: d.FileName, Data: data}
-			if err := prepareImport(&in, header.Filename, data); err != nil {
-				d.Errors["document"] = err.Error()
+			if err != nil && len(images) == 0 {
+				asFile, err = true, nil
+			}
+			for _, image := range images {
+				if err != nil {
+					break
+				}
+				if _, exists := in.Assets[image.Name]; exists {
+					err = fmt.Errorf("duplicate image name")
+				}
+				in.Assets[image.Name] = image.Data
 			}
 		}
-	}
-	for _, header := range r.MultipartForm.File["assets"] {
-		if d.Errors["assets"] != "" {
-			break
+		if asFile {
+			err = filePublication(&in, doc)
 		}
-		file, err := header.Open()
 		if err != nil {
-			d.Errors["assets"] = "Cairn couldn’t read one of the images. Choose them again."
-			break
+			d.Errors["document"] = err.Error()
 		}
-		data, readErr := io.ReadAll(io.LimitReader(file, (4<<20)+1))
-		file.Close()
-		switch {
-		case readErr != nil:
-			d.Errors["assets"] = "Cairn couldn’t read one of the images. Choose them again."
-		case len(data) > 4<<20:
-			d.Errors["assets"] = "Each image can be up to 4 MB. “" + header.Filename + "” is larger."
-		case in.Assets[header.Filename] != nil:
-			d.Errors["assets"] = "Two images are called “" + header.Filename + "”. Rename one and choose them again."
-		default:
-			in.Assets[header.Filename] = data
-		}
+
 	}
 	if len(d.Errors) == 0 {
 		// The same publication path owns all validation and storage semantics.
@@ -198,6 +198,20 @@ func (s *Server) importPage(w http.ResponseWriter, r *http.Request) {
 		d.Errors["rechoose"] = "Choose the file again to import it."
 	}
 	s.renderImport(w, d, status)
+}
+
+// renderableImport reports whether Cairn can show a file as a page. Anything
+// else, including renderable types over their page limits, becomes a file page.
+func renderableImport(name string, size int64) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".md", ".markdown", ".html", ".htm", ".mmd", ".mermaid", ".txt", ".json", ".php", ".csv", ".xml", ".yaml", ".yml", ".log", ".svg":
+		return size <= 2<<20
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp":
+		return size <= 4<<20
+	case ".docx":
+		return size <= 10<<20
+	}
+	return false
 }
 
 func prepareImport(in *publication, name string, data []byte) error {
@@ -252,8 +266,6 @@ func prepareImport(in *publication, name string, data []byte) error {
 			return err
 		}
 		return importBody(in, body)
-	case ".pdf", ".doc", ".odt", ".rtf":
-		return importBody(in, `<h1>`+template.HTMLEscapeString(in.Title)+`</h1>`+fileCard(filepath.Base(name), ext, len(data)))
 	default:
 		return fmt.Errorf("%s", importUnsupported)
 	}
@@ -358,60 +370,6 @@ func importTitle(name string, data []byte) string {
 	}
 	return title
 }
-
-// documentKinds names the documents Cairn keeps but cannot show as text, in
-// the fewest words, so a library row reads "PDF · 47 KB" whole on a phone.
-var documentKinds = map[string]string{".pdf": "PDF", ".doc": "Word", ".odt": "OpenDocument", ".rtf": "RTF"}
-
-// legacyDocumentKinds are the longer names file cards carried before, for
-// pages imported then.
-var legacyDocumentKinds = map[string]string{"PDF document": "PDF", "Word document": "Word", "OpenDocument text": "OpenDocument", "Rich Text document": "RTF"}
-
-// fileCardDownload is the card's Download button. Delivery takes it out of
-// the page a visitor sees (fileCardFor).
-const fileCardDownload = `<a class="file-card-download" href="?download=1" target="_blank" rel="noopener">Download</a>`
-
-// fileCard is the body of a document Cairn keeps but cannot show: its name,
-// kind and size, and a Download button for the original. Browsers will not
-// show a PDF inside the reader's sandboxed frame, so the page offers the
-// file itself. The card draws in the report's own colours, so it follows
-// the theme like any page Cairn rendered.
-func fileCard(name, ext string, size int) string {
-	kind := documentKinds[ext]
-	label := strings.ToUpper(strings.TrimPrefix(ext, "."))
-	return `<style>` + fileCardCSS + `</style>` +
-		`<div class="file-card"><span class="file-card-icon" aria-hidden="true">` + template.HTMLEscapeString(label) + `</span>` +
-		`<p class="file-card-text"><strong>` + template.HTMLEscapeString(name) + `</strong><br>` + kind + ` · ` + strings.Replace(byteSize(size), " ", "\u00a0", 1) + `</p>` +
-		fileCardDownload + `</div>`
-}
-
-// fileCardFor fits a stored file card to who is reading: older cards take
-// the short kind names, and a visitor's copy has no Download, because a
-// shared page shares the page, never the file it was made from.
-func fileCardFor(content string, owner bool) string {
-	if !strings.Contains(content, `class="file-card"`) {
-		return content
-	}
-	for long, short := range legacyDocumentKinds {
-		content = strings.Replace(content, "</strong><br>"+long+" · ", "</strong><br>"+short+" · ", 1)
-	}
-	if !owner {
-		content = fileCardButton.ReplaceAllString(content, "")
-	}
-	return content
-}
-
-// fileCardButton finds the card's Download button however the stored page
-// orders its attributes.
-var fileCardButton = regexp.MustCompile(`<a class="file-card-download"[^>]*>Download</a>`)
-
-const fileCardCSS = `.file-card{display:flex;align-items:center;gap:16px;max-width:43.5rem;margin:32px auto;padding:16px 16px 16px 20px;border:1px solid var(--report-rule);border-radius:12px;background:var(--report-tint);color:var(--report-ink);font:15px/1.5 var(--report-sans)}` +
-	`.file-card-icon{display:grid;flex-shrink:0;place-items:center;width:44px;height:52px;border:1px solid var(--report-rule);border-radius:4px 12px 4px 4px;background:var(--report-paper);color:var(--report-muted);font-size:12px;font-weight:600;letter-spacing:.04em}` +
-	`.file-card-text{flex:1;min-width:0;margin:0;color:var(--report-muted);font-size:13px;overflow-wrap:anywhere}` +
-	`.file-card-text strong{color:var(--report-ink);font-size:15px;font-weight:600}` +
-	`.file-card-download{display:inline-flex;flex-shrink:0;align-items:center;min-height:44px;padding:0 18px;border-radius:7px;background:var(--report-accent);color:var(--report-paper);font-weight:500;text-decoration:none}` +
-	`.file-card-download:focus-visible{outline:2px solid var(--report-accent);outline-offset:3px}` +
-	`@media (max-width:480px){.file-card{flex-wrap:wrap}.file-card-download{width:100%;justify-content:center}}`
 
 // byteSize says a file's size the way the drop zone does: 240 KB, 1.4 MB.
 func byteSize(n int) string {

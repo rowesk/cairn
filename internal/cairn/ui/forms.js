@@ -163,7 +163,7 @@
    for (const file of files) {
     const dot = file.name.lastIndexOf('.');
     const extension = dot > 0 ? file.name.slice(dot).toLowerCase() : '';
-    if (!types.includes(extension)) return fail(zone.dataset.unsupported);
+    if (input.accept && !types.includes(extension)) return fail(zone.dataset.unsupported);
     if (file.size > limit) return fail(zone.dataset.tooLarge);
    }
    clear();

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keep streamed file pages up to 50 MiB and explicit, creation-only agent sharing alongside the new reader and publishing API.
+- Require Go 1.26.11.
+
 ### Reading
 
 - The reader is rebuilt around the navy Blue Hour cover: brand, status (Private or Shared), Copy link, Edit, Send to Kindle and Manage page in one row, then the title, the byline and your request, clamped to three lines with Show full request. Phones get a More menu. Visitors see a plain strip with the title, byline and Copy link.

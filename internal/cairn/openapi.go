@@ -130,6 +130,8 @@ func publicationSchema() map[string]any {
 	for _, f := range publicationFields {
 		p := map[string]any{"description": f.Description}
 		switch f.Kind {
+		case "boolean":
+			p["type"] = "boolean"
 		case "string":
 			p["type"] = "string"
 		case "strings":
@@ -213,7 +215,9 @@ func errorResponses(responses map[string]any, statuses ...int) map[string]any {
 }
 
 func openAPIDocument() map[string]any {
-	schemas := map[string]any{"Publication": publicationSchema(), "PageUpdate": patchSchema()}
+	replacement := publicationSchema()
+	delete(replacement["properties"].(map[string]any), "share_enabled")
+	schemas := map[string]any{"Replacement": replacement, "Publication": publicationSchema(), "PageUpdate": patchSchema()}
 	for _, c := range components {
 		schemas[c.name] = schemaOf(c.t, true)
 	}
@@ -251,7 +255,7 @@ func openAPIDocument() map[string]any {
 				"Authenticate with Authorization: Bearer and an agent key from Settings, Authors. " +
 				"An agent key signs pages with its own byline, and through this API lists, reads and changes only those pages; another author's page answers 404 like a missing one. " +
 				"A key is a byline, not a lock: software that can reach the library's address can do anything the owner can. " +
-				"The installation token reaches every page and must send agent. Only the owner shares or deletes pages: " +
+				"The installation token reaches every page and must send agent. Only the owner deletes pages or changes existing sharing: " +
 				"DELETE answers 405 method_not_allowed, so archive with PATCH instead. Browsers cannot use the API. " +
 				"Every response is JSON. Failures share one shape: code, message, field, retryable and errors.",
 		},
@@ -265,6 +269,8 @@ func openAPIDocument() map[string]any {
 				"operationId": "openapi", "summary": "This document.", "security": []any{},
 				"responses": map[string]any{"200": response("This document.", map[string]any{"type": "object"})},
 			}},
+			"/api/files":        map[string]any{"post": fileOperation("Publish a private file page.", "publishFile", 201)},
+			"/api/files/{slug}": map[string]any{"parameters": []any{slug}, "put": fileOperation("Replace a page with a file; sharing and passwords stay.", "replaceFile", 200)},
 			"/api/pages": map[string]any{
 				"get": map[string]any{
 					"operationId": "listPages",
@@ -304,7 +310,7 @@ func openAPIDocument() map[string]any {
 					"summary":     "Replace a page completely.",
 					"description": "Send the whole page again, with every image it still needs. The slug, date and sharing stay; leaving out request_summary or request_source keeps the saved ones.",
 					"parameters":  []any{idempotency},
-					"requestBody": body("Publication"),
+					"requestBody": body("Replacement"),
 					"responses":   errorResponses(map[string]any{"200": response("The page was replaced.", ref("PageWrite"))}, 400, 401, 403, 404, 409, 413, 415, 422, 500, 503),
 				},
 				"patch": map[string]any{
@@ -329,4 +335,16 @@ func openAPIDocument() map[string]any {
 		},
 		"x-limits": limits,
 	}
+}
+
+// fileOperation describes the streamed multipart API, not JSON publication.
+func fileOperation(summary, id string, status int) map[string]any {
+	fields := map[string]any{"file": map[string]any{"type": "string", "format": "binary", "description": "One inert file, up to 50 MiB.", "x-max-bytes": maxFileBytes}}
+	for _, f := range publicationFields {
+		switch f.Name {
+		case "title", "agent", "original_request", "request_summary", "request_source", "slug":
+			fields[f.Name] = map[string]any{"type": "string", "description": f.Description}
+		}
+	}
+	return map[string]any{"operationId": id, "summary": summary, "requestBody": map[string]any{"required": true, "content": map[string]any{"multipart/form-data": map[string]any{"schema": map[string]any{"type": "object", "properties": fields, "required": []string{"file", "original_request"}, "additionalProperties": false}}}}, "responses": errorResponses(map[string]any{strconv.Itoa(status): response("The file page was saved.", ref("PageWrite"))}, 400, 401, 403, 404, 409, 413, 415, 500, 503)}
 }

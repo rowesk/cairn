@@ -78,6 +78,7 @@ type publication struct {
 	OwnerWritten    bool              `json:"-"`
 	PublicSlug      string            `json:"-"`
 	Source          *sourceFile       `json:"-"`
+	File            bool              `json:"-"`
 	Capabilities    []string          `json:"capabilities"`
 	Markdown        string            `json:"markdown"`
 	Template        string            `json:"template"`
@@ -94,6 +95,8 @@ type savedPage struct {
 	ID, Slug, Title, Agent, OriginalRequest, CreatedAt, Object string
 	RequestSummary, RequestSource                              string
 	FileName                                                   string
+	File                                                       bool
+	FileSize                                                   int64
 }
 
 func Open(cfg Config) (*Server, error) {
@@ -186,6 +189,23 @@ func Open(cfg Config) (*Server, error) {
 		return nil, err
 	}
 	if err := migrateThemes(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	for column, definition := range map[string]string{"file_page": "INTEGER NOT NULL DEFAULT 0", "file_name": "TEXT NOT NULL DEFAULT ''", "file_size": "INTEGER NOT NULL DEFAULT 0"} {
+		if _, err := db.Exec("SELECT " + column + " FROM pages LIMIT 0"); err != nil {
+			if _, err := db.Exec("ALTER TABLE pages ADD COLUMN " + column + " " + definition); err != nil {
+				db.Close()
+				return nil, err
+			}
+		}
+	}
+	// Interrupted uploads leave only temporary files here; the lock is held.
+	if err := os.RemoveAll(filepath.Join(cfg.DataDir, "uploads")); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := os.Mkdir(filepath.Join(cfg.DataDir, "uploads"), 0700); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -311,7 +331,14 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.mu.RLock()
-	defer s.mu.RUnlock()
+	unlocked := false
+	unlock := func() {
+		if !unlocked {
+			unlocked = true
+			s.mu.RUnlock()
+		}
+	}
+	defer unlock()
 	if r.URL.Path == "/" {
 		s.library(w, r)
 		return
@@ -351,7 +378,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Query().Get("download") == "1" {
-		s.downloadSource(w, r, p, s.notFound)
+		s.serveSource(w, r, p, unlock)
 		return
 	}
 	if content && r.URL.Query().Has("asset") {
@@ -375,7 +402,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		if opensPage(r, true) {
 			s.markOpened(p.ID)
 		}
-		_, _ = w.Write([]byte(reportDocument(reportSchemeOf(r).apply(fileCardFor(string(data), true)))))
+		_, _ = w.Write([]byte(reportDocument(reportSchemeOf(r).apply(string(data)))))
 		return
 	}
 	if opensPage(r, false) {
@@ -385,7 +412,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) getPage(slug string) (savedPage, error) {
 	var p savedPage
-	err := s.db.QueryRow(`SELECT id,slug,title,agent,original_request,created_at,object,request_summary,request_source FROM pages WHERE slug=?`, slug).Scan(&p.ID, &p.Slug, &p.Title, &p.Agent, &p.OriginalRequest, &p.CreatedAt, &p.Object, &p.RequestSummary, &p.RequestSource)
+	err := s.db.QueryRow(`SELECT id,slug,title,agent,original_request,created_at,object,request_summary,request_source,file_page,file_size FROM pages WHERE slug=?`, slug).Scan(&p.ID, &p.Slug, &p.Title, &p.Agent, &p.OriginalRequest, &p.CreatedAt, &p.Object, &p.RequestSummary, &p.RequestSource, &p.File, &p.FileSize)
 	if err == nil {
 		p.FileName = s.sourceName(p)
 	}
@@ -419,7 +446,7 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 	var previous savedPage
 	var err error
 	if replace {
-		slug := strings.TrimPrefix(r.URL.Path, "/api/pages/")
+		slug := strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/api/pages/"), "/api/files/")
 		if !validSlug(slug) {
 			noPage(w, slug, true)
 			return
@@ -477,7 +504,7 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 		}
 		var existing string
 		if e := s.db.QueryRow(`SELECT id FROM pages WHERE public_slug=? OR slug=?`, in.PublicSlug, in.PublicSlug).Scan(&existing); e != sql.ErrNoRows {
-			writeAPIErrorField(w, http.StatusConflict, ErrPublicSlugUnavailable, "public_slug", "public shortlink is unavailable", false)
+			writeAPIErrorField(w, http.StatusConflict, ErrPublicSlugUnavailable, "public_slug", "public link name is unavailable", false)
 			return
 		}
 	}
@@ -497,6 +524,11 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 		}
 	}
 	preview, body := pageText(in.HTML, in.Title)
+	var fileName string
+	var fileSize int64
+	if in.File && in.Source != nil {
+		fileName, fileSize = in.Source.Name, in.Source.Size
+	}
 	sourceName := ""
 	if in.Source != nil {
 		sourceName = in.Source.Name
@@ -512,19 +544,19 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 	tx, err := s.db.Begin()
 	if err == nil {
 		if replace {
-			_, err = tx.Exec(`UPDATE pages SET title=?,agent=?,original_request=?,object=?,preview=?,request_summary=?,request_source=?,source_name=?,index_version=?,index_source=?,updated_at=? WHERE id=?`, in.Title, in.Agent, in.OriginalRequest, object, preview, in.RequestSummary, in.RequestSource, sourceName, derivedVersion, stamp, now, id)
+			_, err = tx.Exec(`UPDATE pages SET title=?,agent=?,original_request=?,object=?,preview=?,request_summary=?,request_source=?,source_name=?,index_version=?,index_source=?,updated_at=?,file_page=?,file_name=?,file_size=? WHERE id=?`, in.Title, in.Agent, in.OriginalRequest, object, preview, in.RequestSummary, in.RequestSource, sourceName, derivedVersion, stamp, now, in.File, fileName, fileSize, id)
 		} else {
 			// The owner has seen what they wrote or imported themselves.
 			opened := ""
 			if in.OwnerWritten {
 				opened = created
 			}
-			_, err = tx.Exec(`INSERT INTO pages (id,slug,title,agent,original_request,created_at,object,preview,request_summary,request_source,share_enabled,public_slug,source_name,index_version,index_source,opened_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, in.Slug, in.Title, in.Agent, in.OriginalRequest, created, object, preview, in.RequestSummary, in.RequestSource, in.Share, func() any {
+			_, err = tx.Exec(`INSERT INTO pages (id,slug,title,agent,original_request,created_at,object,preview,request_summary,request_source,share_enabled,public_slug,source_name,index_version,index_source,opened_at,updated_at,file_page,file_name,file_size) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, in.Slug, in.Title, in.Agent, in.OriginalRequest, created, object, preview, in.RequestSummary, in.RequestSource, in.Share, func() any {
 				if in.Share {
 					return in.PublicSlug
 				}
 				return nil
-			}(), sourceName, derivedVersion, stamp, opened, now)
+			}(), sourceName, derivedVersion, stamp, opened, now, in.File, fileName, fileSize)
 		}
 		if err == nil {
 			err = writeIndex(tx, pageIndex{ID: id, Title: in.Title, Summary: in.RequestSummary, Request: in.OriginalRequest, Agent: in.Agent, Body: body})
@@ -553,6 +585,9 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 	if s.cleanupPending {
 		result.Warning = "page saved; temporary storage cleanup pending"
 		warnings = append(warnings, apiWarning{Code: "storage_cleanup_pending", Message: "The page was saved, but Cairn could not remove the old version's files. It tries again before the next save."})
+	}
+	if replace || !in.Share {
+		result.PublicURL = nil
 	}
 	result.Warnings = s.writeWarnings(warnings)
 	event, credentialKind := "publish", "owner"

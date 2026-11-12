@@ -20,7 +20,7 @@
 </div>
 </div>
 <p class="field-error" id="document-error"{{if .Errors.document}} role="alert"{{else}} hidden{{end}}>{{icon "alert"}}<span>{{.Errors.document}}</span></p>
-<p class="field-help" id="document-hint">Markdown, HTML, text, an image, a PDF or a Word document, up to 10 MB.</p>
+<p class="field-help" id="document-hint">Any file up to 50 MiB. Text up to 2 MiB, images up to 4 MiB and DOCX up to 10 MiB open as pages. Other files get a download page.</p>
 {{- with .Errors.rechoose}}
 <p class="field-note">{{icon "info"}}<span>{{if $.FileName}}Choose “{{$.FileName}}” again to import it.{{else}}{{.}}{{end}} Browsers don’t keep a chosen file when the form reloads.</span></p>
 {{- end}}
@@ -59,6 +59,7 @@
 <option value="comparison"{{if eq .Template "comparison"}} selected{{end}}>Comparison · tables and choices</option>
 <option value="visual"{{if eq .Template "visual"}} selected{{end}}>Visual · images and diagrams</option>
 </select>
+<label class="file-import-choice"><input type="checkbox" name="as_file" value="1">Save as a file page, even if Cairn can open it</label>
 <p class="field-help" id="template-help">The layout for Markdown and text files. HTML files keep their own design.</p>
 </div>
 <div class="field">

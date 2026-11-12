@@ -270,51 +270,6 @@ func TestSearchSnippetsExplainTheHit(t *testing.T) {
 	}
 }
 
-// Items 11 and 12: file cards read "PDF · 47 KB", the reader offers the file
-// once, and a visitor's copy offers no Download that would lead nowhere.
-func TestFileCardsOfferTheirFileOnceAndOnlyToTheOwner(t *testing.T) {
-	a := fxStart(t, "")
-	pdf := "%PDF-1.4\n" + strings.Repeat("x", 48000)
-	var b strings.Builder
-	b.WriteString(`<h1>Boiler service</h1>` + fileCard("boiler-service-2026.pdf", ".pdf", len(pdf)))
-	if !strings.Contains(b.String(), "<br>PDF · 47\u00a0KB</p>") {
-		t.Fatalf("card: %s", b.String())
-	}
-	legacy := strings.Replace(b.String(), "<br>PDF · 47\u00a0KB", "<br>PDF document · 47 KB", 1)
-	if got := fileCardFor(legacy, true); !strings.Contains(got, "<br>PDF · 47 KB") || !strings.Contains(got, `class="file-card-download"`) {
-		t.Errorf("owner's copy of an older card: %s", got)
-	}
-	reordered := strings.Replace(legacy, fileCardDownload, `<a class="file-card-download" href="?download=1" rel="noopener" target="_blank">Download</a>`, 1)
-	if got := fileCardFor(reordered, false); strings.Contains(got, `class="file-card-download"`) || strings.Contains(got, `href="?download=1"`) {
-		t.Errorf("visitor's copy keeps Download: %s", got)
-	}
-	doc, _ := html.Parse(strings.NewReader(legacy))
-	if line := fileCardLine(doc); line != "PDF · 47\u00a0KB" {
-		t.Errorf("excerpt of an older card: %q", line)
-	}
-	// Through the real routes.
-	body := strings.NewReader(`--x` + "\r\n" + `Content-Disposition: form-data; name="csrf"` + "\r\n\r\n" + a.s.formToken().String() + "\r\n--x\r\n" + `Content-Disposition: form-data; name="slug"` + "\r\n\r\nboiler\r\n--x\r\n" + `Content-Disposition: form-data; name="document"; filename="boiler-service-2026.pdf"` + "\r\nContent-Type: application/pdf\r\n\r\n" + pdf + "\r\n--x--\r\n")
-	if code, _, out := a.do(t, "POST", "/import", body, map[string]string{"Content-Type": "multipart/form-data; boundary=x", "Origin": a.private.URL}); code != 303 {
-		t.Fatalf("import: %d %s", code, out)
-	}
-	a.form(t, "/manage/boiler", url.Values{"action": {"share"}})
-	if _, reader := a.get(t, "/boiler"); strings.Contains(reader, "Download original") {
-		t.Error("the reader offers the file twice")
-	}
-	if _, content := a.get(t, "/_content/boiler"); !strings.Contains(content, `class="file-card-download"`) {
-		t.Error("the owner's card lost its Download")
-	}
-	if _, content := a.get(t, "public:/_content/boiler"); strings.Contains(content, `class="file-card-download"`) || strings.Contains(content, `href="?download=1"`) {
-		t.Error("the visitor's card offers a Download that leads to the not-found page")
-	}
-	if code, _ := a.get(t, "public:/_content/boiler?download=1"); code != 404 {
-		t.Errorf("public download: %d", code)
-	}
-	if _, list := a.get(t, "/"); !strings.Contains(list, "<p class=\"excerpt\">PDF · 47\u00a0KB</p>") || !strings.Contains(list, `<div class="create-dock">`) {
-		t.Errorf("library row or dock: %s", regexp.MustCompile(`<p class="excerpt">[^<]*</p>`).FindAllString(list, -1))
-	}
-}
-
 // Item 14: a number keeps its unit or multiplication sign on its line, in
 // prose, headings and table cells, never in code; everything else is left
 // as it was.

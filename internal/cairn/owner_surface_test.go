@@ -84,22 +84,19 @@ func TestImportTitlesAndFileCards(t *testing.T) {
 	if code, body := importFile(t, private, "boiler-service.pdf", pdf, "boiler"); code != 303 {
 		t.Fatal(code, body)
 	}
-	_, _, content := request(t, private, "GET", "/_content/boiler", nil, "")
-	for _, want := range []string{`<div class="file-card">`, `<strong>boiler-service.pdf</strong>`, "PDF · 240\u00a0KB", `<a class="file-card-download" href="?download=1" rel="noopener" target="_blank">Download</a>`} {
+	_, _, content := request(t, private, "GET", "/boiler", nil, "")
+	for _, want := range []string{`class="file-page"`, `class="file-card"`, "boiler-service.pdf", "PDF document · 240 KB", `/boiler?download=1`} {
 		if !strings.Contains(string(content), want) {
-			t.Errorf("file card lacks %q", want)
+			t.Errorf("file reader lacks %q", want)
 		}
-	}
-	if strings.Contains(string(content), "full-page view") {
-		t.Error("the card still tells the owner to look elsewhere")
 	}
 	_, _, list := request(t, private, "GET", "/", nil, "")
 	// The row reads "PDF · 240 KB": the title already names the file (p9).
-	if !strings.Contains(string(list), "<p class=\"excerpt\">PDF · 240\u00a0KB</p>") {
+	if !strings.Contains(string(list), "<p class=\"excerpt\">PDF · <span class=\"file-row-size\">240 KB</span></p>") {
 		t.Errorf("PDF excerpt: %s", regexp.MustCompile(`<p class="excerpt">[^<]*</p>`).FindAllString(string(list), -1))
 	}
 	_, _, form := request(t, private, "GET", "/import", nil, "")
-	if !strings.Contains(string(form), "a PDF or a Word document, up to 10 MB") || !strings.Contains(string(form), `class="dropzone is-compact`) || !strings.Contains(string(form), `<form method="post" enctype="multipart/form-data" class="stacked-form" novalidate>`) {
+	if !strings.Contains(string(form), "Any file up to 50 MiB") || !strings.Contains(string(form), `class="dropzone is-compact`) || !strings.Contains(string(form), `<form method="post" enctype="multipart/form-data" class="stacked-form" novalidate>`) {
 		t.Error("import form: hint, supporting images zone or novalidate")
 	}
 }

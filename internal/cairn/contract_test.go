@@ -26,6 +26,11 @@ func TestAPIIndexMirrorsCanonicalContract(t *testing.T) {
 	if status != 200 {
 		t.Fatalf("index: %d %s", status, body)
 	}
+	for _, want := range []string{"share_enabled", "public_url", "public_example", "Sharing, link names and passwords stay unchanged"} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("index missing public publishing contract %q", want)
+		}
+	}
 	var index struct {
 		Version   string `json:"version"`
 		OpenAPI   string `json:"openapi"`
@@ -418,7 +423,7 @@ func TestOpenAPIDescribesTheHandlersRealBehaviour(t *testing.T) {
 		fields = append(fields, name)
 	}
 	sort.Strings(fields)
-	if strings.Join(fields, " ") != "agent assets capabilities html markdown original_request request_source request_summary slug template title" {
+	if strings.Join(fields, " ") != "agent assets capabilities html markdown original_request request_source request_summary share_enabled slug template title" {
 		t.Errorf("publication fields: %v", fields)
 	}
 	// The document reveals nothing private.

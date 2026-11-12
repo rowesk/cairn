@@ -61,7 +61,7 @@
  const nav=cover.querySelector('.reading-nav')||cover;
  const bar=document.querySelector('.compact-reader'),title=bar.querySelector('.compact-title'),hint=document.querySelector('#compact-title-hint'),details=document.querySelector('#reader-details'),scrim=document.querySelector('.reader-scrim'),progress=bar.querySelector('.reading-progress');
  const toc=document.querySelector('.reader-toc'),contentsButton=bar.querySelector('.compact-contents'),section=bar.querySelector('.compact-section'),page=bar.querySelector('.compact-page'),panel=toc?.querySelector('.toc-panel');
- const menu=document.querySelector('#reader-menu'),shortcuts=document.querySelector('#reader-shortcuts'),grid=document.querySelector('.reader-grid'),view=frame.parentElement;
+ const menu=document.querySelector('#reader-menu'),shortcuts=document.querySelector('#reader-shortcuts'),grid=document.querySelector('.reader-grid'),view=frame?.parentElement||document.querySelector('.file-page');
  const reduced=matchMedia('(prefers-reduced-motion: reduce)'),phone=matchMedia('(max-width: 760px)'),fine=matchMedia('(hover: hover) and (pointer: fine)');
  const links=toc?[...toc.querySelectorAll('a[data-id]')]:[],ids=new Set(links.map(link=>link.dataset.id)),controls=[...bar.querySelectorAll('a,button')];
  // The rail may float only on Cairn's own templates that keep their text in the column.
@@ -164,11 +164,11 @@
  }
  // The report pins long tables' header rows below the bar; it needs to know which part of it is in view.
  function viewport(rect){
-  if(!flowing||!frame.contentWindow)return;
+  if(!flowing||!frame?.contentWindow)return;
   const barBottom=shown?bar.offsetHeight:0,top=Math.max(0,Math.round(barBottom-rect.top)),height=Math.max(0,Math.round(innerHeight-Math.max(barBottom,rect.top)));
   const key=top+' '+height;
   if(key===lastView)return;
-  lastView=key;frame.contentWindow.postMessage({type:'cairn:viewport',top,height},'*');
+  lastView=key;frame?.contentWindow.postMessage({type:'cairn:viewport',top,height},'*');
  }
  // The section being read is the last one whose start has reached the bar's bottom edge. A section
  // starts where the space above its heading starts, so the moment the last line of the section before
@@ -194,7 +194,7 @@
   cover.inert=shown&&cover.getBoundingClientRect().bottom<=bar.offsetHeight;
   if(sheet&&Math.abs(scrollY-openedAt)>60)closeSheet(false);
   if(menu?.matches(':popover-open')&&Math.abs(scrollY-menuAt)>60)menu.hidePopover();
-  const rect=frame.getBoundingClientRect(),span=rect.height-innerHeight;
+  const rect=(frame||view).getBoundingClientRect(),span=rect.height-innerHeight;
   progress.style.transform='scaleX('+(span>0?Math.min(1,Math.max(0,-rect.top/span)):rect.top<=0?1:0)+')';
   viewport(rect);
   if(links.length&&flowing&&positions.size)mark(reading(rect));
@@ -242,14 +242,14 @@
   const now=performance.now();growth=growth.filter(time=>now-time<1500);
   if(height>frame.offsetHeight+1&&growth.push(now)>20)return stopFlowing();
   frame.style.height=Math.max(200,Math.ceil(height))+'px';view.style.minHeight='';body.classList.add('flowing-report');settled();
-  if(restore!==null){const top=frame.getBoundingClientRect().top+scrollY;scrollTo(0,top+restore*frame.offsetHeight);restore=null;}
+  if(restore!==null){const top=(frame||view).getBoundingClientRect().top+scrollY;scrollTo(0,top+restore*frame.offsetHeight);restore=null;}
   lastView='';queue();
  }
  function jump(top,smooth){
-  const target=frame.getBoundingClientRect().top+scrollY+top-offset;
+  const target=(frame||view).getBoundingClientRect().top+scrollY+top-offset;
   scrollTo({top:Math.max(0,target),behavior:smooth&&!reduced.matches?'smooth':'auto'});
  }
- function goTo(id,smooth){if(flowing&&positions.has(id))jump(positions.get(id),smooth);else frame.contentWindow?.postMessage({type:'cairn:go',id},'*');}
+ function goTo(id,smooth){if(flowing&&positions.has(id))jump(positions.get(id),smooth);else frame?.contentWindow?.postMessage({type:'cairn:go',id},'*');}
  // Heading positions must name the page's own contents, in their order, inside the report. Each may
  // carry the space above its heading (0 to 96px), which is where its section starts.
  function headings(items){
@@ -287,7 +287,7 @@
   }
  }
  window.addEventListener('message',event=>{
-  if(event.source!==frame.contentWindow)return;
+  if(event.source!==frame?.contentWindow)return;
   const data=event.data,type=data?.type;
   if(typeof type!=='string')return;
   // Clicks and Tab presses inside the report decide whether focus rings show, as they do in the reader.
@@ -336,16 +336,17 @@
   queue();
  }
  function measure(){
+ if(!frame){settled();return;}
   if(!flowing)return;
-  const rect=frame.getBoundingClientRect();
+  const rect=(frame||view).getBoundingClientRect();
   restore=rect.top<0&&rect.height>0?-rect.top/rect.height:null;
   // The report measures itself at a small height. Its place keeps its size meanwhile, so nothing
   // below it moves unless the report really changed.
   if(frame.offsetHeight>200)view.style.minHeight=view.offsetHeight+'px';
-  frame.style.height='200px';frame.contentWindow?.postMessage({type:'cairn:measure'},'*');
+  frame.style.height='200px';frame?.contentWindow?.postMessage({type:'cairn:measure'},'*');
  }
- frame.addEventListener('load',measure);
- cairnFollowScheme(frame);
+ frame?.addEventListener('load',measure);
+ if(frame)cairnFollowScheme(frame);
  window.addEventListener('resize',()=>{if(innerWidth!==width){width=innerWidth;measure();place();}syncTitle();fitTitle();lastView='';queue();});
  phone.addEventListener?.('change',()=>{closeSheet(false);syncTitle();});
 

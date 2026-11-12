@@ -39,6 +39,7 @@ Pages are Go templates rendered on the server. There is no client framework and 
 | `library.css` | The library list, search, row menu, drawer and shortcut sheet |
 | `editor.css` | The editor, its modes and the page access popover |
 | `settings.css` | Settings, the theme cards, authors and the key and photo dialogs |
+| `files.css` | File page downloads and per-type icons |
 | `reader.css` | The reader's cover, bar, contents, sheets and end of the page |
 | `feedback.css` | Notices, error pages and the password gate |
 | `themes.css` | The few things a theme changes beyond its tokens |

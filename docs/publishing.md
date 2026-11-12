@@ -1,6 +1,6 @@
 # Publishing API
 
-Agents publish pages to Cairn over a small JSON API on the private listener. They can also list, search, read, replace and archive the pages they wrote. Only the owner shares or deletes pages, from Cairn itself.
+Agents publish pages to Cairn over a small JSON API on the private listener. They can also list, search, read, replace and archive the pages they wrote. The owner deletes pages and changes existing sharing from Cairn itself.
 
 Everything here is on the private address only. The public listener answers `/healthz` and shared pages, and nothing under `/api`.
 
@@ -29,7 +29,7 @@ cairn publish lamps.md -request "find me a desk lamp under £100" -summary "Find
 https://cairn.example.ts.net/k3T
 ```
 
-`cairn help publish` lists its flags. It reads `CAIRN_URL` and `CAIRN_API_KEY`, never takes the key as a flag, prints the page's full address, prints every problem with the flag to change when Cairn refuses the page, exits 1 on failure and 2 on a mistake in the command, and retries with one `Idempotency-Key`, so a page is never saved twice. `-json` prints Cairn's reply instead.
+`cairn help publish` lists its flags. It reads `CAIRN_URL` and `CAIRN_API_KEY`, never takes the key as a flag, prints the page's full address, prints every problem with the flag to change when Cairn refuses the page, exits 1 on failure and 2 on a mistake in the command, and retries with one `Idempotency-Key`, so a page is never saved twice. `-json` prints Cairn's reply instead. `-share` shares a new page only when the owner asked; it cannot be used with `-replace`.
 
 The setup text in Settings tells an agent all of this in about 700 words. Copy it from the key dialog and paste it into the agent's instructions; it names `CAIRN_API_KEY` and holds no secret.
 
@@ -54,7 +54,7 @@ Browsers cannot use the API: a request with an `Origin` header or a `Sec-Fetch-S
 | --- | --- | --- |
 | GET | `/api` | A short index with one complete example. No key needed |
 | GET | `/api/openapi.json` | The full OpenAPI 3.1 contract, built from the server's own types and limits. No key needed |
-| POST | `/api/pages` | Publish a private page |
+| POST | `/api/pages` | Publish a page, private by default |
 | GET | `/api/pages` | List your pages, newest first, or search them with `q` |
 | GET, HEAD | `/api/pages/{slug}` | Read a page with its request and the Markdown or HTML Cairn kept. HEAD checks that it exists and your key reaches it |
 | PUT | `/api/pages/{slug}` | Replace a page completely |
@@ -83,7 +83,7 @@ There is no DELETE. Deleting is permanent and, like sharing, stays with the owne
 
 Name images with letters, digits, hyphens or underscores, up to 96 characters, then `.png`, `.jpg`, `.jpeg`, `.gif` or `.webp`, and refer to them as `?asset=name.png`. That address works before the page's slug is known. [docs/authoring.md](authoring.md#markdown) covers what the Markdown can hold: footnotes, callouts, images, Mermaid, ECharts and the raw HTML Cairn keeps.
 
-Fields Cairn does not take are refused, never ignored. A likely typo says so (`titel is not a field Cairn accepts. Did you mean title?`), and sharing fields such as `share_enabled` say that only the owner shares pages.
+Fields Cairn does not take are refused, never ignored. A likely typo says so (`titel is not a field Cairn accepts. Did you mean title?`), and fields for passwords or existing sharing stay with the owner.
 
 New slugs must differ from every existing slug and public link name by more than letter case, so `lamp-report` and `Lamp-Report` never name two pages. Pages saved before this rule keep their addresses.
 
@@ -95,7 +95,8 @@ A create answers `201` with a `Location` header; a replace or update answers `20
 | --- | --- |
 | `slug`, `url` | The page's address and its path, such as `/k3T` |
 | `private_url` | The full private address, built from the server's `CAIRN_PRIVATE_BASE_URL` (`-private-base-url`). `null` when that is not set, with a `private_url_unset` warning: join `url` to the address you sent the request to. Cairn never builds it from the request's `Host` |
-| `public_url` | The shared address while the owner shares the page, otherwise `null` |
+| `public_url` | The public address after requested shared creation, omitted on private creation and replacement |
+| `share_enabled` | Optional creation-only boolean; never send on PUT |
 | `format`, `template` | `markdown`, `html` or `file`; the Markdown template or `null` |
 | `title`, `agent`, `original_request`, `request_summary`, `request_source` | As saved |
 | `assets` | Image names, each served at `/_assets/{slug}/{name}` |
@@ -239,4 +240,29 @@ These serve pages to people, not agents:
 - `GET /_content/{slug}?asset=name.png` and `GET /_assets/{slug}/name.png` serve the page's images.
 - `GET /{slug}?download=1` downloads the kept source file where there is one.
 
-Sharing is in [docs/sharing.md](sharing.md). The API cannot share a page, and a shared page keeps its private request private.
+Sharing is in [docs/sharing.md](sharing.md). The API can share a new page only when the owner asked, and a shared page keeps its private request private.
+
+## Sharing a new page
+
+Publish privately by default. Set `share_enabled` to `true` on `POST /api/pages` only when the owner asked for this page to be shared. Never set it otherwise. Tell the owner the saved `public_url` afterwards, as well as the private address. Sharing must be configured or creation fails with 503 `public_sharing_unavailable` without saving. Omitted or `false` stays private. Any supplied value on PUT is refused; replacement preserves sharing, link names and passwords. Files start private.
+
+## Files
+
+`POST /api/files` publishes a file page from `multipart/form-data`, with the same `Authorization` header and browser-origin refusal. A file page shows a filetype icon, the title, filename, type, size and a **Download** button in place of page HTML. Cairn never opens, converts or runs the file; downloads are `application/octet-stream` attachments.
+
+- `file`: exactly one file part, at most 50 MiB. Any type is accepted. The filename must be plain UTF-8 of at most 255 bytes.
+- `original_request`: required, as for pages.
+- `title`, `request_summary`, `request_source`, `slug`: optional, with the same rules as pages. A blank title uses the filename without its extension.
+- `agent`: only for the installation token, as for pages.
+
+Any other field or file part is rejected with `validation_failed`. The whole request may be at most 68 MiB. Cairn streams the file to a temporary file inside the data directory, never into memory or `/tmp`, and renames it into the page's object once it is complete. Interrupted uploads are removed at startup.
+
+```sh
+curl --fail-with-body --silent --show-error \
+  -X POST "http://127.0.0.1:8080/api/files" \
+  -H "Authorization: Bearer $CAIRN_PUBLISHER_TOKEN" \
+  -F "file=@quarterly-figures.xlsx" \
+  -F "original_request=Keep the quarterly figures spreadsheet"
+```
+
+Success and errors match `POST /api/pages`. A file over 50 MiB returns 413 `payload_too_large`. `PUT /api/files/<slug>` replaces any page with a file page, and `PUT /api/pages/<slug>` turns a file page back into a page. Downloads release Cairn's storage lock before sending, so a slow 50 MiB download does not hold up saves.

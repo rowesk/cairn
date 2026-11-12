@@ -157,7 +157,7 @@
 {{- end}}
 </div>
 </section>
-<main id="main" class="report-view">
+<main id="main" class="{{if .File}}file-page{{else}}report-view{{end}}">
 {{- if .Contents}}
 <nav class="reader-toc" id="reader-contents" aria-labelledby="toc-label">
 <div class="toc-panel">
@@ -166,7 +166,7 @@
 </div>
 </nav>
 {{- end}}
-<iframe class="report-frame" title="{{.Title}}" name="report" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" src="{{.FrameSrc}}"></iframe>
+{{if .File}}<div class="file-card">{{fileIcon .FileName}}<div class="file-details"><p class="file-name">{{.FileName}}</p><p class="file-facts">{{fileType .FileName}} · {{fileSize .FileSize}}</p></div><a class="button file-download" href="/{{.Slug}}?download=1" download>{{icon "download"}}<span>Download</span></a></div>{{else}}<iframe class="report-frame" title="{{.Title}}" name="report" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" src="{{.FrameSrc}}"></iframe>{{end}}
 </main>
 {{- if .Owner}}
 <footer class="reader-end">

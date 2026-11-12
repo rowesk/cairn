@@ -24,6 +24,10 @@ The words Cairn's screens, messages and documentation use, one per idea. Field n
 
 A saved answer meant to be read outside chat, with a title, its author, its creation date and the request that prompted it. Agents publish pages through the API; the owner writes them in the editor or imports a file.
 
+### File page
+
+A page whose content is one stored file, shown with a filetype icon, its name, size and a download button. Cairn keeps the file as uploaded and never opens or runs it.
+
 ### Library
 
 The owner's private collection of pages. Sharing a page does not grant access to the library.
@@ -70,7 +74,7 @@ An EPUB copy of a page emailed from the owner's mail account to their Kindle add
 
 ### Agent key
 
-A credential for one agent, made in Settings under Authors. Through the API it publishes private pages under its own byline and lists, reads, replaces and archives only those pages; it cannot share or delete. It is a byline, not a lock: it does not keep software that can reach the private address out of the library. Cairn keeps only its fingerprint and shows it once, and makes none for the owner's default author.
+A credential for one agent, made in Settings under Authors. Through the API it publishes private pages under its own byline and lists, reads, replaces and archives only those pages; it cannot delete or change existing sharing. It is a byline, not a lock: it does not keep software that can reach the private address out of the library. Cairn keeps only its fingerprint and shows it once, and makes none for the owner's default author.
 
 ### Installation token
 

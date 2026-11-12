@@ -1,6 +1,6 @@
 # Publishing to Cairn
 
-Cairn is the owner's private library of pages. Publish there when an answer works better as a page to keep: research, comparisons, plans, explanations with diagrams or charts. Keep short answers in chat. When the owner asks you to save something to Cairn, publish it yourself; never ask them to upload or format a file.
+Cairn keeps pages for the owner. Publish when asked; keep short answers in chat. Publish yourself, without asking the owner to upload a file.
 
 ## Connect
 
@@ -13,7 +13,7 @@ Send requests from a machine that can open the library, with a command-line or s
 
 ## Publish
 
-Write the body as a JSON file with a JSON library, so quotes and line breaks survive:
+Write JSON with a JSON library:
 
 ```json
 {
@@ -68,7 +68,7 @@ Don't open with a `# heading` repeating the title; Cairn shows the title above t
 
 ## Update a page
 
-Only when the owner asks. Find it with `GET /api/pages?q=lamps`, read it with `GET /api/pages/{slug}` (it includes your Markdown), then `PUT /api/pages/{slug}` with the whole new page and every image it still needs. Its address, date and sharing stay. Your key changes only pages with your byline; use only the API, never the library's own pages. `PATCH` with `{"archived": true}` archives one; only the owner shares or deletes pages.
+Only when the owner asks. Find it with `GET /api/pages?q=lamps`, read it with `GET /api/pages/{slug}` (it includes your Markdown), then `PUT /api/pages/{slug}` with the whole new page and every image it still needs. Its address, date and sharing stay. Your key changes only pages with your byline; use only the API, never the library's own pages. `PATCH` with `{"archived": true}` archives one; only the owner deletes pages or changes existing sharing.
 
 ## Errors
 
@@ -84,4 +84,8 @@ Failures are JSON with `code`, `message` and `errors`, which lists every problem
 
 ## Afterwards
 
-Give the owner the full address (`private_url`, or `$CAIRN_URL` followed by `url`) and one sentence on what the page holds. Mention any `dropped_html` warning. Don't paste the page into chat, and never claim a save that failed.
+Return the full address and one sentence. Mention `dropped_html` warnings. Never claim a failed save succeeded.
+
+## Sharing a new page
+
+Publish privately by default. Set `share_enabled` to `true` on POST only when the owner asked for this page to be shared. Never otherwise. Tell the owner the saved `public_url` afterwards. Omitted or false stays private; null is refused. PUT refuses this field and preserves sharing, link names and passwords. Without configured sharing, creation fails with 503 `public_sharing_unavailable`. Files start private.

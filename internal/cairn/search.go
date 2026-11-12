@@ -448,9 +448,6 @@ func pageText(source, title string) (excerpt, body string) {
 		return "", ""
 	}
 	body = bodyText(doc)
-	if card := fileCardLine(doc); card != "" {
-		return card, body
-	}
 
 	// blocks holds readable paragraphs in order; an empty entry marks a
 	// heading, so a short opening only borrows from its own section.
@@ -543,40 +540,6 @@ func pageText(source, title string) (excerpt, body string) {
 		}
 	}
 	return clipWords(joinExcerpt(chosen), 240), body
-}
-
-// fileCardLine is the excerpt of an imported document Cairn keeps as a file
-// card: its kind and size, "PDF · 47 KB", with the number and its unit kept
-// together. The title already names the file.
-func fileCardLine(doc *html.Node) string {
-	var line string
-	var walk func(*html.Node)
-	walk = func(n *html.Node) {
-		if line != "" {
-			return
-		}
-		if n.Type == html.ElementNode && n.Data == "p" && hasClass(n, "file-card-text") {
-			for c := n.FirstChild; c != nil; c = c.NextSibling {
-				if c.Type == html.ElementNode && c.Data == "br" && c.NextSibling != nil && c.NextSibling.Type == html.TextNode {
-					kind, size, ok := strings.Cut(strings.TrimSpace(c.NextSibling.Data), " · ")
-					if !ok {
-						return
-					}
-					if short, legacy := legacyDocumentKinds[kind]; legacy {
-						kind = short
-					}
-					line = kind + " · " + strings.Replace(strings.TrimSpace(size), " ", "\u00a0", 1)
-					return
-				}
-			}
-			return
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			walk(c)
-		}
-	}
-	walk(doc)
-	return line
 }
 
 // listItemMark tags an excerpt block that came from a list item.

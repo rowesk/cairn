@@ -83,6 +83,14 @@ func (s *Server) servePublic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.mu.RLock()
+	unlocked := false
+	unlock := func() {
+		if !unlocked {
+			unlocked = true
+			s.mu.RUnlock()
+		}
+	}
+	defer unlock()
 	var slug string
 	var hash sql.NullString
 	var revision int64
@@ -92,25 +100,28 @@ func (s *Server) servePublic(w http.ResponseWriter, r *http.Request) {
 		p, err = s.getPage(slug)
 	}
 	if err != nil {
-		s.mu.RUnlock()
+		unlock()
 		s.publicNotFound(w, r)
 		return
 	}
 	if r.Method == http.MethodPost {
 		// Checking a password takes bcrypt's deliberate time; nothing else
 		// waits for it.
-		s.mu.RUnlock()
+		unlock()
 		s.unlockShare(w, r, p, hash.String, route, revision)
 		return
 	}
-	defer s.mu.RUnlock()
-	// Sharing a page shares the page, not the file it was made from: the
-	// source stays with the owner, who never chose to offer it.
-	if r.URL.Query().Get("download") == "1" {
+	// Ordinary page sources stay owner-only. A shared file page offers
+	// its file, behind the same password gate as the reader.
+	if r.URL.Query().Get("download") == "1" && !p.File {
 		s.publicNotFound(w, r)
 		return
 	}
 	if !s.passwordGate(w, r, p, hash.String, route, kind, revision) {
+		return
+	}
+	if r.URL.Query().Get("download") == "1" {
+		s.serveSource(w, r, p, unlock)
 		return
 	}
 	if kind == "asset" {
@@ -128,9 +139,7 @@ func (s *Server) servePublic(w http.ResponseWriter, r *http.Request) {
 		}
 		content := strings.ReplaceAll(string(data), "/_assets/"+p.Slug+"/", "/_assets/"+route+"/")
 		content = strings.ReplaceAll(content, "/_content/"+p.Slug+"?", "/_content/"+route+"?")
-		// Visitors get the page without the file card's Download, which the
-		// public listener refuses (above).
-		w.Write([]byte(reportDocument(reportSchemeOf(r).apply(fileCardFor(content, false)))))
+		w.Write([]byte(reportDocument(reportSchemeOf(r).apply(content))))
 		return
 	}
 	s.renderReader(w, r, p, route, false, true, hash.String != "", strings.TrimRight(s.cfg.PublicBaseURL, "/")+"/"+route)

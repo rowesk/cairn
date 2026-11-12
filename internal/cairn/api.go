@@ -66,7 +66,7 @@ var (
 // fieldSpec describes one field of a publication. The decoder, the OpenAPI
 // document and the docs are built from this one table.
 type fieldSpec struct {
-	Name, Kind  string // Kind: string, strings or assets
+	Name, Kind  string // Kind: string, strings, boolean or assets
 	MaxBytes    int
 	MaxWords    int
 	MaxItems    int
@@ -75,6 +75,7 @@ type fieldSpec struct {
 }
 
 var publicationFields = []fieldSpec{
+	{Name: "share_enabled", Kind: "boolean", Description: "Creation only. Publish privately by default. Set true only when the owner asked to share this page. Never send on replacement."},
 	{Name: "title", Kind: "string", MaxBytes: maxTitleBytes, Description: "Required. A specific title that says what the page covers or concludes."},
 	{Name: "agent", Kind: "string", MaxBytes: maxAgentBytes, Description: "The byline. Required with the installation token; an agent key sets its own byline and ignores this."},
 	{Name: "original_request", Kind: "string", MaxBytes: maxOriginalRequestBytes, Description: "Required. The owner's request in their own words. Private: never shown on shared pages."},
@@ -107,7 +108,7 @@ type apiPage struct {
 	Slug            string   `json:"slug" doc:"The page's address on this library."`
 	URL             string   `json:"url" doc:"The page's path, such as /k3T."`
 	PrivateURL      *string  `json:"private_url" doc:"The full private address, when the server sets a private base URL. Otherwise null: join url to the address you used."`
-	PublicURL       *string  `json:"public_url" doc:"The public address while the owner shares the page, otherwise null."`
+	PublicURL       *string  `json:"public_url,omitempty" doc:"The public address while shared on reads, and after shared creation. Omitted on private creation and replacement."`
 	Title           string   `json:"title"`
 	Agent           string   `json:"agent" doc:"The byline."`
 	Format          string   `json:"format" enum:"markdown,html,file" doc:"How the page was written."`
@@ -125,6 +126,7 @@ type apiPage struct {
 
 // apiSource is what Cairn kept of how a page was written.
 type apiSource struct {
+	Size        int64   `json:"size,omitempty"`
 	Format      string  `json:"format" enum:"markdown,html,file"`
 	Name        string  `json:"name,omitempty" doc:"The kept file's name."`
 	Text        *string `json:"text" doc:"The Markdown or HTML, or null when Cairn did not keep it or it is not text."`
@@ -202,6 +204,8 @@ func publishContextOf(r *http.Request) *publishContext {
 // api routes everything under /api.
 func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	switch path := r.URL.Path; {
+	case path == "/api/files" || strings.HasPrefix(path, "/api/files/"):
+		s.publishFile(w, r)
 	case path == "/api":
 		s.apiIndex(w, r)
 	case path == "/api/openapi.json":
@@ -295,7 +299,17 @@ func (s *Server) apiPublish(w http.ResponseWriter, r *http.Request, cred credent
 		writeAPIErrorBody(w, http.StatusBadRequest, *fail)
 		return
 	}
+	share, hasShare := raw["share_enabled"]
 	in, problems := decodePublication(raw)
+	if hasShare {
+		if slug != "" {
+			problems = append(problems, FieldError{Code: FieldNotAllowed, Field: "share_enabled", Message: "share_enabled is creation only; replacement preserves sharing and passwords."})
+		} else if string(bytes.TrimSpace(share)) != "true" && string(bytes.TrimSpace(share)) != "false" {
+			problems = append(problems, FieldError{Code: FieldWrongType, Field: "share_enabled", Message: "share_enabled must be a boolean."})
+		} else {
+			in.Share = string(bytes.TrimSpace(share)) == "true"
+		}
+	}
 	ctx := &publishContext{cred: cred}
 	if !cred.installation() {
 		if strings.TrimSpace(in.Agent) != "" && in.Agent != cred.Agent {
@@ -467,7 +481,7 @@ func leftovers(raw map[string]json.RawMessage, accepted []string, problems *[]Fi
 		shown := clip(name, 40)
 		switch {
 		case slices.Contains(sharingFieldNames, name):
-			*problems = append(*problems, FieldError{Code: FieldNotAllowed, Field: shown, Message: shown + " is not available to agents. Only the owner shares pages, from Cairn."})
+			*problems = append(*problems, FieldError{Code: FieldNotAllowed, Field: shown, Message: shown + " is not available to agents. Only the owner changes existing sharing and passwords, from Cairn."})
 		case name == "archived" && slices.Contains(accepted, "title") && !slices.Contains(accepted, "archived"):
 			*problems = append(*problems, FieldError{Code: FieldReadOnly, Field: shown, Message: "archived changes with PATCH /api/pages/{slug}. Leave it out here."})
 		case slices.Contains(readOnlyFields, name):
@@ -541,6 +555,7 @@ func decodePublication(raw map[string]json.RawMessage) (publication, []FieldErro
 	for _, f := range publicationFields {
 		accepted = append(accepted, f.Name)
 	}
+	delete(raw, "share_enabled")
 	takeString(raw, "title", &in.Title, &problems)
 	takeString(raw, "agent", &in.Agent, &problems)
 	takeString(raw, "original_request", &in.OriginalRequest, &problems)
@@ -800,7 +815,7 @@ func (s *Server) pageResource(slug string) (apiPage, savedPage, error) {
 	if updated == "" {
 		updated = p.CreatedAt
 	}
-	out := apiPage{ID: p.ID, Slug: p.Slug, URL: "/" + p.Slug, PrivateURL: s.privateURL("/" + p.Slug), Title: p.Title, Agent: p.Agent, OriginalRequest: p.OriginalRequest, RequestSummary: p.RequestSummary, RequestSource: p.RequestSource, Assets: []string{}, Shared: shared, Archived: archived, Editable: editableSource(p.FileName), CreatedAt: p.CreatedAt, UpdatedAt: updated}
+	out := apiPage{ID: p.ID, Slug: p.Slug, URL: "/" + p.Slug, PrivateURL: s.privateURL("/" + p.Slug), Title: p.Title, Agent: p.Agent, OriginalRequest: p.OriginalRequest, RequestSummary: p.RequestSummary, RequestSource: p.RequestSource, Assets: []string{}, Shared: shared, Archived: archived, Editable: !p.File && editableSource(p.FileName), CreatedAt: p.CreatedAt, UpdatedAt: updated}
 	if shared && s.cfg.PublicBaseURL != "" {
 		route := publicSlug.String
 		if route == "" {
@@ -823,6 +838,9 @@ func (s *Server) pageResource(slug string) (apiPage, savedPage, error) {
 		out.Template = &layout
 	}
 	switch {
+	case p.File:
+		out.Format = "file"
+		out.Template = nil
 	case editableSource(p.FileName):
 		out.Format = "markdown"
 	case p.FileName != "" && !strings.EqualFold(filepath.Ext(p.FileName), ".html") && !strings.EqualFold(filepath.Ext(p.FileName), ".htm"):
@@ -842,7 +860,7 @@ var runtimeTag = regexp.MustCompile(`<script src="/_runtime/(?:mermaid|echarts|b
 // pageSource reads what Cairn kept of how a page was written.
 func (s *Server) pageSource(page apiPage, p savedPage) apiSource {
 	dir := filepath.Join(s.cfg.DataDir, "objects", p.Object)
-	source := apiSource{Format: page.Format, Name: p.FileName}
+	source := apiSource{Format: page.Format, Name: p.FileName, Size: p.FileSize}
 	text := func(data []byte) *string {
 		if !utf8.Valid(data) || len(data) > maxContentBytes {
 			return nil
@@ -1578,6 +1596,7 @@ func examplePage() apiPageWrite {
 
 func apiLimits(linkLength int) map[string]any {
 	return map[string]any{
+		"file_bytes": maxFileBytes, "file_request_bytes": maxUploadRequestBytes,
 		"request_bytes":          maxRequestBytes,
 		"title_bytes":            maxTitleBytes,
 		"agent_bytes":            maxAgentBytes,
@@ -1610,15 +1629,18 @@ func apiIndexDocument(linkLength int) map[string]any {
 		"endpoints": []map[string]string{
 			{"method": "GET", "path": "/api", "description": "This index. No key needed."},
 			{"method": "GET", "path": "/api/openapi.json", "description": "The full OpenAPI 3.1 contract. No key needed."},
-			{"method": "POST", "path": "/api/pages", "description": "Publish a private page from Markdown or HTML."},
+			{"method": "POST", "path": "/api/pages", "description": "Publish a page from Markdown or HTML. Private by default; share_enabled opts into sharing on creation only when the owner asks."},
+			{"method": "POST", "path": "/api/files", "description": "Publish a private file page, up to 50 MiB, with multipart/form-data."},
+			{"method": "PUT", "path": "/api/files/{slug}", "description": "Replace a page with a file. Sharing and passwords stay."},
 			{"method": "GET", "path": "/api/pages", "description": "List your pages, newest first, or search them with q."},
 			{"method": "GET", "path": "/api/pages/{slug}", "description": "Read a page with its request and the Markdown or HTML Cairn kept. HEAD checks that it exists."},
-			{"method": "PUT", "path": "/api/pages/{slug}", "description": "Replace a page completely. The slug, date and sharing stay."},
+			{"method": "PUT", "path": "/api/pages/{slug}", "description": "Replace a page completely. Sharing, link names and passwords stay unchanged. Omit share_enabled on replacement."},
 			{"method": "PATCH", "path": "/api/pages/{slug}", "description": "Archive or restore a page, or change its title."},
 			{"method": "GET", "path": "/healthz", "description": "Whether Cairn is up. No key needed."},
 		},
-		"limits":      apiLimits(linkLength),
-		"error_codes": apiErrorCodes,
+		"public_example": map[string]any{"request": map[string]any{"share_enabled": true}, "response": map[string]string{"public_url": "https://reports.example.com/k3T"}},
+		"limits":         apiLimits(linkLength),
+		"error_codes":    apiErrorCodes,
 		"example": map[string]any{
 			"request": map[string]any{
 				"method":  "POST",

@@ -60,7 +60,7 @@ Cairn stores each page as rendered HTML. Pages saved before these changes keep t
 
 ## Imports
 
-The main upload limit is 10 MiB. Text input must be UTF-8 and at most 2 MiB. Images must fit 4 MiB each. The total multipart request, including supporting images, must fit 16 MiB.
+Import accepts any file up to 50 MiB. Cairn opens a file as a page when it can: UTF-8 text up to 2 MiB, images up to 4 MiB and DOCX up to 10 MiB. Everything else, including those types over their limits, becomes a file page with a filetype icon, the filename, size and a **Download** button. Tick **Save as a file page, even if Cairn can open it** to keep a file you could otherwise read as a page, such as a Markdown file you want to hand on unchanged. Supporting images must fit 4 MiB each.
 
 | File | Reading view |
 | --- | --- |
@@ -70,15 +70,17 @@ The main upload limit is 10 MiB. Text input must be UTF-8 and at most 2 MiB. Ima
 | Mermaid, MMD | Diagram using Cairn's bundled Mermaid runtime |
 | PHP, SVG | Escaped source text, never server execution |
 | DOCX | Extracted paragraph text; original retains formatting and embedded content |
-| PDF, DOC, ODT, RTF | A file card with the file's name, kind and size ("PDF · 47 KB") and a Download button for the original (owner only) |
+| Other files, including ZIP, PDF, DOC, ODT, RTF, spreadsheets, video and large images | A file page with a Download button |
 
-A blank title comes from the file: a Markdown file's first `#` heading or an HTML file's `<title>`, as `cairn publish` reads them, and otherwise the file name. The author and your request have defaults; **More details** lets you change them. Every import keeps the original file. For files Cairn cannot edit your reader offers the original once: a PDF, Word, OpenDocument or RTF file from the Download button on its file card, and anything else (HTML, plain text and the like) from **Download original** under the byline; a Markdown import opens in the editor instead. Shared pages never offer the original. From the library's preview, **Open page** reaches the reader and the download.
+A blank title comes from the file: a Markdown file's first `#` heading or an HTML file's `<title>`, as `cairn publish` reads them, and otherwise the file name. The author and your request have defaults; **More details** lets you change them. Every import keeps the original file. File pages offer Download to the owner and visitors with access. Ordinary pages keep their source owner-only. From the library's preview, **Open page** reaches the reader and the download.
 
 ## Storage and access
 
+Uploads stream to `uploads/` inside the data directory and are renamed into the page object. Cairn clears interrupted uploads at startup. File pages add `file_page`, `file_name` and `file_size` columns; existing pages stay unchanged.
+
 Original files use fixed internal names, `source.bin` and `source.json`, within the page's object directory. The uploaded filename is metadata and never a filesystem path. Cairn streams originals as `application/octet-stream` with attachment disposition, `nosniff`, a restrictive CSP and `no-store`.
 
-Originals are only ever downloaded on the private address: sharing a page shares the page, not the file it was made from, and the public address refuses `?download=1`. Deleting the page removes its original with the rest of its stored object. No PHP interpreter, office conversion process or additional Pi service is required.
+Shared file pages allow downloads behind the same password checks. Other original files stay owner-only. Deleting the page removes its original with the rest of its stored object. No PHP interpreter, office conversion process or additional Pi service is required.
 
 ## Writing and editing pages
 
@@ -155,7 +157,7 @@ The key dialog runs in order:
 
 Reopening an active key shows steps 2 and 3, and **Rotate key** and **Revoke key**. Both confirm inside the dialog and say what happens: rotating stops the old key at once and shows a new one; revoking stops the agent publishing and reading, and keeps its pages. Focus starts on the dialog's first action, stays inside it, and returns to the button that opened it; changes are announced to screen readers.
 
-Each name has one active key. An agent key signs pages with its name, ignoring any `agent` it sends, and through the API lists, searches, reads, replaces and archives only pages with that byline. It cannot share or delete pages through the API, and it can replace pages you have shared, which visitors then see at once. Byline names also match pages written before the key existed, so give each agent a distinct name. Settings refuses a key on your own default author name, since that key would reach every page you write or import.
+Each name has one active key. An agent key signs pages with its name, ignoring any `agent` it sends, and through the API lists, searches, reads, replaces and archives only pages with that byline. It cannot delete pages or change existing sharing through the API, and it can replace pages you have shared, which visitors then see at once. Byline names also match pages written before the key existed, so give each agent a distinct name. Settings refuses a key on your own default author name, since that key would reach every page you write or import.
 
 A key is a byline, not a lock. The library has no sign-in, so an agent that can reach the private address can do anything you can, key or no key. Run only agents you trust on machines that can reach it. [SECURITY.md](../SECURITY.md#security-model) explains the model. The installation token from `cairn init` still works for your own scripts; revoking agent keys does not affect it. Keys and setup text exist only on the private listener.
 
@@ -172,3 +174,5 @@ Agents should send `request_summary`, a rewrite from the requester's perspective
 Optional `request_source` identifies the known app, such as Hermes, Codex CLI, Claude Code, ChatGPT or Claude. It is a single label of at most 80 bytes. Do not guess it. Your reader shows it in the request's label: "Your request · via Claude Code · only you see this". Shared pages show nothing of the request, the source included. The full original stays in SQLite.
 
 On PUT replacement, omitted or empty summary/source fields retain their saved values. Supply a new summary when the purpose changes. Cairn does not generate summaries itself.
+
+Publish privately by default. Set `share_enabled` to `true` on `POST /api/pages` only when the owner asked for this page to be shared. Never set it otherwise. Tell the owner the saved `public_url` afterwards, as well as the private address. Sharing must be configured or creation fails with 503 `public_sharing_unavailable` without saving. Omitted or `false` stays private. Any supplied value on PUT is refused; replacement preserves sharing, link names and passwords. Files start private.

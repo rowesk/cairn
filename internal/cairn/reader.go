@@ -64,6 +64,8 @@ func readerTitle(title string) template.HTML {
 type readerPage struct{ Slug, Title string }
 
 type readerData struct {
+	File                                                                  bool
+	FileSize                                                              int64
 	Theme                                                                 string
 	Title, Agent, CreatedAt, Slug, FileName, Request, Link, RequestSource string
 	Photo                                                                 template.URL
@@ -153,7 +155,7 @@ func (s *Server) followLibraryView(d *readerData, p savedPage, in string) {
 }
 
 func (s *Server) renderReader(w http.ResponseWriter, r *http.Request, p savedPage, route string, owner, shared, protected bool, link string) {
-	d := readerData{Title: p.Title, Agent: p.Agent, CreatedAt: p.CreatedAt, Slug: route, FileName: p.FileName, Owner: owner, Shared: shared, Protected: protected, Link: link}
+	d := readerData{Title: p.Title, Agent: p.Agent, CreatedAt: p.CreatedAt, Slug: route, FileName: p.FileName, Owner: owner, Shared: shared, Protected: protected, Link: link, File: p.File && p.FileName != "", FileSize: p.FileSize}
 	themes := s.themes()
 	d.Theme = themes.public()
 	if owner {
@@ -163,7 +165,7 @@ func (s *Server) renderReader(w http.ResponseWriter, r *http.Request, p savedPag
 	d.LongTitle = utf8.RuneCountInString(p.Title) > 80
 	d.FrameSrc = template.URL("/_content/" + route + reportSchemeFor(d.Theme).query())
 	d.FixedReport = true
-	if data, err := os.ReadFile(filepath.Join(s.cfg.DataDir, "objects", p.Object, "page.html")); err == nil {
+	if data, err := os.ReadFile(filepath.Join(s.cfg.DataDir, "objects", p.Object, "page.html")); err == nil && !d.File {
 		d.FixedReport = !adaptsToScheme(string(data))
 		_, headings := reportHeadings(string(data))
 		d.Contents = reportContents(headings, route)
@@ -171,7 +173,7 @@ func (s *Server) renderReader(w http.ResponseWriter, r *http.Request, p savedPag
 		d.ReportLimit = reportHeightLimit(string(data))
 		d.OwnTitle = reportShowsTitle(headings, p.Title, d.Template)
 	}
-	d.Custom = !d.Template
+	d.Custom = !d.Template && !d.File
 	d.Rail = len(d.Contents) > 0 && d.Template && d.Layout != "comparison"
 	if owner {
 		d.Request = strings.TrimSpace(p.OriginalRequest)
@@ -179,16 +181,15 @@ func (s *Server) renderReader(w http.ResponseWriter, r *http.Request, p savedPag
 			d.Request = summary
 		}
 		d.RequestSource = p.RequestSource
-		d.CSRF, d.Kindle, d.KindleReady = s.formToken(), s.cfg.Mail.enabled(), s.kindleAddress() != ""
+		d.CSRF, d.Kindle, d.KindleReady = s.formToken(), s.cfg.Mail.enabled() && !p.File, s.kindleAddress() != ""
 		d.Notice = s.kindleNotice(r.URL.Query().Get("kindle"), p.Slug, true)
 		if d.Notice == nil {
 			d.Notice = savedNotice(r)
 		}
 		d.ShortcutsOff = !s.preferences().Shortcuts
-		d.Editable = editableSource(p.FileName)
-		// A file card already offers its file in the page, so the byline
-		// does not offer it twice.
-		d.Download = p.FileName != "" && !d.Editable && documentKinds[strings.ToLower(filepath.Ext(p.FileName))] == ""
+		d.Editable = !p.File && editableSource(p.FileName)
+		// File pages offer Download in place of the content frame.
+		d.Download = p.FileName != "" && !d.Editable && !p.File
 		d.Archived, d.Previous, d.Next = s.readerNeighbours(p)
 		d.BackHref = "/"
 		if d.Archived {

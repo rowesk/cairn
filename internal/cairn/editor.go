@@ -103,7 +103,7 @@ func (s *Server) editPage(w http.ResponseWriter, r *http.Request) {
 		s.showError(w, http.StatusInternalServerError, problemStorage(r.URL.RequestURI()))
 		return
 	}
-	if !editableSource(target.page.FileName) {
+	if target.page.File || !editableSource(target.page.FileName) {
 		s.mu.RLock()
 		reason, next := s.editReason(target.page)
 		s.mu.RUnlock()
@@ -134,7 +134,7 @@ func (s *Server) loadEditTarget(slug string) (*editTarget, error) {
 	if t.publicSlug == "" {
 		t.publicSlug = p.Slug
 	}
-	if !editableSource(p.FileName) {
+	if p.File || !editableSource(p.FileName) {
 		return t, nil
 	}
 	dir := filepath.Join(s.cfg.DataDir, "objects", p.Object)

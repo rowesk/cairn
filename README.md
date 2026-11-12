@@ -115,7 +115,7 @@ Agents can also list and search their pages, read one back with its Markdown, re
 
 Everything starts private. To send one page to a friend without opening the rest of your library, start Cairn with its optional public listener and point a tunnel or reverse proxy at that port alone.
 
-Turn on **Sharing** for a page under **Manage page** and it is readable at its public link, on your public domain, with the same link name it has privately: three random letters and digits unless you choose one. You can add a password. Your request never leaves the private side, and neither does the file the page was made from. Agents cannot share pages; only you can, from Cairn itself. The [sharing guide](docs/sharing.md) covers the setup.
+Turn on **Sharing** for a page under **Manage page** and it is readable at its public link, on your public domain, with the same link name it has privately: three random letters and digits unless you choose one. You can add a password. Your request stays private. Shared file pages offer their file for download; other pages keep their original source private. Agents publish privately by default and can share a new page only when you ask. The [sharing guide](docs/sharing.md) covers the setup.
 
 ## Reading on a Kindle
 
@@ -128,3 +128,5 @@ Cairn is built for one owner. It deliberately has no multi-user accounts, commen
 [Writing and importing](docs/authoring.md) · [Send to Kindle](docs/kindle.md) · [Backups and upgrades](docs/operations.md) · [Troubleshooting](docs/troubleshooting.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 Cairn is [MIT licensed](LICENSE). Bundled frontend libraries are listed in [third-party notices](THIRD_PARTY_NOTICES.md).
+
+Publish privately by default. Set `share_enabled` to `true` on `POST /api/pages` only when the owner asked for this page to be shared. Never set it otherwise. Tell the owner the saved `public_url` afterwards, as well as the private address. Sharing must be configured or creation fails with 503 `public_sharing_unavailable` without saving. Omitted or `false` stays private. Any supplied value on PUT is refused; replacement preserves sharing, link names and passwords. Files start private.

@@ -167,7 +167,7 @@ func TestCreateReportsEveryProblemWithItsField(t *testing.T) {
 		{"neither markdown nor html", with(minimal(), map[string]any{"markdown": nil}), 400, "validation_failed", []string{"required markdown"}},
 		{"both markdown and html", with(minimal(), map[string]any{"html": "<p>x</p>"}), 400, "validation_failed", []string{"conflict html"}},
 		{"unknown field with a likely meaning", with(minimal(), map[string]any{"titel": "x"}), 400, "validation_failed", []string{"unknown_field titel"}},
-		{"sharing is the owner's", with(minimal(), map[string]any{"share_enabled": true}), 400, "validation_failed", []string{"not_allowed share_enabled"}},
+		{"sharing needs boolean", with(minimal(), map[string]any{"share_enabled": "true"}), 400, "validation_failed", []string{"wrong_type share_enabled"}},
 		{"read-only field", with(minimal(), map[string]any{"id": "abc"}), 400, "validation_failed", []string{"read_only id"}},
 		{"wrong type", with(minimal(), map[string]any{"title": 5}), 400, "validation_failed", []string{"wrong_type title"}},
 		{"bad base64", with(minimal(), map[string]any{"assets": map[string]string{"x.png": "not base64!"}}), 400, "validation_failed", []string{"invalid_base64 assets.x.png"}},

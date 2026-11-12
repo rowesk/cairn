@@ -57,6 +57,22 @@ func importFile(t *testing.T, srv *httptest.Server, name string, data []byte, sl
 	out, _ := io.ReadAll(r.Body)
 	return r.StatusCode, string(out)
 }
+func TestImportRefusesCrossSiteBeforeReading(t *testing.T) {
+	srv, close := start(t, t.TempDir())
+	defer close()
+	req, _ := http.NewRequest("POST", srv.URL+"/import", strings.NewReader("never read"))
+	req.Header.Set("Content-Type", "multipart/form-data; boundary=x")
+	req.Header.Set("Origin", "https://evil.example")
+	r, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Body.Close()
+	if r.StatusCode != 403 {
+		t.Fatal(r.StatusCode)
+	}
+}
+
 func TestMarkdownAuthoring(t *testing.T) {
 	srv, close := start(t, t.TempDir())
 	defer close()
@@ -113,7 +129,7 @@ func TestImportedFilesAndDownloadAccess(t *testing.T) {
 		{"flow.mmd", []byte("graph TD; A-->B"), "/_runtime/mermaid.js"},
 		{"photo.png", png, "?asset=image.png"},
 		{"document.docx", doc.Bytes(), "Word text &amp; more"},
-		{"document.pdf", []byte("%PDF-1.4\nfixture"), `<a class="file-card-download" href="?download=1"`},
+		{"document.pdf", []byte("%PDF-1.4\nfixture"), "Open this page in Cairn to download the file."},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			slug := strings.ReplaceAll(tc.name, ".", "-")
@@ -161,11 +177,25 @@ func TestImportedFilesAndDownloadAccess(t *testing.T) {
 	if c, _, _ := request(t, private, "GET", "/"+slug+"?download=1", nil, ""); c != 404 {
 		t.Fatal("deleted source leaked")
 	}
-	if c, _ := importFile(t, private, "not.png", []byte("<?php bad ?>"), "fake-image"); c != 400 {
-		t.Fatal("accepted fake image")
+	// Files that fail the page checks are kept as inert download pages.
+	// Files that fail the page checks are kept as inert download pages.
+	if c, _ := importFile(t, private, "not.png", []byte("<?php bad ?>"), "fake-image"); c != 303 {
+		t.Fatal("fake image not kept as a download", c)
 	}
-	if c, _ := importFile(t, private, "bad.exe", []byte("exe"), "executable"); c != 400 {
-		t.Fatal("accepted executable")
+	if c, _ := importFile(t, private, "excel.csv", []byte("caf\xe9,1\n"), "latin-csv"); c != 303 {
+		t.Fatal("non-UTF-8 CSV not kept as a download", c)
+	}
+	for _, slug := range []string{"fake-image", "latin-csv"} {
+		if _, _, b := request(t, private, "GET", "/"+slug, nil, ""); !strings.Contains(string(b), `class="file-page"`) {
+			t.Fatal(slug, "is not a file page")
+		}
+	}
+	// Unknown types become inert download pages rather than being rejected.
+	if c, _ := importFile(t, private, "tool.exe", []byte("exe"), "executable"); c != 303 {
+		t.Fatal("rejected download page")
+	}
+	if c, h, b := request(t, private, "GET", "/executable?download=1", nil, ""); c != 200 || string(b) != "exe" || h.Get("Content-Type") != "application/octet-stream" || !strings.Contains(h.Get("Content-Disposition"), "attachment") {
+		t.Fatal("executable served inline")
 	}
 }
 

@@ -48,6 +48,7 @@ var publishGroups = []flagGroup{
 		{name: "agent", arg: "NAME", local: true,
 			help: "Byline, needed only with the installation token. An agent key\nsigns pages itself."},
 	}},
+	{"Sharing", []flagSpec{{name: "share", local: true, boolean: true, help: "Share this new page only when the owner asked. Creation only."}}},
 	{"Output", []flagSpec{
 		{name: "json", local: true, boolean: true,
 			help: "Print Cairn's JSON reply instead of the address."},
@@ -92,7 +93,7 @@ type publishOptions struct {
 	title, request, summary, source, template, slug string
 	replace, agent, base                            string
 	assets                                          []string
-	json                                            bool
+	json, share                                     bool
 	baseFromEnv                                     bool
 }
 
@@ -109,6 +110,8 @@ func (c *cli) parsePublish(args []string) (publishOptions, error) {
 			switch {
 			case spec.name == "asset":
 				fs.Func("asset", "", func(v string) error { o.assets = append(o.assets, v); return nil })
+			case spec.name == "share":
+				fs.BoolVar(&o.share, spec.name, false, "")
 			case spec.boolean:
 				fs.BoolVar(&o.json, spec.name, false, "")
 			default:
@@ -159,6 +162,9 @@ func (c *cli) parsePublish(args []string) (publishOptions, error) {
 		return o, usagef("Unexpected argument %q. publish takes one file.\nA value with spaces needs quotes.\n%s", files[1], seeFlags)
 	}
 	o.file = files[0]
+	if o.share && o.replace != "" {
+		return o, usagef("-share is creation only. Leave it out when replacing a page.")
+	}
 	if o.replace != "" && o.slug != "" && o.slug != o.replace {
 		return o, usagef("-slug %s and -replace %s name different pages.\nA replaced page keeps its slug, so leave -slug out.", shellQuote(o.slug), shellQuote(o.replace))
 	}
@@ -230,6 +236,7 @@ func (c *cli) publish(ctx context.Context, args []string) error {
 	var page struct {
 		URL        string  `json:"url"`
 		PrivateURL *string `json:"private_url"`
+		PublicURL  *string `json:"public_url"`
 		Warnings   []struct {
 			Code, Message string
 		} `json:"warnings"`
@@ -240,6 +247,9 @@ func (c *cli) publish(ctx context.Context, args []string) error {
 	address := base.String() + page.URL
 	if page.PrivateURL != nil {
 		address = *page.PrivateURL
+	}
+	if o.share && page.PublicURL != nil {
+		address = *page.PublicURL
 	}
 	if _, err := fmt.Fprintln(c.stdout, address); err != nil {
 		return err
@@ -289,6 +299,9 @@ func (c *cli) publication(o publishOptions) ([]byte, error) {
 	}
 	text := string(data)
 	in := map[string]any{format: text}
+	if o.share {
+		in["share_enabled"] = true
+	}
 	title := o.title
 	if title == "" {
 		if format == "markdown" {

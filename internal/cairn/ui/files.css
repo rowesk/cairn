@@ -1,0 +1,158 @@
+/* File page icons. Hues mix toward --ink so they darken on light themes and lift on dark ones. */
+.file-icon {
+  --file-hue: var(--muted);
+  display: block;
+  width: var(--file-icon-size);
+  height: auto;
+  flex: none;
+  overflow: visible;
+  color: color-mix(in oklab, var(--file-hue) 78%, var(--ink));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.file-icon-sheet {
+  fill: var(--paper);
+  stroke: color-mix(in oklab, currentColor 35%, var(--line));
+  stroke-width: 1.5;
+}
+.file-icon-fold {
+  fill: color-mix(in oklab, currentColor 14%, var(--paper));
+  stroke: color-mix(in oklab, currentColor 35%, var(--line));
+  stroke-width: 1.5;
+}
+.file-icon-glyph {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.file-icon-band {
+  fill: currentColor;
+}
+.file-icon-label {
+  fill: var(--paper);
+  font: 600 var(--file-label-size)/1 var(--font-ui);
+  letter-spacing: .04em;
+}
+.file-icon-archive {
+  --file-hue: var(--tint-1-ink);
+}
+.file-icon-spreadsheet {
+  --file-hue: var(--tint-2-ink);
+}
+.file-icon-document {
+  --file-hue: var(--tint-3-ink);
+}
+.file-icon-presentation {
+  --file-hue: var(--tint-4-ink);
+}
+.file-icon-image {
+  --file-hue: var(--tint-5-ink);
+}
+.file-icon-design {
+  --file-hue: var(--tint-6-ink);
+}
+.file-icon-audio {
+  --file-hue: var(--tint-1-ink);
+}
+.file-icon-video {
+  --file-hue: var(--tint-2-ink);
+}
+.file-icon-code {
+  --file-hue: var(--tint-3-ink);
+}
+.file-icon-data {
+  --file-hue: var(--tint-4-ink);
+}
+.file-icon-pdf {
+  --file-hue: var(--tint-5-ink);
+}
+.file-icon-other {
+  --file-hue: var(--muted);
+}
+
+/* File page: one card in place of the report frame. */
+.file-page {
+  padding: clamp(var(--space-7), 6vw, var(--file-icon-size)) var(--space-6) var(--space-8);
+}
+.file-card {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: var(--space-7);
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+}
+.file-details {
+  flex: 1;
+  min-width: 0;
+}
+.file-name {
+  font-size: var(--text-lead);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.file-facts {
+  margin-top: var(--space-1);
+  font-size: var(--text-label);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.file-download {
+  flex: none;
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--text-body);
+}
+.doc-mark.file-mark {
+  padding: 0;
+  background: none;
+  align-items: center;
+  justify-content: center;
+}
+.doc-mark.file-mark .file-icon {
+  width: var(--file-icon-row);
+  height: auto;
+  margin: 0;
+}
+@media (max-width: 650px) {
+  .file-card {
+  flex-wrap: wrap;
+  padding: var(--space-6);
+  gap: var(--space-4);
+}
+  .file-card .file-icon {
+  width: var(--file-icon-small);
+}
+  .file-download {
+  width: 100%;
+}
+  .doc-mark.file-mark .file-icon {
+  width: var(--target);
+  height: auto;
+}
+}
+
+.file-import-choice {
+  display:flex;
+  gap:var(--space-2);
+  align-items:center;
+}
+.file-import-choice input {
+  width:auto;
+}
+
+.file-row-size {
+  white-space:nowrap;
+}
+
+.file-row-main {
+  padding-left:calc(var(--file-icon-row) + var(--space-4));
+}
+.file-mark {
+  position:absolute;
+  left:0;
+  top:50%;
+  transform:translateY(-50%);
+}

@@ -144,6 +144,7 @@
 }
 
 :root {
+ --file-label-size:12px; --file-icon-size:72px; --file-icon-small:56px; --file-icon-row:52px;
   /* Type scale: eight steps, never below 12px, in rem so text follows the
      reader's own font size. */
   --text-meta: 0.75rem;      /* 12px dates, counts, badges, captions */
@@ -190,6 +191,7 @@
 
 @media (pointer: coarse) {
   :root {
+ --file-label-size:12px; --file-icon-size:72px; --file-icon-small:56px; --file-icon-row:52px;
     --target: 44px;
     --text-field: var(--text-lead);
   }

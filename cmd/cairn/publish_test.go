@@ -253,3 +253,30 @@ func TestPublishRetriesWithOneIdempotencyKey(t *testing.T) {
 		t.Fatalf("retries saved %v pages", list["total"])
 	}
 }
+
+func TestPublishShareIsExplicitAndCreationOnly(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		if body["share_enabled"] != true || r.Method != "POST" {
+			t.Errorf("request: %s %#v", r.Method, body)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(201)
+		io.WriteString(w, `{"url":"/new","private_url":"https://private.example/new","public_url":"https://shared.example/new","warnings":[]}`)
+	}))
+	defer srv.Close()
+	env := map[string]string{"CAIRN_URL": srv.URL, "CAIRN_API_KEY": "test-key"}
+	r := runPublish(t, env, "# Shared page", "-", "-request", "Share this page", "-share")
+	if r.code != 0 || strings.TrimSpace(r.stdout) != "https://shared.example/new" {
+		t.Fatalf("publish: %+v", r)
+	}
+	r = runPublish(t, env, "# Shared page", "-", "-request", "Replace it", "-replace", "new", "-share")
+	if r.code != 2 || calls != 1 {
+		t.Fatalf("replacement: %+v, calls %d", r, calls)
+	}
+}

@@ -78,7 +78,7 @@ The installation token in `publisher-token` remains a compatibility credential w
 
 ## Run on a Mac
 
-There is no macOS release archive. To run Cairn on a Mac for your own use, build it with [Go](https://go.dev/dl/) 1.26.10 or later from a clone of the repository:
+There is no macOS release archive. To run Cairn on a Mac for your own use, build it with [Go](https://go.dev/dl/) 1.26.11 or later from a clone of the repository:
 
 ```sh
 go build -o cairn ./cmd/cairn

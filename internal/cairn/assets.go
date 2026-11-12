@@ -28,7 +28,7 @@ var fontFiles embed.FS
 
 // stylesheetOrder is the cascade order of ui/*.css. Later files win ties, so
 // themes and focus come last. Add a new surface file before "themes".
-var stylesheetOrder = []string{"tokens", "base", "shell", "forms", "library", "editor", "settings", "reader", "feedback", "themes", "focus"}
+var stylesheetOrder = []string{"tokens", "base", "shell", "forms", "library", "editor", "settings", "reader", "files", "feedback", "themes", "focus"}
 
 // uiAsset is one immutable file under /_ui/.
 type uiAsset struct {

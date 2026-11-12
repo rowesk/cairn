@@ -25,6 +25,9 @@ const pageSize = 50
 
 // libraryItem is one row of the library list.
 type libraryItem struct {
+	File                                   bool
+	FileName                               string
+	FileSize                               int64
 	Slug, Title, Agent, CreatedAt, Preview string
 	// Asked is the request summary in one line, when the agent sent one.
 	Asked                               string
@@ -394,7 +397,7 @@ func (s *Server) agentNames() ([]string, error) {
 }
 
 // libraryColumns are the page fields a row needs, read from pages AS p.
-const libraryColumns = `p.id,p.slug,p.title,p.agent,p.request_summary,p.original_request,p.created_at,p.preview,p.archived,p.share_enabled,coalesce(p.password_hash,'')!='',p.opened_at,p.source_name,coalesce(p.public_slug,'')`
+const libraryColumns = `p.id,p.slug,p.title,p.agent,p.request_summary,p.original_request,p.created_at,p.preview,p.archived,p.share_enabled,coalesce(p.password_hash,'')!='',p.opened_at,p.source_name,coalesce(p.public_slug,''),p.file_page,p.file_name,p.file_size`
 
 // libraryFilter limits a query to the collection and agent; its arguments
 // follow from filterArgs.
@@ -495,7 +498,7 @@ func (s *Server) scanItems(query string, args ...any) ([]libraryItem, []int, []s
 		var p libraryItem
 		var id, summary, request, opened, source, publicSlug string
 		var tier int
-		if err := rows.Scan(&id, &p.Slug, &p.Title, &p.Agent, &summary, &request, &p.CreatedAt, &p.Preview, &p.Archived, &p.Shared, &p.Protected, &opened, &source, &publicSlug, &tier); err != nil {
+		if err := rows.Scan(&id, &p.Slug, &p.Title, &p.Agent, &summary, &request, &p.CreatedAt, &p.Preview, &p.Archived, &p.Shared, &p.Protected, &opened, &source, &publicSlug, &p.File, &p.FileName, &p.FileSize, &tier); err != nil {
 			return nil, nil, nil, err
 		}
 		p.Photo = photos[p.Agent]
@@ -507,7 +510,7 @@ func (s *Server) scanItems(query string, args ...any) ([]libraryItem, []int, []s
 			}
 		}
 		p.Unread = opened == ""
-		p.Editable = editableSource(source)
+		p.Editable = !p.File && editableSource(source)
 		p.Asked = askedLine(summary, request)
 		p.When, p.WhenFull = relativeDate(p.CreatedAt, now)
 		p.Link = "/" + p.Slug
@@ -860,7 +863,7 @@ func (s *Server) editNote(p savedPage) string {
 // editReason is why a page cannot be edited and what to do instead, for a
 // page whose heading already says that Cairn can't edit it.
 func (s *Server) editReason(p savedPage) (reason, next string) {
-	if editableSource(p.FileName) {
+	if !p.File && editableSource(p.FileName) {
 		return "", ""
 	}
 	if p.FileName != "" {
@@ -910,7 +913,7 @@ func (s *Server) libraryAction(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusNotFound, ErrNotFound, "no such page", false)
 			return
 		}
-		writeOwnerJSON(w, map[string]any{"request": p.OriginalRequest, "summary": p.RequestSummary, "source": p.RequestSource, "edit": editableSource(p.FileName)})
+		writeOwnerJSON(w, map[string]any{"request": p.OriginalRequest, "summary": p.RequestSummary, "source": p.RequestSource, "edit": (!p.File && editableSource(p.FileName))})
 	default:
 		s.notFound(w, r)
 	}
@@ -1409,7 +1412,7 @@ func (s *Server) manageState(p savedPage) (manageData, error) {
 	if d.Protected && checked != passwordStamp(hash) {
 		d.PasswordNote = passwordUnchecked
 	}
-	d.Editable, d.EditNote = editableSource(p.FileName), s.editNote(p)
+	d.Editable, d.EditNote = (!p.File && editableSource(p.FileName)), s.editNote(p)
 	d.PublicSlug = publicSlug.String
 	if d.PublicSlug == "" {
 		d.PublicSlug = p.Slug
