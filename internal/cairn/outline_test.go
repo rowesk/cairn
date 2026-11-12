@@ -27,7 +27,7 @@ func TestReportHeadingsAddsStableIDsAndKeepsOtherBytes(t *testing.T) {
 }
 
 func TestReportContentsNestsUnderNearestShallowerHeading(t *testing.T) {
-	headings := []outlineHeading{{1, "title", "Title"}, {2, "a", "A"}, {3, "a1", "A1"}, {5, "deep", "Deep"}, {3, "a2", "A2"}, {2, "b", "B"}, {4, "b1", "B1"}}
+	headings := []outlineHeading{{Level: 1, ID: "title", Text: "Title"}, {Level: 2, ID: "a", Text: "A"}, {Level: 3, ID: "a1", Text: "A1"}, {Level: 5, ID: "deep", Text: "Deep"}, {Level: 3, ID: "a2", Text: "A2"}, {Level: 2, ID: "b", Text: "B"}, {Level: 4, ID: "b1", Text: "B1"}}
 	contents := reportContents(headings, "pet")
 	var walk func([]*contentsEntry, string) string
 	walk = func(entries []*contentsEntry, indent string) string {
@@ -44,10 +44,10 @@ func TestReportContentsNestsUnderNearestShallowerHeading(t *testing.T) {
 	if contents[0].Href != "/_content/pet#a" {
 		t.Fatal(contents[0].Href)
 	}
-	if reportContents([]outlineHeading{{1, "x", "X"}, {2, "a", "A"}, {2, "b", "B"}}, "pet") != nil {
+	if reportContents([]outlineHeading{{Level: 1, ID: "x", Text: "X"}, {Level: 2, ID: "a", Text: "A"}, {Level: 2, ID: "b", Text: "B"}}, "pet") != nil {
 		t.Fatal("short outline should have no contents")
 	}
-	if got := reportContents([]outlineHeading{{1, "x", "X"}, {1, "y", "Y"}, {2, "a", "A"}}, "pet"); len(got) != 2 {
+	if got := reportContents([]outlineHeading{{Level: 1, ID: "x", Text: "X"}, {Level: 1, ID: "y", Text: "Y"}, {Level: 2, ID: "a", Text: "A"}}, "pet"); len(got) != 2 {
 		t.Fatal("several h1 headings are sections, not the page title")
 	}
 }

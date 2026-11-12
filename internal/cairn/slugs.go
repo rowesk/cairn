@@ -2,6 +2,7 @@ package cairn
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"fmt"
 	"math/big"
 	"strings"
@@ -23,12 +24,23 @@ func randomSlugChars(length int) (string, error) {
 	return path.String(), nil
 }
 
-func (s *Server) slugTaken(slug string) (bool, error) {
-	var count int
-	if err := s.db.QueryRow(`SELECT count(*) FROM pages WHERE slug=? OR public_slug=?`, slug, slug).Scan(&count); err != nil {
-		return false, err
+// slugHolder returns the slug or public link name that a new slug would
+// clash with, or "" when it is free. New slugs must differ from every
+// existing one by more than letter case, so lamp-report and Lamp-Report
+// never name two pages. Lookups stay exact, so pages saved before this rule
+// that differ only in case keep working.
+func (s *Server) slugHolder(slug string) (string, error) {
+	var existing string
+	err := s.db.QueryRow(`SELECT CASE WHEN lower(slug)=lower(?1) THEN slug ELSE public_slug END FROM pages WHERE lower(slug)=lower(?1) OR lower(public_slug)=lower(?1) ORDER BY slug=?1 DESC, public_slug=?1 DESC LIMIT 1`, slug).Scan(&existing)
+	if err == sql.ErrNoRows {
+		return "", nil
 	}
-	return count != 0, nil
+	return existing, err
+}
+
+func (s *Server) slugTaken(slug string) (bool, error) {
+	existing, err := s.slugHolder(slug)
+	return existing != "", err
 }
 
 // randomSlug generates a private convenience link using the owner setting.

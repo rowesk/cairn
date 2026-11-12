@@ -20,19 +20,35 @@ trap cleanup EXIT
 useradd --system --home-dir /var/lib/cairn --shell /usr/sbin/nologin cairn
 install -d -m 0700 -o cairn -g cairn /var/lib/cairn
 install -m 0755 "$release/cairn" /usr/local/bin/cairn
-runuser -u cairn -- /usr/local/bin/cairn init -data /var/lib/cairn -owner 'Service test owner'
+runuser -u cairn -- /usr/local/bin/cairn init -data /var/lib/cairn -owner 'Service test owner' | grep 'Created a Cairn library' >/dev/null
+/usr/local/bin/cairn help | grep CAIRN_LISTEN >/dev/null
 install -d -m 0755 /etc/cairn
 install -m 0644 "$release/deploy/cairn.env" /etc/cairn/cairn.env
 install -m 0644 "$release/deploy/cairn.service" /etc/systemd/system/cairn.service
 systemctl daemon-reload
 systemctl start cairn
-curl --retry 10 --retry-connrefused --retry-delay 1 -fsS http://127.0.0.1:8080/settings | grep 'Service test owner' >/dev/null
+curl --retry 10 --retry-connrefused --retry-delay 1 -fsS http://127.0.0.1:8080/healthz | grep '"status":"ok"' >/dev/null
+curl -fsS http://127.0.0.1:8080/settings | grep 'Service test owner' >/dev/null
 systemctl is-active --quiet cairn
+banner() {
+  for _ in $(seq 10); do
+    journalctl -u cairn --no-pager | grep -F "$1" >/dev/null && return 0
+    sleep 1
+  done
+  echo "Missing startup line: $1" >&2
+  return 1
+}
+banner 'Cairn private listener: 127.0.0.1:8080'
+banner 'Sharing: off'
+# The unit passes only -data and -publisher-token-file, so these prove Cairn reads its environment file itself.
 cat >> /etc/cairn/cairn.env <<'CONFIG'
+CAIRN_LISTEN=127.0.0.1:8090
 CAIRN_PUBLIC_LISTEN=127.0.0.1:8081
 CAIRN_PUBLIC_BASE_URL=https://reports.example.com
 CONFIG
 systemctl restart cairn
-curl --retry 10 --retry-connrefused --retry-delay 1 -fsS http://127.0.0.1:8080/api >/dev/null
+curl --retry 10 --retry-connrefused --retry-delay 1 -fsS http://127.0.0.1:8090/healthz | grep '"database":"ok"' >/dev/null
+curl -fsS http://127.0.0.1:8081/healthz | grep -x '{"status":"ok"}' >/dev/null
 [[ $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8081/settings) == 404 ]]
-echo 'Packaged systemd service passed private-only startup and optional public configuration.'
+banner 'Sharing: on, public links start https://reports.example.com'
+echo 'Packaged systemd service passed private-only startup, environment settings and optional public configuration.'

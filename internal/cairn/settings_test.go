@@ -35,10 +35,11 @@ func TestSettingsPersistAndControlFuturePages(t *testing.T) {
 		t.Fatal(code)
 	}
 	code, h, _ := authorForm(t, srv, "/new", url.Values{"title": {"Settings check"}, "markdown": {"Hello"}}, srv.URL)
-	if code != 303 || len(strings.TrimPrefix(h.Get("Location"), "/")) != 5 {
+	// The editor opens the saved page with ?saved=1, so the reader confirms it.
+	oldLink, _, _ := strings.Cut(h.Get("Location"), "?saved=1")
+	if code != 303 || len(strings.TrimPrefix(oldLink, "/")) != 5 {
 		t.Fatal(code, h)
 	}
-	oldLink := h.Get("Location")
 	_, _, body := request(t, srv, "GET", oldLink, nil, "")
 	if !strings.Contains(string(body), "Prepared by Test author") {
 		t.Fatal("default author ignored")
@@ -147,7 +148,7 @@ func TestOldLinkPreferencesMigrateToThreeCharacters(t *testing.T) {
 		t.Fatal("migration lost preferences")
 	}
 	code, h, _ := authorForm(t, srv, "/new", url.Values{"title": {"Short link"}, "markdown": {"Hello"}}, srv.URL)
-	if code != 303 || !regexp.MustCompile(`^/[a-zA-Z0-9]{3}$`).MatchString(h.Get("Location")) {
+	if code != 303 || !regexp.MustCompile(`^/[a-zA-Z0-9]{3}\?saved=1$`).MatchString(h.Get("Location")) {
 		t.Fatal(code, h)
 	}
 	for _, length := range []string{"2", "8"} {

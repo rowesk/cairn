@@ -1,47 +1,74 @@
 # Cairn
 
-Cairn is a self-hosted library for reports your AI agents write.
+Cairn is a self-hosted library for the pages your AI agents write.
 
-When an agent puts together a good hardware comparison, a trip itinerary, or a deep technical note, leaving it in a chat thread means you will probably lose it. Two weeks later you are digging through old conversations trying to remember which window had the table you needed.
+When an agent puts together a good hardware comparison, a trip plan or a deep technical note, leaving it in a chat thread means you will probably lose it. Two weeks later you are digging through old conversations trying to remember which window had the table you needed.
 
-Cairn gives your agents a place to publish finished work as standalone web pages. Your pages live in a private, searchable library on your own machine, with the original prompt and the agent's name kept alongside each report so you always know what you asked for.
+Cairn gives your agents a place to publish finished work as standalone pages. They live in a private, searchable library on your own machine, each with the agent's name and the request that prompted it, so you always know what you asked for.
 
-[Download Cairn](https://github.com/rowesk/cairn/releases/latest) · [Installation guide](docs/install.md) · [Agent publishing API](docs/publishing.md)
+[Download Cairn](https://github.com/rowesk/cairn/releases/latest) · [Installation guide](docs/install.md) · [Publishing API](docs/publishing.md)
 
-![Cairn's searchable private library with research, planning and technical reports](docs/images/library.png)
+![Cairn's private library: a search field above a list of pages with their authors, dates and access](docs/images/library.png)
 
 ## What you get
 
-Agents can send plain Markdown using Cairn's built-in report, comparison, or visual templates, or push custom HTML when a problem calls for its own layout. If a report includes Mermaid diagrams, interactive ECharts charts, or local images, Cairn serves them straight from the binary without calling out to external CDNs. Custom scripts run inside a strict sandbox so an ambitious page cannot touch the rest of your library.
+Agents send Markdown, which Cairn sets in one of three templates (Report, Comparison or Visual), or their own HTML when a page needs a layout of its own. Mermaid diagrams, ECharts charts and images are served from the Cairn binary itself, never from an outside CDN. A page's scripts run in a sandboxed frame, so an ambitious page cannot touch the rest of your library.
 
-Reading a long report is comfortable on both a monitor and a phone. Cairn builds a table of contents from your headings, sets it in the margin beside the text when the screen is wide enough, and tracks where you are on the page. Back in the library, you can search across titles and original prompts, filter by which agent wrote the page, archive old work, or write and import pages by hand when no agent is involved.
+Reading is comfortable on a monitor and on a phone. Cairn builds a contents list from a page's headings, sets it beside the text when the screen is wide enough and marks where you are. In the library you can search titles, requests and every word of every page as you type, filter by author, archive what you are done with, and write or import pages yourself.
 
-The whole thing is one Go binary backed by SQLite and a directory on disk. It does not need Docker, Node, an external database, or an AI subscription of its own. Drop it on a Raspberry Pi or a small Linux server and forget about it.
+The whole thing is one Go binary with SQLite and a folder on disk. It needs no Docker, Node, external database or AI subscription of its own. Put it on a Raspberry Pi or a small Linux server and forget about it.
 
 <table>
 <tr>
-<td width="76%" valign="top"><img src="docs/images/report.png" alt="Cairn desktop report with a contents list in the left margin and a budget table"></td>
-<td width="24%" valign="top"><img src="docs/images/mobile.png" alt="Cairn phone reader showing a weekend plan and its original request"></td>
+<td width="76%" valign="top"><img src="docs/images/report.png" alt="A page in Cairn's reader on a desktop: the navy cover with the title and byline, the contents beside the text, and a budget table"></td>
+<td width="24%" valign="top"><img src="docs/images/mobile.png" alt="A weekend plan in Cairn's reader on a phone, with the request under the byline"></td>
 </tr>
 </table>
 
 ## Themes
 
-Cairn has three presets: Cairn, Minimal and Futuristic. Choose them under **Settings → Appearance**, separately for the admin view, the reader you use privately, and the reader visitors see on shared links, or apply one preset everywhere. A theme changes Cairn's own pages and the bar around each report. The report keeps the design its agent gave it.
+Choose a theme under **Settings → Appearance**. One click on a card applies it to your library, the pages you read and the pages you share. **Customise per view** lets the reader or shared pages keep a theme of their own.
+
+- **System**, the default for new installations, shows Cairn by day and Dark by night, following each device. Visitors to a shared page get their own device's setting; Cairn stores nothing about them.
+- **Cairn**: blue-grey paper and the navy Blue Hour cover.
+- **Dark**: the same blues on deep slate, for reading at night.
+- **Minimal**: black type on white and thin rules, in the device's own fonts, so it downloads nothing.
+- **Futuristic**: midnight indigo with violet links and squarer corners.
+
+Pages written in Markdown take the theme's colours, charts and diagrams included, so a dark theme gives you a dark page. Pages in a design of their own keep it; in a dark theme they sit on the page like a sheet of paper.
+
+![A page in Cairn's reader in the Dark theme: a blue cover band over dark slate, with the contents beside the text](docs/images/report-dark.png)
 
 <table>
 <tr>
-<td width="33%" valign="top"><img src="docs/images/theme-cairn.png" alt="Cairn library on a phone in the Cairn theme, with soft blue-grey surfaces and rounded controls"><br><sub>Cairn: blue covers, soft edges and the familiar Cairn type.</sub></td>
-<td width="33%" valign="top"><img src="docs/images/theme-minimal.png" alt="Cairn library on a phone in the Minimal theme, with white surfaces and black controls"><br><sub>Minimal: white space, compact covers and plain black controls.</sub></td>
-<td width="33%" valign="top"><img src="docs/images/theme-futuristic.png" alt="Cairn library on a phone in the Futuristic theme, with dark purple-grey surfaces and violet buttons"><br><sub>Futuristic: dark Tokyo Night greys, violet accents and angular controls.</sub></td>
+<td width="25%" valign="top"><img src="docs/images/theme-cairn.png" alt="Cairn's library on a phone in the Cairn theme"><br><sub>Cairn</sub></td>
+<td width="25%" valign="top"><img src="docs/images/theme-dark.png" alt="Cairn's library on a phone in the Dark theme"><br><sub>Dark</sub></td>
+<td width="25%" valign="top"><img src="docs/images/theme-minimal.png" alt="Cairn's library on a phone in the Minimal theme"><br><sub>Minimal</sub></td>
+<td width="25%" valign="top"><img src="docs/images/theme-futuristic.png" alt="Cairn's library on a phone in the Futuristic theme"><br><sub>Futuristic</sub></td>
 </tr>
 </table>
 
-Every screenshot here comes from a temporary demo library. You can [recreate them locally](CONTRIBUTING.md#readme-screenshots) if you want to poke around the sample pages.
+Every screenshot here comes from a temporary library with made-up pages. You can [recreate them](CONTRIBUTING.md#readme-screenshots).
+
+## Keyboard shortcuts
+
+In the library:
+
+| Keys | Does |
+|---|---|
+| `/` or ⌘K (Ctrl+K) | Search |
+| Esc | Clear the search |
+| J and K, or ↓ and ↑ | Next or previous page |
+| Enter | Open the page |
+| Space or P | Preview the page, then step through with J and K |
+| E | Archive or restore, with undo |
+| ? | Show the shortcuts |
+
+Reading a page: C opens the contents, [ and ] go to the previous and next page in the list you came from, ? shows the shortcuts and Esc closes sheets and menus. In the editor, ⌘S (Ctrl+S) saves and ⌘P (Ctrl+P) switches between writing and the preview.
 
 ## Quick start
 
-Grab the Linux archive and `checksums.txt` from [GitHub Releases](https://github.com/rowesk/cairn/releases/latest). Use `linux_amd64` for standard x86-64 machines, or `linux_arm64` for a 64-bit Raspberry Pi or ARM server.
+Download the Linux archive and `checksums.txt` from [GitHub Releases](https://github.com/rowesk/cairn/releases/latest). Use `linux_amd64` for x86-64 machines, or `linux_arm64` for a 64-bit Raspberry Pi or ARM server.
 
 On ARM64, with both files in the current directory:
 
@@ -51,31 +78,53 @@ sha256sum --ignore-missing --check checksums.txt
 tar -xzf cairn_v0.2.0_linux_arm64.tar.gz
 cd cairn_v0.2.0_linux_arm64
 ./cairn init -data ./data -owner "Alex"
-./cairn -data ./data -publisher-token-file ./data/publisher-token
+./cairn serve -data ./data
 ```
 
-Open `http://127.0.0.1:8080` on that machine. If you are putting Cairn on a remote box, exposing it over Tailscale, or setting up systemd so it starts on boot, read the [installation guide](docs/install.md).
+Open `http://127.0.0.1:8080` on that machine. To run Cairn on a remote machine, reach it over Tailscale or start it with systemd, read the [installation guide](docs/install.md).
 
-One important detail: the private library has **no login screen**. Anyone who can reach the private listener can read and manage your pages. Keep it bound to localhost or your own Tailscale network. Publishing keys authenticate the API that agents use, not the web UI.
+The private library has **no login screen**. Anyone who can reach the private listener can read and manage your pages, so keep it on localhost or your own Tailscale network. Agent keys protect the API agents use, not the web pages.
 
 ## Connecting your agents
 
-Open **Settings** in the web UI, add an agent by name, and click **Set up key**. Cairn generates a ready-to-paste prompt block explaining how to publish, while you keep the secret key in your agent's environment or secret store. Any tool or agent that can make an HTTP POST request to your Cairn address can publish a page.
+Open **Settings**. **Authors** comes first: name the agent the way its byline should read and choose **Create key**. A dialog shows the key once, with a Copy button, then the setup text to give the agent and a command to test the connection. The setup text tells the agent when and how to publish and reads the key from `CAIRN_API_KEY`, so it holds no secret and you can paste it anywhere. The key goes in the agent's environment or secret store.
 
-From there, just ask your agent to save its output to Cairn and give you the link. Each agent gets its own key, attaches its own byline, and can update pages it previously wrote without touching anything else. You can rotate or revoke keys at any time.
+Each agent signs its own pages, and through the API its key reads and changes only those pages. Sharing and deleting stay with you. You can rotate or revoke a key at any time; its pages stay.
 
-If you are wiring up an integration yourself, read the [publishing contract](docs/publishing.md). Agents send Markdown or HTML to `POST /api/pages`, and `GET /api` returns a JSON spec with all endpoints, size limits, and examples. You do not need a client SDK.
+A key is a byline, not a lock. The library has no sign-in, so any software that can reach its address can do everything you can, key or no key. Only run agents you trust on machines that can reach it. [SECURITY.md](SECURITY.md#security-model) has the details.
 
-## Sharing individual pages
+Any tool that can send an HTTP request to your Cairn address can publish:
 
-By default, everything stays private. If you want to send a single report to a friend or colleague without exposing the rest of your library, you can start Cairn with an optional public listener and point a tunnel or reverse proxy at that port alone.
+```sh
+export CAIRN_URL=http://127.0.0.1:8080   # the address you open the library at
+export CAIRN_API_KEY=cairn_...           # the agent key; keep it in a secret store
+curl -sS -X POST "$CAIRN_URL/api/pages" \
+  -H "Authorization: Bearer $CAIRN_API_KEY" -H "Content-Type: application/json" \
+  -d '{"title": "Hello from my agent", "original_request": "test Cairn", "markdown": "It works."}'
+```
 
-When you flip sharing on for a page, it becomes available on your public domain at the same short path it uses privately, defaulting to three random mixed-case characters. Your original prompt stays hidden on the private side, and you can put a password on any shared page if you do not want it open to anyone with the link. Agents cannot turn public sharing on through the API; only you can do that from the UI. See the [sharing guide](docs/sharing.md) for the setup details.
+Or let the `cairn` binary send the file and its images, and print the page's address:
 
-Cairn is built for a single owner. It intentionally skips multi-user accounts, comment threads, draft workflows, and revision history. Updating a page replaces it in place.
+```sh
+cairn publish notes.md -request "summarise this week's reading"
+```
+
+Agents can also list and search their pages, read one back with its Markdown, replace it and archive it. `GET /api` is a short index with a complete example, and `/api/openapi.json` is the full OpenAPI 3.1 contract. Every failure names each field to fix. The [publishing reference](docs/publishing.md) has the details. Listing, reading, archiving, `cairn publish` and the key dialog arrive in the next release; v0.2.0 has publishing and replacement only (see the [changelog](CHANGELOG.md)).
+
+## Sharing a page
+
+Everything starts private. To send one page to a friend without opening the rest of your library, start Cairn with its optional public listener and point a tunnel or reverse proxy at that port alone.
+
+Turn on **Sharing** for a page under **Manage page** and it is readable at its public link, on your public domain, with the same link name it has privately: three random letters and digits unless you choose one. You can add a password. Your request never leaves the private side, and neither does the file the page was made from. Agents cannot share pages; only you can, from Cairn itself. The [sharing guide](docs/sharing.md) covers the setup.
+
+## Reading on a Kindle
+
+New in the next release, not in v0.2.0: add an SMTP account and your Kindle's email address, and every page gets a Send to Kindle action in the library menu and the reader. Cairn turns the page into an EPUB with its headings, tables and images and emails it from your address. The [Kindle guide](docs/kindle.md) covers app passwords and Amazon's approved sender list.
+
+Cairn is built for one owner. It deliberately has no multi-user accounts, comments, drafts workflow or revision history. Updating a page replaces it in place.
 
 ## Documentation
 
-[Writing and importing](docs/authoring.md) · [Backups and upgrades](docs/operations.md) · [Troubleshooting](docs/troubleshooting.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+[Writing and importing](docs/authoring.md) · [Send to Kindle](docs/kindle.md) · [Backups and upgrades](docs/operations.md) · [Troubleshooting](docs/troubleshooting.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 Cairn is [MIT licensed](LICENSE). Bundled frontend libraries are listed in [third-party notices](THIRD_PARTY_NOTICES.md).

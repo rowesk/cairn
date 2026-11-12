@@ -38,7 +38,8 @@ func TestSamePathSharingLifecycle(t *testing.T) {
 			if code != 303 {
 				t.Fatalf("editor: %d %s", code, body)
 			}
-			route = headers.Get("Location")
+			// The editor opens the saved page with ?saved=1 for its confirmation.
+			route, _, _ = strings.Cut(headers.Get("Location"), "?saved=1")
 		} else {
 			in := page("API private")
 			delete(in, "slug")
@@ -65,9 +66,7 @@ func TestSamePathSharingLifecycle(t *testing.T) {
 			t.Fatalf("share changed path: %s != %s", got, slug)
 		}
 		routes := []string{route, "/_content" + route}
-		if immediate {
-			routes = append(routes, route+"?download=1")
-		} else {
+		if !immediate {
 			routes = append(routes, "/_content"+route+"?asset=image.png")
 		}
 		for _, path := range routes {

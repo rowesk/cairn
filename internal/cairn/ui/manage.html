@@ -1,0 +1,135 @@
+{{template "owner" .}}
+
+{{- define "title" -}}Manage {{.Page.Title}} · Cairn{{end}}
+
+{{- define "main-class" -}}form-page manage-page{{end}}
+
+{{- define "main" -}}
+<h1 class="sr-only">Manage {{.Page.Title}}</h1>
+<section class="manage-title" id="title" aria-label="Title and byline">
+<form method="post" class="title-form" novalidate>
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<label class="sr-only" for="page-title">Title</label>
+<textarea id="page-title" class="title-field" name="title" rows="1" required data-missing="Give the page a title." maxlength="300" autocomplete="off" spellcheck="true" data-single-line{{if .Errors.title}} aria-invalid="true" aria-describedby="page-title-error" autofocus{{end}}>{{.Title}}</textarea>
+<p class="field-error" id="page-title-error"{{if .Errors.title}} role="alert"{{else}} hidden{{end}}>{{icon "alert"}}<span>{{.Errors.title}}</span></p>
+<div class="title-foot">
+<p class="page-meta">
+<span class="avatar tint-{{tint .Page.Agent}}" aria-hidden="true">{{if .Photo}}<img src="{{.Photo}}" alt="">{{else}}{{initial .Page.Agent}}{{end}}</span>
+<span>Prepared by {{.Page.Agent}} · <time datetime="{{.Page.CreatedAt}}">{{date .Page.CreatedAt}}</time>{{if .Archived}} · Archived{{end}}</span>
+</p>
+<div class="title-actions">
+{{- if .Editable}}
+<a class="quiet-link" href="/edit/{{.Page.Slug}}">{{icon "pen"}}Edit page</a>
+{{- end}}
+<a class="quiet-link" href="/{{.Page.Slug}}">Open page {{icon "arrow"}}</a>
+<button class="quiet" name="action" value="rename" data-save-when-changed="page-title" data-off-until-changed>Save title</button>
+</div>
+</div>
+</form>
+{{- with .EditNote}}
+<p class="field-help edit-note">{{.}}</p>
+{{- end}}
+</section>
+
+<section class="manage-section" id="sharing" aria-labelledby="sharing-title">
+<div class="section-head">
+<div>
+<h2 id="sharing-title">Sharing</h2>
+<p class="sharing-state" id="sharing-state">
+{{- if not .CanShare}}Private. This server has no public address, so pages can’t be shared yet.
+{{- else if not .Shared}}Private. Only your devices can open this page. Turn sharing on to publish it at {{.PublicHost}}/{{.PublicSlug}}.
+{{- else if .Protected}}<strong>Shared with a password.</strong> Visitors need the password to read the page. They never see your request or the rest of your library.
+{{- else}}<strong>Shared.</strong> Anyone with the link can read the page. They never see your request or the rest of your library.{{end -}}
+</p>
+</div>
+<form method="post">
+<input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="action" value="{{if .Shared}}unshare{{else}}share{{end}}">
+<button class="switch" role="switch" aria-checked="{{.Shared}}" aria-labelledby="sharing-title" aria-describedby="sharing-state"{{if not .CanShare}} disabled{{end}}><span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span><span class="switch-text" aria-hidden="true">{{if .Shared}}On{{else}}Off{{end}}</span></button>
+</form>
+</div>
+{{- if not .CanShare}}
+<p class="field-note setup-note">{{icon "info"}}<span>To share pages by link, set <code>CAIRN_PUBLIC_BASE_URL</code> and <code>CAIRN_PUBLIC_LISTEN</code> on the server and restart Cairn. The <a href="https://github.com/rowesk/cairn/blob/main/docs/sharing.md">sharing guide</a> explains how.</span></p>
+{{- else if .Shared}}
+<form method="post" class="sharing-form" id="sharing-form" novalidate data-page="{{.Page.Slug}}" data-public-url="{{.PublicURL}}">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<div class="field">
+<label class="field-label" for="link-name">Public link</label>
+<div class="field-row">
+<div class="address-input{{if .Errors.public_slug}} has-error{{end}}">
+<span aria-hidden="true">{{.PublicHost}}/</span>
+<input id="link-name" name="public_slug" value="{{.LinkName}}" required data-missing="Give the page a link name." maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_\-]{0,63}" data-mismatch="Use letters, numbers, dashes or underscores, starting with a letter or number, up to 64 characters." autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="{{if .Errors.public_slug}}link-name-error {{end}}link-help"{{if .Errors.public_slug}} aria-invalid="true" autofocus{{end}}>
+</div>
+<button type="button" class="quiet copy-button" data-copy-value="{{.PublicURL}}" data-status="copy-status" hidden>{{icon "copy"}}<span class="copy-label">Copy link</span></button>
+</div>
+<p class="field-error" id="link-name-error"{{if .Errors.public_slug}} role="alert"{{else}} hidden{{end}}>{{icon "alert"}}<span>{{.Errors.public_slug}}</span></p>
+<p class="field-help" id="link-help">Letters, numbers, dashes and underscores. A new name gives the page a new address.</p>
+</div>
+<div class="field">
+<label class="field-label" for="share-password">Password{{if .Protected}} <span class="field-badge">{{icon "lock"}}On</span>{{else}} <span class="field-optional">Optional</span>{{end}}</label>
+<div class="secret-field">
+<input id="share-password" type="password" name="password" minlength="8" data-too-short="Use at least 8 characters." autocomplete="new-password" autocapitalize="none" spellcheck="false"{{if .Protected}} placeholder="Type a new password to change it"{{end}} aria-describedby="{{if .Errors.password}}share-password-error {{end}}{{if .PasswordNote}}password-note {{end}}password-help"{{if .Errors.password}} aria-invalid="true" autofocus{{end}}{{if not .CanProtect}} disabled{{end}}>
+<button type="button" class="reveal" data-reveal="share-password" aria-controls="share-password" aria-pressed="false" aria-label="Show password" hidden{{if not .CanProtect}} disabled{{end}}>Show</button>
+</div>
+<p class="field-error" id="share-password-error"{{if .Errors.password}} role="alert"{{else}} hidden{{end}}>{{icon "alert"}}<span>{{.Errors.password}}</span></p>
+{{- with .PasswordNote}}
+<p class="field-note" id="password-note">{{icon "info"}}<span>{{.}}</span></p>
+{{- end}}
+<p class="field-help" id="password-help">{{if not .CanProtect}}Passwords need a public address that starts with https://.{{else if .Protected}}Visitors type it before they can read the page. A new one replaces it for everyone.{{else}}Visitors type it before they can read the page. At least 8 characters.{{end}}</p>
+{{- if .Protected}}
+<button class="quiet-link remove-password" name="action" value="remove_password" formnovalidate>Remove password</button>
+{{- end}}
+</div>
+<div class="form-actions">
+<button name="action" value="sharing">Save sharing</button>
+<button type="button" class="quiet copy-both" id="copy-both" hidden>{{icon "copy"}}<span class="copy-label">Copy link and password</span></button>
+</div>
+<p class="sr-only" id="copy-status" role="status"></p>
+</form>
+{{- else if .Errors.public_slug}}
+<form method="post" class="sharing-form" novalidate>
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<div class="field">
+<label class="field-label" for="link-name">Public link</label>
+<div class="address-input has-error">
+<span aria-hidden="true">{{.PublicHost}}/</span>
+<input id="link-name" name="public_slug" value="{{.LinkName}}" required data-missing="Give the page a link name." maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_\-]{0,63}" data-mismatch="Use letters, numbers, dashes or underscores, starting with a letter or number, up to 64 characters." autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="link-name-error link-help" aria-invalid="true" autofocus>
+</div>
+<p class="field-error" id="link-name-error" role="alert">{{icon "alert"}}<span>{{.Errors.public_slug}}</span></p>
+<p class="field-help" id="link-help">Letters, numbers, dashes and underscores. This becomes the page’s public address.</p>
+</div>
+<div class="form-actions"><button name="action" value="share">Share at this link</button></div>
+</form>
+{{- end}}
+</section>
+
+<section class="manage-section manage-row" id="archive" aria-labelledby="archive-title">
+<div>
+<h2 id="archive-title">{{if .Archived}}Archived{{else}}Archive{{end}}</h2>
+<p>{{if .Archived}}This page is hidden from your library list. Its links still work.{{else}}Hide this page from your library list. Its links keep working.{{end}}</p>
+</div>
+<form method="post">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<button class="quiet" name="action" value="{{if .Archived}}restore{{else}}archive{{end}}">{{if .Archived}}Restore to library{{else}}Archive page{{end}}</button>
+</form>
+</section>
+
+<section class="manage-section manage-row danger-zone" id="delete" aria-labelledby="delete-title">
+<div>
+<h2 id="delete-title">Delete page</h2>
+<p>Removes the page, its images, its original file and any public link. This can’t be undone.</p>
+</div>
+<details class="delete-confirm"{{if .Confirm}} open{{end}}>
+<summary class="button danger-quiet">Delete page</summary>
+<form method="post" action="/manage/{{.Page.Slug}}/delete" class="confirm-panel">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<p class="confirm-question" tabindex="-1">Delete “{{.Page.Title}}” for good?</p>
+<div class="confirm-actions">
+<button class="danger" name="action" value="delete">Delete permanently</button>
+<button type="button" class="quiet" data-close-details hidden>Keep page</button>
+</div>
+</form>
+</details>
+</section>
+{{- end}}
+
+{{- define "script" -}}{{scriptURL "forms"}}{{end}}

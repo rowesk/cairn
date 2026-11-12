@@ -1,0 +1,391 @@
+/*
+ * Feedback: the toast region every page has, the in-place notice, the themed
+ * error page (owner and visitor) and the password gate.
+ */
+
+/* Toasts sit at the bottom edge of the window, over the page, so a message
+   never moves what is on screen. One shows at a time. Without JavaScript
+   the toast is part of the page, under the top bar. */
+
+.toasts {
+  position: fixed;
+  right: var(--space-6);
+  bottom: max(var(--space-6), calc(env(safe-area-inset-bottom) + var(--space-3)));
+  z-index: 40;
+  display: grid;
+  justify-items: end;
+  width: min(420px, calc(100vw - 2 * var(--space-4)));
+  pointer-events: none;
+}
+
+.toast {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-2) var(--space-3) var(--space-4);
+  border-radius: var(--radius-menu);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow-float);
+  font-size: var(--text-label);
+  line-height: 1.5;
+  pointer-events: auto;
+}
+
+.toast > .icon {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+}
+
+.toast.is-success > .icon {
+  color: var(--success-ink);
+}
+
+.toast.is-error > .icon {
+  color: var(--error-ink);
+}
+
+.toast.is-info > .icon {
+  color: var(--accent);
+}
+
+.toast-body {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-block: 1px;
+}
+
+.toast-text {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.toast.is-error .toast-text {
+  font-weight: 500;
+}
+
+.toast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.toast-actions form {
+  display: contents;
+}
+
+.toast-actions button {
+  min-height: max(var(--control-height-sm), var(--target));
+  padding-block: 0;
+  background: var(--control-bg);
+  color: var(--accent);
+}
+
+.toast-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  font-weight: 500;
+}
+
+.toast-close {
+  min-width: max(32px, var(--target));
+  min-height: max(32px, var(--target));
+  margin-block: -6px;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.toast-close:hover {
+  filter: none;
+  background: var(--control-bg);
+  color: var(--ink);
+}
+
+.toast-close .icon {
+  width: 16px;
+  height: 16px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .toast {
+    animation: toast-in var(--duration-base) var(--ease-out);
+  }
+
+  .toast.is-leaving {
+    animation: toast-out var(--duration-fast) ease-in forwards;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-2));
+  }
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(var(--space-1));
+  }
+}
+
+/* In the reader the text column is what is being read. Wherever the margin
+   beside it can hold a toast, the toast keeps to that margin and never sits
+   on the words; on narrower screens it takes its usual place. */
+@media (min-width: 1280px) {
+  .reading-shell .toasts {
+    width: min(420px, calc((100% - var(--measure)) / 2 - var(--space-6) - var(--space-4)));
+  }
+}
+
+/* Owner pages keep room at their foot, so a toast never has to sit over
+   the last control. The room is always there, so a toast arriving or
+   leaving never changes the page's length. */
+body:not(.reading-shell):has(> .toasts) {
+  padding-bottom: 88px;
+}
+
+@media (max-width: 650px) {
+  .toasts {
+    right: var(--space-4);
+    left: var(--space-4);
+    width: auto;
+  }
+}
+
+@media (scripting: none) {
+  .toasts {
+    position: static;
+    width: auto;
+    max-width: 760px;
+    margin: var(--space-4) auto 0;
+    padding-inline: var(--space-4);
+  }
+
+  .toast {
+    box-shadow: 0 0 0 1px var(--line);
+  }
+}
+
+/* A notice in place: the editor's restored draft. */
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--text-label);
+  line-height: 1.5;
+}
+
+.notice.is-success {
+  border-color: transparent;
+  background: var(--success-bg);
+  color: var(--success-ink);
+}
+
+.notice.is-error {
+  border-color: transparent;
+  background: var(--error-bg);
+  color: var(--error-ink);
+}
+
+.notice.is-info > .icon {
+  color: var(--accent);
+}
+
+.notice > .icon {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+}
+
+.notice-body {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.notice p {
+  margin: 0;
+  color: inherit;
+  font-size: var(--text-label);
+}
+
+.notice.is-error p,
+.notice.is-success p {
+  font-weight: 500;
+}
+
+.notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.notice-actions form {
+  display: contents;
+}
+
+.notice-actions button {
+  min-height: max(var(--control-height-sm), var(--target));
+  padding-block: 0;
+  background: var(--control-bg);
+  color: var(--accent);
+}
+
+.notice-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  color: inherit;
+  font-weight: 500;
+}
+
+/* The error page, owner and visitor alike: one message in the middle of
+   the window and one way on. The owner keeps the top bar. */
+
+body.visitor,
+body.problem-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+body.visitor > main,
+body.problem-body > main {
+  display: grid;
+  flex: 1;
+  place-items: center;
+}
+
+.problem-page {
+  padding: var(--space-8) var(--space-5);
+}
+
+.problem {
+  max-width: 560px;
+  text-align: center;
+}
+
+.problem h1 {
+  font-size: var(--text-headline);
+}
+
+.problem p {
+  max-width: 52ch;
+  margin: var(--space-3) auto 0;
+  color: var(--muted);
+  font-size: var(--text-lead);
+  line-height: 1.55;
+}
+
+.problem .button {
+  margin-top: var(--space-6);
+}
+
+/* The password gate */
+
+.gate-page {
+  padding: var(--space-8) var(--space-5);
+}
+
+.gate {
+  width: 100%;
+  max-width: 420px;
+  padding: var(--space-7);
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+  box-shadow: var(--shadow-sheet);
+  text-align: center;
+}
+
+.gate-portrait {
+  display: inline-grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  overflow: hidden;
+  border-radius: var(--radius-round);
+  font-size: var(--text-heading);
+  font-weight: 600;
+}
+
+.gate-portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gate h1 {
+  margin-top: var(--space-4);
+  font-size: var(--text-title);
+  letter-spacing: -.03em;
+  overflow-wrap: anywhere;
+}
+
+.gate-lead {
+  margin-top: var(--space-2);
+  color: var(--muted);
+}
+
+.gate-form {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+  text-align: left;
+}
+
+.gate-form label {
+  font-size: var(--text-label);
+  font-weight: 500;
+}
+
+.gate-form .secret-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--text-field);
+}
+
+.gate-submit {
+  width: 100%;
+  margin-top: var(--space-3);
+}
+
+@media (max-width: 650px) {
+  .problem-page,
+  .gate-page {
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .problem h1 {
+    font-size: var(--text-title);
+  }
+
+  /* On a phone the gate starts near the top, so the field stays clear of
+     the keyboard and in easy reach. */
+  body.visitor > main.gate-page {
+    place-items: start center;
+  }
+
+  .gate {
+    padding: var(--space-6) var(--space-5);
+    box-shadow: none;
+  }
+}

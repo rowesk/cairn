@@ -1,0 +1,789 @@
+/* Editor: one paper canvas for title and Markdown, a Write and Preview
+   switch (side by side on wide screens) and page access tucked into the
+   toolbar. The toolbar spans the workspace in every mode, so switching
+   views never moves it; only the panes below change. */
+
+.editor-workspace {
+  padding: 0 var(--gutter) var(--space-8);
+}
+
+.editor-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  padding: var(--space-4) 0;
+  background: var(--bg);
+}
+
+.editor-toolbar h1 {
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-heading);
+  font-weight: 500;
+  letter-spacing: -.02em;
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.editor-actions button {
+  white-space: nowrap;
+}
+
+/* Write, Preview, Side by side */
+.mode-switch {
+  display: flex;
+  padding: 2px;
+  border-radius: var(--radius-control);
+  background: var(--control-bg);
+}
+
+.mode-switch .mode {
+  min-height: max(var(--control-height-sm), var(--target));
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--muted);
+}
+
+.mode-switch .mode:hover {
+  filter: none;
+  color: var(--ink);
+}
+
+.mode-switch .mode[aria-pressed="true"] {
+  border-color: var(--line);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.mode-switch .mode:focus-visible {
+  outline-offset: -2px;
+}
+
+.image-status {
+  max-width: 960px;
+  margin: 0 auto var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-label);
+}
+
+.image-status:empty {
+  display: none;
+}
+
+/* The panes: one centred column for writing or the preview, or the two
+   side by side. */
+
+.editor-panes {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.editor[data-mode="split"] .editor-panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-6);
+  max-width: 1600px;
+}
+
+/* The paper. Its edge is the writing fields' edge, so it meets the 3:1
+   field rule; the fields inside draw none of their own. */
+
+.editor-paper {
+  padding: var(--space-8) var(--space-8) var(--space-5);
+  border: 1px solid var(--field-line);
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+}
+
+.editor[data-mode="split"] .editor-paper {
+  padding-inline: var(--space-7);
+}
+
+/* Title and body draw no focus box. A thin rail in the paper's margin marks
+   the focused field instead, in the error colour while it has an error. */
+.editor-paper .editor-title,
+.editor-paper .markdown-canvas {
+  display: block;
+  width: calc(100% + var(--space-4) + 2px);
+  margin-left: calc(-1 * var(--space-4) - 2px);
+  padding: 0 0 0 var(--space-4);
+  overflow: hidden;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  resize: none;
+  field-sizing: content;
+}
+
+.editor-paper .editor-title:focus-visible,
+.editor-paper .markdown-canvas:focus-visible {
+  outline: 2px solid transparent;
+  border-left-color: var(--focus);
+}
+
+.editor-paper [aria-invalid="true"],
+.editor-paper [aria-invalid="true"]:focus-visible {
+  border-left-color: var(--error-ink);
+}
+
+.editor-paper .editor-title {
+  min-height: var(--target);
+  font-family: var(--font-display);
+  font-size: var(--text-headline);
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -.035em;
+  text-wrap: balance;
+}
+
+.markdown-field {
+  position: relative;
+  margin-top: var(--space-6);
+}
+
+/* Markdown is code-like: tables and fences line up in a monospace face.
+   The textarea and the coloured copy behind it share every rule that
+   decides where a glyph goes. */
+.editor-paper .markdown-canvas,
+.markdown-highlight {
+  min-height: 48vh;
+  font: var(--text-body)/1.75 var(--font-mono);
+  font-variant-ligatures: none;
+  letter-spacing: normal;
+  word-spacing: normal;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: normal;
+  tab-size: 4;
+}
+
+.editor-paper .markdown-canvas {
+  caret-color: var(--accent);
+}
+
+.markdown-highlight {
+  display: none;
+}
+
+.markdown-field.is-highlighted .markdown-highlight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  height: 100%;
+  margin-left: calc(-1 * var(--space-4) - 2px);
+  padding: 0 0 0 var(--space-4);
+  overflow: hidden;
+  border-left: 2px solid transparent;
+  color: var(--ink);
+  pointer-events: none;
+}
+
+.markdown-field.is-highlighted .markdown-canvas {
+  position: relative;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.markdown-field.is-highlighted .markdown-canvas::placeholder {
+  color: var(--muted);
+  -webkit-text-fill-color: var(--muted);
+}
+
+.markdown-field.is-highlighted .markdown-canvas::selection {
+  background: var(--selection);
+  -webkit-text-fill-color: transparent;
+}
+
+/* What the colours mean: marks recede, structure and links come forward. */
+.md-mark,
+.md-fence,
+.md-url {
+  color: var(--muted);
+}
+
+.md-heading,
+.md-callout {
+  color: var(--accent);
+}
+
+.md-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 3px;
+}
+
+.md-bullet {
+  color: var(--accent);
+}
+
+.md-code {
+  border-radius: var(--radius-mark);
+  background: var(--control-bg);
+  color: var(--ink);
+}
+
+.md-quote {
+  color: var(--muted);
+}
+
+.md-strong {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+.editor-title::placeholder,
+.markdown-canvas::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+/* Errors sit under the field they concern, alike for both. */
+.editor-field-error {
+  margin-top: var(--space-2);
+}
+
+.editor-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-7);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+.editor-foot p {
+  line-height: var(--target);
+}
+
+.help-button {
+  gap: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-meta);
+  text-decoration: none;
+}
+
+.help-button .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.help-button:hover {
+  color: var(--accent);
+}
+
+/* The reference sheet: what Markdown Cairn understands, by kind. */
+.format-help {
+  width: min(720px, calc(100vw - var(--space-7)));
+  max-height: min(84dvh, 900px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 0;
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow-modal);
+}
+
+.format-help::backdrop {
+  background: var(--backdrop);
+}
+
+.format-help-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.format-help-head h2 {
+  font-size: var(--text-heading);
+}
+
+.format-help-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6) var(--space-7);
+  padding: var(--space-5) var(--space-6) var(--space-7);
+}
+
+.format-help-body > section {
+  min-width: 0;
+}
+
+.format-help h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-label);
+  font-weight: 600;
+}
+
+.format-help dl {
+  display: grid;
+  margin: 0;
+}
+
+.format-help dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  border-top: 1px solid var(--line);
+  font-size: var(--text-label);
+  line-height: 1.5;
+}
+
+.format-help dd {
+  margin: 0;
+  color: var(--muted);
+}
+
+.format-help code {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+}
+
+.format-help p {
+  margin-top: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-label);
+  line-height: 1.5;
+}
+
+/* A sample wraps inside the sheet rather than running off its edge: a long
+   line such as the image one reads whole, and short lines keep their
+   columns. */
+.format-sample {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--table-bg);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: var(--text-meta);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.format-sample code {
+  white-space: inherit;
+}
+
+/* Preview: in place of the writing, or beside it, always under the title
+   band the reader will show. Without JavaScript it sits under the writing. */
+
+.editor-preview-section {
+  margin-top: var(--space-7);
+  scroll-margin-top: var(--space-5);
+}
+
+.editor[data-mode="write"] .editor-preview-section,
+.editor[data-mode="preview"] #write-pane {
+  display: none;
+}
+
+.editor[data-mode="preview"] .editor-preview-section {
+  margin-top: 0;
+}
+
+/* The title sits on a band in the reader's cover colours, as it will. */
+.preview-label {
+  padding: var(--space-7) var(--space-8);
+  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+  background: var(--cover);
+  color: var(--cover-ink);
+}
+
+.preview-title {
+  font-family: var(--font-display);
+  font-size: var(--text-headline);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -.035em;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.preview-title:empty {
+  display: none;
+}
+
+.editor-preview-section iframe {
+  display: block;
+  width: 100%;
+  min-height: 320px;
+  height: 70vh;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+  background: var(--frame-paper);
+}
+
+.editor:not([data-mode]) .preview-label {
+  display: none;
+}
+
+.editor:not([data-mode]) .editor-preview-section iframe {
+  border-top: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+}
+
+/* Side by side, the preview keeps its band and scrolls in its own pane. */
+.editor[data-mode="split"] .editor-preview-section {
+  position: sticky;
+  top: calc(var(--target) + var(--space-7) + var(--space-4));
+  max-height: calc(100dvh - var(--target) - var(--space-8) - var(--space-4));
+  margin-top: 0;
+  overflow: auto;
+  border-radius: var(--radius-panel);
+  background: var(--frame-paper);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.editor[data-mode="split"] .preview-label {
+  padding: var(--space-6) var(--space-7);
+}
+
+.editor[data-mode="split"] .preview-title {
+  font-size: var(--text-title);
+}
+
+.editor[data-mode="split"] .editor-preview-section iframe {
+  border: 0;
+  border-radius: 0;
+}
+
+/* Page access */
+
+.access-trigger {
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  background: transparent;
+  color: var(--muted);
+}
+
+.access-trigger:hover,
+.access-trigger[aria-expanded=true] {
+  background: var(--control-bg);
+  color: var(--ink);
+}
+
+.access-trigger.is-public {
+  color: var(--accent);
+}
+
+.access-trigger > span:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+}
+
+.access-trigger > .icon:last-child {
+  width: 12px;
+}
+
+.sharing-panel {
+  position: fixed;
+  inset: auto;
+  width: 376px;
+  max-width: calc(100vw - var(--space-7));
+  max-height: calc(100dvh - var(--space-6));
+  margin: 0;
+  padding: var(--space-5) var(--space-6) var(--space-6);
+  overflow: auto;
+  border: 0;
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow-float);
+}
+
+.sharing-panel:popover-open {
+  animation: sharing-in var(--duration-fast) var(--ease-out);
+}
+
+@keyframes sharing-in {
+  from {
+    opacity: .5;
+    transform: translateY(-4px);
+  }
+}
+
+.sharing-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.sharing-heading h2 {
+  font-size: var(--text-lead);
+  font-weight: 600;
+  letter-spacing: -.02em;
+}
+
+.access-choices {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.access-choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  cursor: pointer;
+}
+
+.access-choice input {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.access-choice > span:first-of-type {
+  display: flex;
+  color: var(--muted);
+}
+
+.access-choice strong {
+  display: block;
+  font-size: var(--text-body);
+  font-weight: 500;
+}
+
+.access-choice small {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-meta);
+  line-height: 1.5;
+}
+
+.access-choice:has(input:disabled) {
+  cursor: not-allowed;
+}
+
+.access-choice:has(input:disabled) strong {
+  color: var(--muted);
+}
+
+.address-settings {
+  margin-top: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+
+.address-settings > label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-label);
+  font-weight: 500;
+}
+
+/* The field and its fixed prefix are one control with one edge and one
+   focus ring, like Manage's address; the prefix sits in its own tinted
+   cell so it never reads as part of the name. */
+.address-field {
+  display: flex;
+  align-items: stretch;
+  min-height: max(var(--control-height), var(--target));
+  overflow: hidden;
+  border: 1px solid var(--field-line);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+}
+
+.address-field[hidden] {
+  display: none;
+}
+
+.address-field:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+}
+
+.address-field:has([aria-invalid="true"]) {
+  border-color: var(--error-ink);
+}
+
+.address-field:has([aria-invalid="true"]):focus-within {
+  outline-color: var(--error-ink);
+}
+
+.address-prefix {
+  display: flex;
+  flex-shrink: 1;
+  align-items: center;
+  max-width: 55%;
+  padding: 0 var(--space-2) 0 var(--space-3);
+  overflow: hidden;
+  border-right: 1px solid var(--line);
+  background: var(--table-bg);
+  color: var(--muted);
+  font-size: var(--text-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.address-field input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0 var(--space-3);
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-size: var(--text-label);
+}
+
+/* iOS zooms into any field under 16px. */
+@media (pointer: coarse) {
+  .address-field input,
+  .address-prefix {
+    font-size: var(--text-field);
+  }
+}
+
+.address-settings .field-error {
+  margin-top: var(--space-2);
+}
+
+.address-full {
+  margin-top: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-meta);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.address-full strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+@media (max-width: 650px) {
+  .editor-workspace {
+    padding: 0 var(--space-4) var(--space-8);
+  }
+
+  .editor-toolbar {
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-3);
+    padding: var(--space-3) 0;
+  }
+
+  .editor-toolbar h1 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .editor-actions {
+    width: 100%;
+  }
+
+  .editor-actions .access-trigger {
+    margin-right: auto;
+    padding-inline: var(--space-2);
+  }
+
+  .editor-actions #save-button {
+    padding: 0 var(--space-4);
+  }
+
+  .editor-paper {
+    padding: var(--space-6) var(--space-5) var(--space-4) var(--space-6);
+  }
+
+  .preview-label {
+    padding: var(--space-6) var(--space-5);
+  }
+
+  .preview-title,
+  .editor-paper .editor-title {
+    font-size: var(--text-title);
+  }
+
+  .editor-paper .markdown-canvas,
+  .markdown-highlight {
+    min-height: 50vh;
+    font-size: var(--text-label);
+  }
+
+  .sharing-panel {
+    padding: var(--space-4) var(--space-5) var(--space-5);
+  }
+
+  .format-help-body {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-4) var(--space-5) var(--space-6);
+  }
+
+  .format-help dl > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
+/* Touch screens get 17px writing, so iOS does not zoom into the field. */
+@media (pointer: coarse) {
+  .editor-paper .markdown-canvas,
+  .markdown-highlight {
+    font-size: var(--text-lead);
+  }
+}
+
+/* Narrow phones keep every toolbar control on screen: the access button
+   keeps its icon, Save its verb. Both keep their full names for screen
+   readers through their labels. */
+@media (max-width: 420px) {
+  .editor-actions .access-trigger #access-label,
+  .save-rest {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+}
+
+/* Manage says why a page cannot be edited, under its title. */
+.manage-title > .edit-note {
+  max-width: 60ch;
+  margin-top: var(--space-3);
+}

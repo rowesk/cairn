@@ -1,0 +1,1491 @@
+/*
+ * Reader: the Blue Hour cover that scrolls away (or, for a page in its own
+ * design, a slim neutral strip), the compact bar that takes over from it,
+ * page details, contents, the end of the page and the report frame. A
+ * visitor's view swaps the cover for a neutral strip.
+ *
+ * One grid for every page type and width: the report's text column (43.5rem,
+ * the measure of Cairn's templates, centred with the report's own gutter).
+ * The cover, strip, bar, details and end of the page put their edges on it,
+ * so the brand, the toolbar and the title stand still when [ and ] move
+ * between a report, a short page, a comparison and a custom page. Only the
+ * report inside the frame may lay itself out differently. Contents float in
+ * the left margin when it has room, on template pages that allow it.
+ */
+
+.reading-shell {
+  --measure: 43.5rem;
+  --edge: clamp(var(--space-4), 4%, var(--space-7));
+  --group-inset: max(var(--edge), (100% - var(--measure)) / 2);
+  --bar-height: 48px;
+  --sheet-out: calc(var(--duration-base) * .75);
+  /* The contents rail wears the colours Cairn's own templates take in this
+     theme. They come from the theme, never from the report, whose script
+     could say anything. */
+  --toc-ink: var(--frame-ink);
+  --toc-paper: var(--frame-paper);
+  --toc-accent: var(--frame-accent);
+  /* The heading face of Cairn's templates, the only pages the rail floats on. */
+  --toc-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  min-height: 100dvh;
+}
+
+.reading-shell [hidden] {
+  display: none !important;
+}
+
+/* Focusing the skip link from the middle of a page leaves the page where it is. */
+.reading-shell .skip-link {
+  position: fixed;
+}
+
+.reader-grid {
+  padding-inline: var(--group-inset);
+}
+
+/* Report frame */
+
+.report-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  background: var(--toc-paper);
+}
+
+/* A report in its own design (custom HTML, or a page saved before reports
+   followed the theme) keeps its colours. Light themes run it edge to edge
+   as before; dark themes lay it on the page as a sheet of paper, so the
+   light page reads as a document set down on a dark desk. */
+.report-fixed {
+  --toc-ink: var(--fixed-ink);
+  --toc-paper: var(--fixed-paper);
+  --toc-accent: var(--fixed-accent);
+}
+
+.report-fixed .report-view {
+  padding: 0 var(--fixed-inset) var(--fixed-inset);
+  background: var(--bg);
+}
+
+.report-fixed .report-frame {
+  border-radius: min(var(--fixed-inset), var(--radius-panel));
+}
+
+:root[data-input-modality="keyboard"] .report-fixed.frame-focused .report-frame {
+  outline-offset: var(--frame-ring-offset);
+}
+
+.report-frame {
+  display: block;
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100dvh;
+  min-height: 200px;
+  border: 0;
+  background: var(--toc-paper);
+}
+
+.reading-shell.flowing-report .report-frame {
+  overflow: hidden;
+}
+
+/* The report is a document of its own; keyboard focus inside it shows as a
+   ring around the whole frame. */
+:root[data-input-modality="keyboard"] .frame-focused .report-frame {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+/* Cover */
+
+.reader-cover {
+  position: relative;
+  --cover-text: var(--cover-ink);
+  --cover-soft: var(--cover-muted);
+}
+
+.blue-hour {
+  background: var(--cover);
+  color: var(--cover-ink);
+}
+
+.blue-hour :is(a, button, summary):focus-visible,
+.is-owner:not(.is-custom) .compact-reader :is(a, button):focus-visible,
+.is-owner:not(.is-custom) .reader-details :is(a, button):focus-visible {
+  outline-color: var(--cover-focus);
+}
+
+/* The toolbar: brand, then the page's status, Copy link and More. Its
+   buttons are quiet, like the bar's, so the title leads. */
+.reading-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 64px;
+  padding-block: var(--space-3);
+}
+
+.reader-cover .brand {
+  color: inherit;
+}
+
+.reading-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.nav-button,
+.compact-actions button {
+  gap: var(--space-2);
+  min-height: max(var(--control-height-sm), var(--target));
+  padding: 0 var(--space-3);
+  background: none;
+  color: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.nav-button:hover,
+.compact-actions button:hover,
+.nav-button[aria-expanded=true],
+.compact-contents[aria-expanded=true],
+.compact-more[aria-expanded=true] {
+  filter: none;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.nav-button .icon,
+.compact-actions .icon {
+  width: 15px;
+  height: 15px;
+}
+
+/* Who can open the page, said in words with the library's icons. Copying
+   the link is its own button. */
+.access-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 var(--space-3) 0 0;
+  color: var(--cover-soft);
+  font-size: var(--text-label);
+  white-space: nowrap;
+}
+
+.is-shared .access-status {
+  color: var(--cover-text);
+}
+
+.access-status .icon,
+.byline-access .icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+/* Copy link confirms on the button itself. Both labels share one cell, so
+   the button keeps its width while the words change. */
+.copy-label {
+  display: inline-grid;
+}
+
+.copy-ready,
+.copy-done {
+  display: inline-flex;
+  grid-area: 1 / 1;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-2);
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.copy-done,
+.is-copied .copy-ready {
+  opacity: 0;
+}
+
+.is-copied .copy-done {
+  opacity: 1;
+}
+
+/* Title, byline and request */
+
+.report-heading {
+  padding-block: var(--space-6) var(--space-7);
+}
+
+.report-title {
+  margin: 0;
+  color: var(--cover-text);
+  font-weight: 500;
+  font-size: clamp(var(--text-title), 2.4vw, var(--text-headline));
+  line-height: 1.15;
+  letter-spacing: -.025em;
+  overflow-wrap: break-word;
+  text-wrap: balance;
+}
+
+.report-title.is-long {
+  font-size: var(--text-title);
+  line-height: 1.2;
+}
+
+/* "27-inch" and "USB-C" stay whole on a narrow screen. */
+.report-title .compound {
+  white-space: nowrap;
+}
+
+.report-author {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  margin-top: var(--space-4);
+}
+
+.author-portrait {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-round);
+  background: var(--selected-bg);
+  color: var(--accent);
+  font-size: var(--text-label);
+  font-weight: 500;
+}
+
+.byline {
+  min-width: 0;
+}
+
+.byline p {
+  margin: 0;
+}
+
+.byline-credit {
+  color: var(--cover-soft);
+  font-size: var(--text-label);
+  line-height: 1.45;
+}
+
+.byline-who {
+  color: var(--cover-text);
+  font-size: var(--text-body);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.byline-sep {
+  margin-inline: var(--space-2);
+}
+
+.byline-extra {
+  color: var(--cover-soft);
+  font-size: var(--text-meta);
+  line-height: 1.5;
+}
+
+.byline-access {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  vertical-align: top;
+}
+
+/* The toolbar states the status on wider screens, so the cover's byline
+   leaves it out there; page details always carry it. */
+@media (min-width: 761px) {
+  .reader-cover .byline-access,
+  .reader-cover .byline-access + .byline-sep,
+  .reader-cover .byline-extra:not(.has-download) {
+    display: none;
+  }
+}
+
+/* The link sits in a line of metadata; its hit area grows without moving it. */
+.reader-download {
+  position: relative;
+  color: inherit;
+  text-decoration-color: color-mix(in srgb, currentColor 50%, transparent);
+  text-underline-offset: 3px;
+}
+
+.reader-download::after {
+  position: absolute;
+  inset: calc(-1 * var(--space-1)) 0;
+  content: "";
+}
+
+.reader-download:hover {
+  text-decoration-color: currentColor;
+}
+
+/* The request is why the page exists: it reads in body text under the
+   byline, three lines at first. */
+.report-request {
+  margin-top: var(--space-5);
+  padding-top: var(--space-5);
+  border-top: 1px solid color-mix(in srgb, var(--cover-text) 18%, transparent);
+}
+
+.request-label {
+  margin: 0 0 var(--space-2);
+  color: var(--cover-soft);
+  font-size: var(--text-meta);
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.request-name {
+  color: var(--cover-text);
+  font-weight: 500;
+}
+
+.request-text {
+  max-width: 64ch;
+  margin: 0;
+  color: var(--cover-text);
+  font-size: var(--text-body);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.report-request.is-clamped .request-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.request-toggle {
+  min-height: var(--target);
+  padding: var(--space-1) 0 0;
+  border-radius: 0;
+  background: none;
+  color: var(--cover-text);
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 3px;
+}
+
+.request-toggle:hover {
+  filter: none;
+  text-decoration-color: currentColor;
+}
+
+/* Without JavaScript the contents open from the cover. */
+.contents-fallback {
+  margin-top: var(--space-5);
+  color: var(--cover-text);
+  font-size: var(--text-label);
+}
+
+.contents-fallback summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.contents-fallback ol {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}
+
+.contents-fallback ol ol {
+  margin-top: 0;
+  padding-left: var(--space-4);
+}
+
+.contents-fallback a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  color: inherit;
+  line-height: 1.4;
+}
+
+/* Neutral strips: a visitor's view, and the owner's view of a page in its
+   own design. Paper and ink, so the report owns the page. */
+
+.reader-strip {
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  --cover-text: var(--ink);
+  --cover-soft: var(--muted);
+}
+
+.reader-strip .report-heading {
+  padding-block: var(--space-6) var(--space-5);
+}
+
+.reader-strip.has-own-title .report-heading {
+  padding-block: var(--space-4);
+}
+
+.strip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+}
+
+.strip-row .report-author {
+  min-width: 0;
+}
+
+.reader-strip:not(.has-own-title) .strip-row,
+.reader-strip:not(.has-own-title) .report-heading > .report-author {
+  margin-top: var(--space-4);
+}
+
+.reader-strip.has-own-title .report-author {
+  margin-top: 0;
+}
+
+.strip-copy {
+  flex-shrink: 0;
+  min-height: max(var(--control-height-sm), var(--target));
+  padding: 0 var(--space-3);
+  white-space: nowrap;
+}
+
+.strip-copy .icon {
+  width: 15px;
+  height: 15px;
+}
+
+/* The owner's strip keeps the toolbar row of the cover above its byline. */
+.owner-strip .reading-nav {
+  min-height: 56px;
+  padding-block: var(--space-2);
+}
+
+.owner-strip .report-heading {
+  padding-top: 0;
+}
+
+.owner-strip.has-own-title .report-heading {
+  padding-block: 0 var(--space-4);
+}
+
+.owner-strip .report-request {
+  border-top-color: var(--line);
+}
+
+/* Compact bar */
+
+.compact-reader {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 20;
+  background: var(--cover);
+  color: var(--cover-ink);
+  box-shadow: var(--shadow-float);
+  visibility: hidden;
+  transform: translateY(-100%);
+  transition: transform var(--sheet-out) var(--ease-out), visibility 0s linear var(--sheet-out);
+}
+
+.compact-reader.is-visible {
+  visibility: visible;
+  transform: none;
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.is-public .compact-reader,
+.is-custom .compact-reader {
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.compact-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--bar-height);
+}
+
+.compact-reader .brand {
+  flex: none;
+  min-width: var(--target);
+  color: inherit;
+  font-size: var(--text-lead);
+}
+
+.compact-title {
+  flex: 0 1 auto;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: max(var(--control-height-sm), var(--target));
+  margin-right: auto;
+  margin-left: calc(-1 * var(--space-2));
+  padding: 0 var(--space-2);
+  background: none;
+  color: inherit;
+  font-weight: 500;
+}
+
+.compact-title > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.compact-page {
+  flex: 0 1 auto;
+}
+
+.compact-section {
+  flex: 0 1 auto;
+  color: var(--cover-muted);
+  font-weight: 400;
+}
+
+.is-public .compact-section,
+.is-custom .compact-section {
+  color: var(--muted);
+}
+
+.compact-section:empty {
+  display: none;
+}
+
+.compact-section::before {
+  margin-right: var(--space-2);
+  content: "›";
+}
+
+/* When the page title and the section do not both fit, the section the
+   reader is in wins: the title stays in page details. */
+.compact-title.section-only .compact-page {
+  display: none;
+}
+
+.compact-title.section-only .compact-section {
+  color: inherit;
+  font-weight: 500;
+}
+
+.compact-title.section-only .compact-section::before {
+  content: none;
+}
+
+.compact-title .icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  opacity: .75;
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.compact-title[aria-expanded=true] .icon {
+  transform: rotate(180deg);
+}
+
+.compact-title:hover {
+  filter: none;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.compact-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.more-button .icon {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.more-button[aria-expanded=true] .icon {
+  transform: rotate(180deg);
+}
+
+.reading-progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--cover-focus);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.is-public .reading-progress,
+.is-custom .reading-progress {
+  bottom: -1px;
+  background: var(--accent);
+}
+
+/* The overflow menu: one list for the cover, the strip and the bar. */
+
+.reader-menu {
+  position: fixed;
+  inset: var(--space-8) var(--space-4) auto auto;
+  width: 248px;
+  margin: 0;
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-menu);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow-float);
+}
+
+.reader-menu :is(a, button) {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: max(var(--control-height), var(--target));
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--ink);
+  font-size: var(--text-label);
+  font-weight: 400;
+  text-align: left;
+  text-decoration: none;
+}
+
+.reader-menu :is(a, button):hover {
+  filter: none;
+  background: var(--badge-bg);
+}
+
+.menu-form {
+  display: contents;
+}
+
+.reader-menu .icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+
+.reader-menu small {
+  display: block;
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+.reader-menu .copy-label,
+.reader-menu .copy-ready,
+.reader-menu .copy-done {
+  justify-content: flex-start;
+  gap: var(--space-3);
+}
+
+.menu-status {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-1);
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: var(--text-meta);
+  line-height: 1.45;
+}
+
+.menu-status .icon {
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+}
+
+/* Copy link and Contents sit in the menu only when their own buttons are
+   out of sight; page details when nothing else shows them. reader.js keeps
+   data-from and the floating state current. */
+.reader-menu .menu-copy,
+.reader-menu .menu-details,
+.reader-menu .menu-contents {
+  display: none;
+}
+
+.reader-menu[data-from="bar"] .menu-details:not([hidden]),
+.is-custom .reader-menu[data-from="cover"] .menu-details:not([hidden]),
+.reader-menu[data-from="cover"] .menu-contents:not([hidden]) {
+  display: flex;
+}
+
+/* Page details sheet */
+
+.reader-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 18;
+  background: var(--backdrop);
+}
+
+.reader-details {
+  position: fixed;
+  top: var(--bar-height);
+  right: 0;
+  left: 0;
+  z-index: 19;
+  max-height: calc(100dvh - var(--bar-height) - var(--space-7));
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  background: var(--cover);
+  color: var(--cover-ink);
+  box-shadow: var(--shadow-modal);
+  --cover-text: var(--cover-ink);
+  --cover-soft: var(--cover-muted);
+}
+
+.is-public .reader-details,
+.is-custom .reader-details {
+  background: var(--paper);
+  color: var(--ink);
+  --cover-text: var(--ink);
+  --cover-soft: var(--muted);
+}
+
+.reader-details:focus-visible {
+  outline-color: var(--cover-focus);
+  outline-offset: -4px;
+}
+
+.is-public .reader-details:focus-visible,
+.is-custom .reader-details:focus-visible {
+  outline-color: var(--focus);
+}
+
+.details-inner {
+  padding-block: var(--space-5) var(--space-6);
+}
+
+.details-inner .report-author {
+  margin-top: 0;
+}
+
+.details-title {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-lead);
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -.02em;
+  overflow-wrap: break-word;
+  text-wrap: balance;
+}
+
+/* Wide bars show the title themselves; details lead with it elsewhere. */
+@media (min-width: 1001px) {
+  .details-title {
+    display: none;
+  }
+}
+
+.details-request {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid color-mix(in srgb, var(--cover-text) 18%, transparent);
+}
+
+.details-request p:last-child {
+  max-width: 64ch;
+  margin: 0;
+  color: var(--cover-text);
+  font-size: var(--text-body);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reader-details:not([hidden]),
+  .contents-open .reader-toc {
+    animation: sheet-in var(--duration-base) var(--ease-out);
+  }
+
+  .reader-scrim:not([hidden]) {
+    animation: fade-in var(--duration-base) ease-out;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-1 * var(--space-2)));
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Contents: a rail in the left margin when there is room, otherwise a
+   sheet below the bar. */
+
+.compact-contents .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.reader-toc {
+  display: none;
+}
+
+.reader-toc ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reader-toc ol ol {
+  padding-left: var(--space-3);
+}
+
+.reader-toc a {
+  --pad: var(--space-1);
+  position: relative;
+  display: block;
+  min-height: var(--target);
+  padding: var(--pad) var(--space-2) var(--pad) var(--space-4);
+  border-radius: var(--radius-control);
+  color: inherit;
+  font-size: var(--text-label);
+  line-height: 1.4;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+.reader-toc a[aria-current] {
+  font-weight: 600;
+}
+
+.reader-toc a[aria-current]::before {
+  position: absolute;
+  top: calc(var(--pad) + .7em - 2.5px);
+  left: var(--space-1);
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-round);
+  background: currentColor;
+  content: "";
+}
+
+@media (pointer: coarse) {
+  .reader-toc a {
+    --pad: var(--space-3);
+  }
+}
+
+.toc-panel h2 {
+  margin: 0 0 var(--space-2) var(--space-4);
+  color: inherit;
+  font-size: var(--text-meta);
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+
+/* The rail is a zero-height sticky line in the report's row, so it never
+   changes the page's height. reader.js sets its place and how far it may
+   run: always to the end of a whole entry, never through one. */
+.toc-floating .reader-toc {
+  position: sticky;
+  top: calc(var(--bar-height) + var(--space-6));
+  z-index: 5;
+  display: block;
+  grid-area: 1 / 1;
+  align-self: start;
+  height: 0;
+  margin-top: var(--toc-lead);
+}
+
+.toc-floating .toc-panel {
+  position: absolute;
+  top: 0;
+  left: var(--toc-left);
+  width: var(--toc-width);
+  max-height: var(--toc-height, calc(100dvh - var(--bar-height) - var(--space-8)));
+  padding: 0 0 var(--space-2);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  background: var(--toc-paper);
+  color: color-mix(in srgb, var(--toc-ink) 80%, var(--toc-paper));
+  font-family: var(--toc-font);
+}
+
+/* More entries wait below: the last whole one fades, so the list never
+   ends in a sliced line. */
+.toc-floating .toc-panel.is-cut {
+  -webkit-mask-image: linear-gradient(to bottom, currentColor calc(100% - var(--space-7)), transparent);
+  mask-image: linear-gradient(to bottom, currentColor calc(100% - var(--space-7)), transparent);
+}
+
+/* Steps aside as a whole while something wider than the text passes it. */
+.toc-floating .reader-toc {
+  transition: opacity var(--duration-base) var(--ease-out), visibility 0s;
+}
+
+.toc-floating.toc-yield .reader-toc {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out), visibility 0s linear var(--duration-fast);
+}
+
+.toc-floating .toc-panel h2,
+.toc-floating .reader-toc a:hover,
+.toc-floating .reader-toc a[aria-current] {
+  color: var(--toc-ink);
+}
+
+.toc-floating .reader-toc a:hover {
+  background: color-mix(in srgb, var(--toc-ink) 6%, transparent);
+}
+
+.toc-floating .reader-toc a[aria-current]::before {
+  background: var(--toc-accent);
+}
+
+/* Beside the text the current entry is marked by its ink and dot alone: a
+   heavier weight would rewrap it, and the rail would shift as you read. */
+.toc-floating .reader-toc a[aria-current] {
+  font-weight: inherit;
+}
+
+.toc-floating .reader-toc a:focus-visible {
+  outline-color: var(--toc-accent);
+  outline-offset: -2px;
+}
+
+.toc-floating .compact-contents {
+  display: none;
+}
+
+/* The sheet drops from the bar with its entries on the grid's edge, under
+   the brand; on a phone it spans the width. */
+.contents-open .reader-toc {
+  position: fixed;
+  top: var(--bar-height);
+  left: max(0px, var(--group-inset) - var(--space-4));
+  z-index: 19;
+  display: block;
+  width: min(380px, 100%);
+  max-height: calc(100dvh - var(--bar-height) - var(--space-7));
+  padding: var(--space-4) var(--space-3) var(--space-6) 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  background: var(--cover);
+  color: var(--cover-muted);
+  box-shadow: var(--shadow-modal);
+}
+
+.is-public.contents-open .reader-toc,
+.is-custom.contents-open .reader-toc {
+  background: var(--paper);
+  color: var(--muted);
+}
+
+.contents-open .reader-toc a:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.contents-open .reader-toc :is(a:hover, a[aria-current], h2) {
+  color: var(--cover-ink);
+}
+
+.is-public.contents-open .reader-toc :is(a:hover, a[aria-current], h2),
+.is-custom.contents-open .reader-toc :is(a:hover, a[aria-current], h2) {
+  color: var(--ink);
+}
+
+.contents-open .reader-toc a[aria-current]::before {
+  background: var(--cover-focus);
+}
+
+.is-public.contents-open .reader-toc a[aria-current]::before,
+.is-custom.contents-open .reader-toc a[aria-current]::before {
+  background: var(--accent);
+}
+
+.contents-open .reader-toc a:focus-visible {
+  outline-color: var(--cover-focus);
+  outline-offset: -2px;
+}
+
+.is-public.contents-open .reader-toc a:focus-visible,
+.is-custom.contents-open .reader-toc a:focus-visible {
+  outline-color: var(--focus);
+}
+
+@media (min-width: 761px) {
+  .contents-open .reader-toc {
+    border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .toc-floating .toc-panel {
+    animation: fade-in var(--duration-base) ease-out;
+  }
+}
+
+/* The end of the page, in Cairn's frame below the report. It appears once
+   the report has its height, so it never jumps into view. */
+
+.reader-end {
+  padding-block: var(--space-7) var(--space-8);
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+}
+
+@media (scripting: enabled) {
+  .reader-end {
+    visibility: hidden;
+  }
+
+  .report-settled .reader-end {
+    visibility: visible;
+  }
+}
+
+.end-pages {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.end-page {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color var(--duration-fast) ease-out, background-color var(--duration-fast) ease-out;
+}
+
+.end-page:hover {
+  border-color: var(--button-divider);
+  background: var(--hover-bg);
+}
+
+.end-page.is-next {
+  grid-column: 2;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.end-direction {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+.end-direction .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.end-title {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: var(--text-body);
+  font-weight: 500;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.end-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.end-form {
+  display: contents;
+}
+
+.end-actions .button {
+  min-height: max(var(--control-height-sm), var(--target));
+  padding: 0 var(--space-3);
+}
+
+.end-actions .icon,
+.end-back .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.end-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target);
+  margin-left: auto;
+  color: var(--accent);
+  font-size: var(--text-label);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.end-back:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.reader-end.is-public {
+  padding-block: var(--space-6);
+}
+
+.shared-with {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+/* The keyboard shortcuts sheet wears the library's own classes (.key-sheet,
+   .key-list), so both read alike; only its note and entrance are set here. */
+
+.key-note {
+  margin: var(--space-4) 0 0;
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reader-menu:popover-open,
+  .reader-keys:popover-open {
+    animation: sheet-in var(--duration-base) var(--ease-out);
+  }
+}
+
+/* Copy failure: the link, selected, so it can be copied by hand. */
+.copy-status:not(.is-failed) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.copy-status.is-failed {
+  position: fixed;
+  top: calc(var(--bar-height) + var(--space-3));
+  right: var(--space-4);
+  z-index: 30;
+  max-width: min(420px, calc(100% - var(--space-7)));
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-menu);
+  background: var(--ink);
+  color: var(--paper);
+  font-size: var(--text-label);
+  box-shadow: var(--shadow-float);
+}
+
+.copy-address {
+  display: block;
+  margin-top: var(--space-1);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+/* Narrower than the desktop: the bar shows the current section alone, and
+   page details carry the title. */
+@media (max-width: 1000px) {
+  .compact-title.has-section .compact-page {
+    display: none;
+  }
+
+  .compact-title .compact-section {
+    color: inherit;
+    font-weight: 500;
+  }
+
+  .compact-section::before {
+    content: none;
+  }
+}
+
+/* Phones: the toolbar keeps the brand and More, and the status moves into
+   the byline; the bar gives the current section the room and opens the
+   contents from it. */
+@media (max-width: 760px) {
+  .reading-nav {
+    gap: var(--space-2);
+    min-height: 56px;
+    padding-block: var(--space-2);
+  }
+
+  .reader-cover .brand {
+    font-size: var(--text-heading);
+  }
+
+  .wide-action,
+  .access-status {
+    display: none;
+  }
+
+  .reading-actions {
+    margin-right: calc(-1 * var(--space-3));
+  }
+
+  .report-heading {
+    padding-block: var(--space-3) var(--space-6);
+  }
+
+  .report-title {
+    font-size: var(--text-title);
+    line-height: 1.16;
+  }
+
+  .report-title.is-long {
+    font-size: var(--text-heading);
+    line-height: 1.25;
+  }
+
+  .report-author {
+    margin-top: var(--space-3);
+  }
+
+  .reader-strip .report-heading {
+    padding-block: var(--space-4);
+  }
+
+  .reader-strip:not(.has-own-title) .strip-row,
+  .reader-strip:not(.has-own-title) .report-heading > .report-author {
+    margin-top: var(--space-3);
+  }
+
+  .owner-strip .report-heading {
+    padding-top: 0;
+  }
+
+  /* The byline keeps its line, the date takes the next; Copy link becomes a
+     named icon beside them. */
+  .strip-row {
+    gap: var(--space-2);
+  }
+
+  .reader-strip .byline-credit .byline-sep {
+    display: none;
+  }
+
+  .reader-strip .byline-credit time {
+    display: block;
+  }
+
+  .strip-copy {
+    min-width: max(var(--control-height-sm), var(--target));
+    padding: 0;
+  }
+
+  .strip-copy .copy-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .compact-inner {
+    gap: var(--space-2);
+  }
+
+  .compact-reader .brand > span,
+  .compact-contents,
+  .is-owner .compact-copy {
+    display: none;
+  }
+
+  .compact-actions {
+    margin-right: calc(-1 * var(--space-2));
+  }
+
+  .compact-actions button {
+    padding: 0 var(--space-2);
+  }
+
+  .reader-menu .menu-copy:not([hidden]) {
+    display: flex;
+  }
+
+  .contents-open .reader-toc {
+    left: 0;
+    width: 100%;
+    padding-left: max(0px, var(--group-inset) - var(--space-4));
+  }
+
+  .end-pages {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .end-page.is-next {
+    grid-column: 1;
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  /* One tidy column: each action a full-width row, the way back last. */
+  .end-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .end-actions .button {
+    justify-content: flex-start;
+    width: 100%;
+    padding-inline: var(--space-4);
+  }
+
+  .end-back {
+    justify-content: flex-start;
+    margin: var(--space-2) 0 0;
+    padding-inline: var(--space-4);
+  }
+}
+
+/* The narrowest phones give the date its own line in the cover too, and a
+   visitor's strip drops the portrait so the name keeps its line beside
+   Copy link. */
+@media (max-width: 380px) {
+  .strip-row .author-portrait {
+    display: none;
+  }
+
+  .byline-credit .byline-sep {
+    display: none;
+  }
+
+  .byline-credit time {
+    display: block;
+  }
+}
+
+/* Landscape phones: the cover keeps to a single short band. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .reading-nav {
+    min-height: var(--bar-height);
+    padding-block: var(--space-1);
+  }
+
+  .report-heading {
+    padding-block: var(--space-1) var(--space-3);
+  }
+
+  .report-title,
+  .report-title.is-long {
+    font-size: var(--text-heading);
+    line-height: 1.2;
+  }
+
+  .report-author {
+    margin-top: var(--space-2);
+  }
+
+  .author-portrait {
+    width: 28px;
+    height: 28px;
+  }
+
+  .report-request {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--space-3);
+    margin-top: var(--space-2);
+    padding-top: var(--space-1);
+  }
+
+  .request-label {
+    margin: 0;
+  }
+
+  .request-label .request-source,
+  .request-label .request-private {
+    display: none;
+  }
+
+  .report-request.is-clamped .request-text {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+
+  .request-toggle {
+    padding: 0;
+  }
+
+  .report-request:has(.request-toggle[aria-expanded=true]) {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .report-request:has(.request-toggle[aria-expanded=true]) .request-text {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+/* With reduced motion nothing moves: the bar, sheets, scrim, rail, menus
+   and notices change state by a short cross-fade instead of a slide. Fading
+   is not motion, and it keeps the change visible. Everything else changes
+   at once (base.css). */
+@media (prefers-reduced-motion: reduce) {
+  .compact-reader {
+    opacity: 0;
+    transform: none !important;
+    transition: opacity var(--sheet-out) linear, visibility 0s linear var(--sheet-out) !important;
+  }
+
+  .compact-reader.is-visible {
+    opacity: 1;
+    transition: opacity var(--sheet-out) linear !important;
+  }
+
+  .reader-details:not([hidden]),
+  .contents-open .reader-toc,
+  .reader-scrim:not([hidden]),
+  .toc-floating .toc-panel,
+  .reader-menu:popover-open,
+  .reader-keys:popover-open {
+    animation: fade-in var(--sheet-out) linear !important;
+  }
+}

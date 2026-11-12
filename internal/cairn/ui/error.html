@@ -1,0 +1,20 @@
+{{if .Visitor}}{{template "visitor" .}}{{else}}{{template "owner" .}}{{end}}
+
+{{- define "title" -}}{{.Title}} · Cairn{{end}}
+
+{{- /* The page's one action is the way on, so the top bar adds no second one. */ -}}
+{{- define "topbar" -}}<span class="topbar-spacer"></span>{{end}}
+
+{{- define "body-class" -}}problem-body{{end}}
+
+{{- define "main-class" -}}problem-page{{end}}
+
+{{- define "main" -}}
+<div class="problem">
+<h1>{{.Title}}</h1>
+<p>{{.Message}}</p>
+{{- if .Href}}
+<a class="button" href="{{.Href}}">{{.Action}}</a>
+{{- end}}
+</div>
+{{- end}}

@@ -1,0 +1,1134 @@
+/*
+ * Cairn's report templates: report, comparison and visual. One family with
+ * three emphases. The serif reading column is the same in all three; the
+ * templates differ in what is allowed to leave it.
+ *
+ *   report      long reading. Everything stays in the column.
+ *   comparison  tables lead: they widen up to 72rem, zebra rows, row headers.
+ *   visual      images, diagrams and charts lead: they widen up to 84rem.
+ *
+ * Colour comes only from the --report-* tokens. data-report-scheme on the
+ * root picks the colours: "dark", or "auto" to follow the device. Cairn sets
+ * it when it delivers the page to a reader in a dark theme, and the reader
+ * can change it with a cairn:scheme message. data-report-palette="violet"
+ * tints a dark report for the Futuristic theme; data-report-palette="mono"
+ * keeps a light report to ink and grey for the Minimal theme. Light is the
+ * default.
+ *
+ * Weights: headings, labels and table heads are set at 600 in the system
+ * sans, which has a true semibold. Bold in the Georgia body is 700, the only
+ * bold Georgia has; asking it for 600 renders the same face. Nothing else.
+ *
+ * Reports run in a sandboxed frame with font-src 'none', so every face is a
+ * system stack, and the frame grows to its content: nothing here may size
+ * itself from the viewport's height.
+ */
+
+:root {
+  color-scheme: light;
+  --report-paper: #ffffff;
+  --report-ink: #132b38;
+  --report-muted: #4c6270;
+  --report-rule: #d8e1e6;
+  --report-accent: #176582;
+  --report-alert: #96372f;
+  --report-code: #f3f6f8;
+  --report-tint: #eef4f7;
+  --report-mark: #fbecaa;
+  --report-shade: rgb(19 43 56 / 0.2);
+  --report-series: #2468a8, #d06a32, #2f9a78, #b88a14, #8466c4, #c94f6a;
+  --report-serif: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+  --report-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --report-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --measure: 43.5rem;
+  --gutter: clamp(1rem, 4cqi, 2rem);
+  /* Blocks wider than the column keep at least this much page either side. */
+  --wide-gutter: max(var(--gutter), 4cqi);
+}
+
+:root[data-report-scheme="dark"] {
+  color-scheme: dark;
+  --report-paper: #111b22;
+  --report-ink: #dde6ec;
+  --report-muted: #9db1be;
+  --report-rule: #2c3d49;
+  --report-accent: #7db8da;
+  --report-alert: #eb9a8c;
+  --report-code: #172530;
+  --report-tint: #172631;
+  --report-mark: #5b4a17;
+  --report-shade: rgb(0 0 0 / 0.6);
+  --report-series: #4a8cc8, #d0743c, #3a9e7c, #b98d22, #9078cf, #cf5f78;
+}
+
+/* Futuristic: indigo paper, lavender ink and violet links. Charts keep the
+   dark palette, which is checked for colour-blind separation. */
+:root[data-report-scheme="dark"][data-report-palette="violet"] {
+  --report-paper: #1a1b26;
+  --report-ink: #c0caf5;
+  --report-muted: #a9b1d6;
+  --report-rule: #343a55;
+  --report-accent: #bb9af7;
+  --report-alert: #f7768e;
+  --report-code: #16161e;
+  --report-tint: #20233a;
+  --report-mark: #4a3f73;
+}
+
+/* Minimal: ink on white, grey for what is secondary. Charts keep the light
+   series, which are checked for colour-blind separation. */
+:root[data-report-palette="mono"]:not([data-report-scheme="dark"]) {
+  --report-ink: #111111;
+  --report-muted: #5e5e5e;
+  --report-rule: #e2e2e2;
+  --report-accent: #111111;
+  --report-alert: #8a2f2a;
+  --report-code: #f6f6f6;
+  --report-tint: #f6f6f6;
+  --report-mark: #ececec;
+}
+
+/* "auto" follows the device. Keep this block identical to the dark one
+   above; render_test.go checks. */
+@media (prefers-color-scheme: dark) {
+  :root[data-report-scheme="auto"] {
+    color-scheme: dark;
+    --report-paper: #111b22;
+    --report-ink: #dde6ec;
+    --report-muted: #9db1be;
+    --report-rule: #2c3d49;
+    --report-accent: #7db8da;
+    --report-alert: #eb9a8c;
+    --report-code: #172530;
+    --report-tint: #172631;
+    --report-mark: #5b4a17;
+    --report-shade: rgb(0 0 0 / 0.6);
+    --report-series: #4a8cc8, #d0743c, #3a9e7c, #b98d22, #9078cf, #cf5f78;
+  }
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--report-paper);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  container-type: inline-size;
+  background: var(--report-paper);
+  color: var(--report-ink);
+  font: 1.125rem/1.7 var(--report-serif);
+  font-kerning: normal;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--report-accent) 24%, transparent);
+}
+
+main {
+  --wide: var(--measure);
+  --span: min(var(--wide), 100cqi - 2 * var(--wide-gutter));
+  max-width: calc(var(--measure) + 2 * var(--gutter));
+  margin: 0 auto;
+  padding: 2.5rem var(--gutter) 5rem;
+}
+
+main > :first-child,
+:root:not([data-standalone]) main > .title-echo:first-child + * {
+  margin-top: 0;
+}
+
+/* The cover above the frame already shows the page title. An opening h1 that
+   repeats it stays for screen readers, EPUB and the standalone page. */
+:root:not([data-standalone]) .title-echo {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Text */
+
+p {
+  margin: 0 0 1.1em;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+}
+
+main > p:first-child,
+main > h1:first-child + p {
+  font-size: 1.25rem;
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--report-ink);
+  font-family: var(--report-sans);
+  font-weight: 600;
+  line-height: 1.2;
+  hyphens: manual;
+  overflow-wrap: break-word;
+  text-wrap: balance;
+}
+
+h1 {
+  margin: 0 0 1.25rem;
+  font-size: clamp(2rem, 1.3rem + 3cqi, 2.75rem);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+
+h2 {
+  margin: 3rem 0 0.75rem;
+  font-size: 1.625rem;
+  letter-spacing: -0.02em;
+}
+
+h3 {
+  margin: 2.25rem 0 0.5rem;
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
+}
+
+h4 {
+  margin: 1.75rem 0 0.375rem;
+  font-size: 1.0625rem;
+}
+
+h5, h6 {
+  margin: 1.75rem 0 0.375rem;
+  color: var(--report-muted);
+  font-size: 0.875rem;
+}
+
+h5 {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+:is(h1, h2, h3, h4, h5, h6) + :is(h2, h3, h4, h5, h6) {
+  margin-top: 0.75rem;
+}
+
+a {
+  color: var(--report-accent);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+  text-underline-offset: 0.18em;
+  transition: text-decoration-color 140ms;
+}
+
+a:hover {
+  text-decoration-color: currentColor;
+}
+
+a:not([href]) {
+  color: inherit;
+  text-decoration: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--report-accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+strong, b {
+  font-weight: 700;
+}
+
+/* In the sans (headings, tables, labels) bold stays at their semibold. */
+:is(h1, h2, h3, h4, h5, h6, th, dt, summary, figcaption, caption, .callout-label) :is(strong, b) {
+  font-weight: inherit;
+}
+
+ul, ol {
+  margin: 0 0 1.1em;
+  padding-left: 1.5em;
+}
+
+li {
+  margin: 0.3em 0;
+  padding-left: 0.15em;
+  overflow-wrap: break-word;
+}
+
+li > ul, li > ol {
+  margin: 0.3em 0 0.5em;
+}
+
+li > p {
+  margin-bottom: 0.5em;
+}
+
+li::marker {
+  color: var(--report-muted);
+}
+
+ol > li::marker {
+  font-family: var(--report-sans);
+  font-size: 0.875em;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+li:has(> input[type="checkbox"]:first-child) {
+  list-style: none;
+}
+
+input[type="checkbox"] {
+  width: 1em;
+  height: 1em;
+  margin: 0 0.5em 0 -1.5em;
+  vertical-align: -0.125em;
+  accent-color: var(--report-accent);
+}
+
+dt {
+  font-family: var(--report-sans);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+dd {
+  margin: 0.25em 0 1em 1.25em;
+}
+
+blockquote {
+  margin: 1.75rem 0;
+  padding: 0 0 0 1.25rem;
+  border-left: 2px solid var(--report-rule);
+  color: var(--report-muted);
+}
+
+blockquote > :last-child, .callout > :last-child, details > :last-child, li > :last-child {
+  margin-bottom: 0;
+}
+
+hr {
+  width: min(10rem, 40%);
+  height: 1px;
+  margin: 3rem auto;
+  border: 0;
+  background: var(--report-rule);
+}
+
+abbr[title] {
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+  cursor: help;
+}
+
+mark {
+  padding: 0 0.15em;
+  border-radius: 2px;
+  background: var(--report-mark);
+  color: inherit;
+}
+
+small {
+  font-size: max(0.85em, 12px);
+}
+
+sup, sub {
+  position: relative;
+  font-size: max(0.75em, 12px);
+  line-height: 0;
+  vertical-align: baseline;
+}
+
+sup {
+  top: -0.5em;
+}
+
+sub {
+  bottom: -0.25em;
+}
+
+del, s {
+  color: var(--report-muted);
+  text-decoration-thickness: 1px;
+}
+
+kbd {
+  padding: 0.1em 0.4em;
+  border: 1px solid var(--report-rule);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--report-paper);
+  font-size: 0.8em;
+  white-space: nowrap;
+}
+
+details {
+  margin: 1.5rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--report-rule);
+  border-radius: 8px;
+}
+
+summary {
+  font-family: var(--report-sans);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+summary::marker {
+  color: var(--report-muted);
+}
+
+details[open] > summary {
+  margin-bottom: 0.75rem;
+}
+
+/* Footnotes */
+
+.footnote-ref, .footnote-backref {
+  padding: 0 0.15em;
+  font-family: var(--report-sans);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.footnotes {
+  margin-top: 3.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--report-rule);
+  color: var(--report-muted);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.footnotes > hr {
+  display: none;
+}
+
+.footnotes ol {
+  margin: 0;
+}
+
+.footnotes li {
+  margin: 0 0 0.5em;
+}
+
+.footnotes li > p {
+  margin: 0;
+}
+
+/* Callouts: GitHub-style [!NOTE] blocks, plus [!VERDICT] and [!SUMMARY]. */
+
+.callout {
+  margin: 1.75rem 0;
+  padding: 1rem 1.25rem;
+  border-radius: 10px;
+  background: var(--report-tint);
+}
+
+.callout-label {
+  margin-right: 0.5em;
+  color: var(--report-accent);
+  font-family: var(--report-sans);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.callout:is([data-kind="warning"], [data-kind="caution"]) .callout-label {
+  color: var(--report-alert);
+}
+
+.callout:is([data-kind="verdict"], [data-kind="summary"]) {
+  padding: 1.25rem 1.5rem;
+  border-radius: 14px;
+  font-size: 1.1875rem;
+  line-height: 1.6;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Images and figures */
+
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  max-height: 48rem;
+  margin: 1.5rem auto;
+  border-radius: 4px;
+}
+
+:is(td, th, li) img {
+  display: inline-block;
+  margin: 0;
+  vertical-align: middle;
+}
+
+.report-image {
+  display: block;
+}
+
+figure {
+  margin: 2rem 0;
+}
+
+figure img {
+  margin: 0 auto;
+}
+
+figcaption {
+  max-width: var(--measure);
+  margin: 0.625rem 0 0;
+  color: var(--report-muted);
+  font: 0.875rem/1.5 var(--report-sans);
+  text-wrap: pretty;
+}
+
+.figure-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  align-items: start;
+  gap: 0 1.25rem;
+  margin: 2rem 0;
+}
+
+/* Side by side, images share one row and captions the next, so captions
+   start level however tall each image is. */
+.figure-grid > figure {
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+  row-gap: 0;
+  margin: 0 0 1.25rem;
+}
+
+.figure-grid > figure > :first-child {
+  align-self: end;
+}
+
+/* Tables. The inner box scrolls. While more of the table lies to the right,
+   its far edge fades into the page; once scrolled, the first column casts a
+   shadow over the columns passing under it. */
+
+@property --more-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+.table-frame {
+  position: relative;
+  margin: 2rem 0;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-timeline: --cairn-table x;
+  scrollbar-color: var(--report-rule) transparent;
+  scrollbar-width: thin;
+  -webkit-mask-image: linear-gradient(to left, transparent, #000 var(--more-end));
+  mask-image: linear-gradient(to left, transparent, #000 var(--more-end));
+}
+
+.table-scroll:focus-visible {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+table {
+  width: auto;
+  min-width: min(100%, 24rem);
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--report-ink);
+  font: 0.9375rem/1.5 var(--report-sans);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+table:has(tr > :nth-child(4)) {
+  width: 100%;
+}
+
+caption {
+  padding: 0 0 0.625rem;
+  caption-side: top;
+  color: var(--report-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+th, td {
+  padding: 0.625rem 0.875rem;
+  border-bottom: 1px solid var(--report-rule);
+  overflow-wrap: break-word;
+  text-align: left;
+  vertical-align: top;
+}
+
+/* Columns are sorted by their longest cell when the page is rendered: short
+   and numeric ones take only the room their values need and never wrap (their
+   headings may), long ones keep a readable width, the rest wrap evenly. */
+td:not(.num, .short, .long) {
+  min-width: 6em;
+}
+
+:is(th, td).short {
+  white-space: nowrap;
+}
+
+:is(th, td):is(.num, .short, [align="right"]) {
+  width: 1%;
+}
+
+thead th:is(.num, .short, [align="right"]) {
+  min-width: 7em;
+  white-space: normal;
+}
+
+thead th {
+  text-wrap: balance;
+}
+
+/* "Wi-Fi" and "3-pack" stay whole when a heading wraps. */
+.nobr {
+  white-space: nowrap;
+}
+
+td.long {
+  min-width: 14em;
+}
+
+/* The first column names each row: wide enough that a name takes two lines,
+   not four, unless it is short. */
+:is(th, td):first-child:not(.num, .short) {
+  min-width: min(9em, 38cqi);
+}
+
+thead th {
+  border-bottom-color: var(--report-muted);
+  font-weight: 600;
+  vertical-align: bottom;
+}
+
+tbody th {
+  font-weight: 600;
+}
+
+:is(th, td):first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  max-width: min(14rem, 45cqi);
+  padding-left: 0;
+  background: var(--report-paper);
+}
+
+:is(th, td):last-child {
+  padding-right: 0;
+}
+
+:is(th, td).num, :is(th, td)[align="right"] {
+  text-align: right;
+  white-space: nowrap;
+}
+
+:is(th, td)[align="center"] {
+  text-align: center;
+}
+
+.table-frame[data-more~="end"] > .table-scroll {
+  --more-end: 2rem;
+}
+
+.table-frame[data-more~="start"] :is(th, td):first-child {
+  box-shadow: 8px 0 8px -8px var(--report-shade);
+}
+
+@supports (animation-timeline: scroll()) {
+  .table-scroll {
+    animation: cairn-more-end linear both;
+    animation-timeline: --cairn-table;
+  }
+
+  .table-scroll :is(th, td):first-child {
+    animation: cairn-more-start linear both;
+    animation-range: 0 2rem;
+    animation-timeline: --cairn-table;
+  }
+}
+
+@keyframes cairn-more-end {
+  0%, 94% { --more-end: 2rem; }
+  100% { --more-end: 0px; }
+}
+
+@keyframes cairn-more-start {
+  from { box-shadow: none; }
+  to { box-shadow: 8px 0 8px -8px var(--report-shade); }
+}
+
+/* Header rows pin below the reader's bar while a tall table scrolls past. */
+table[data-pinned] thead th {
+  z-index: 2;
+  background: var(--report-paper);
+  box-shadow: 0 8px 8px -8px var(--report-shade);
+  transform: translateY(var(--pin, 0px));
+}
+
+table[data-pinned] thead th:first-child {
+  z-index: 3;
+}
+
+/* Code */
+
+code, kbd, samp, pre {
+  font-family: var(--report-mono);
+  font-variant-ligatures: none;
+}
+
+:not(pre) > code {
+  padding: 0.12em 0.32em;
+  border-radius: 4px;
+  background: var(--report-code);
+  font-size: 0.84em;
+  overflow-wrap: break-word;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* Edge shadows show only while there is more to scroll: the paper-coloured
+   covers travel with the content and hide them at either end. Each cover is
+   solid across the whole 0.75rem shadow, so no sliver of it shows as a
+   hairline at a block's edge. */
+pre, .diagram-scroll {
+  --surface: var(--report-code);
+  background:
+    linear-gradient(to right, var(--surface) 0.75rem, transparent) left center / 2rem 100% no-repeat local,
+    linear-gradient(to left, var(--surface) 0.75rem, transparent) right center / 2rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, var(--report-shade), transparent) left center / 0.75rem 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--report-shade), transparent) right center / 0.75rem 100% no-repeat scroll,
+    var(--surface);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-color: var(--report-rule) transparent;
+  scrollbar-width: thin;
+}
+
+pre {
+  margin: 1.75rem 0;
+  padding: 0.875rem 1rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  tab-size: 4;
+}
+
+pre code {
+  font-size: inherit;
+}
+
+.code-block {
+  margin: 1.75rem 0;
+  border-radius: 8px;
+  background: var(--report-code);
+}
+
+.code-block[data-lang]::before, pre:has(> code:is(.language-mermaid, .language-echarts))::before {
+  content: attr(data-lang);
+  display: block;
+  padding: 0.75rem 1rem 0;
+  color: var(--report-muted);
+  font: 600 0.75rem/1 var(--report-sans);
+  letter-spacing: 0.04em;
+}
+
+.code-block > pre {
+  margin: 0;
+}
+
+.code-block[data-lang] > pre {
+  padding-top: 0.5rem;
+}
+
+.code-block[data-wrap] > pre {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* Diagram and chart sources wait here for the runtime, or stay for readers
+   without JavaScript. */
+pre:has(> code.language-mermaid)::before {
+  content: "Diagram source";
+  padding: 0 0 0.75rem;
+}
+
+pre:has(> code.language-echarts)::before {
+  content: "Chart data";
+  padding: 0 0 0.75rem;
+}
+
+pre:has(> code.language-echarts) {
+  height: clamp(15rem, 56cqi, 27.5rem);
+  overflow: auto;
+}
+
+/* Diagrams and charts */
+
+.diagram, .chart {
+  margin: 2rem 0;
+}
+
+.diagram-scroll {
+  --surface: var(--report-paper);
+  padding: 0.5rem 0;
+}
+
+.diagram svg {
+  display: block;
+  height: auto;
+  margin: 0 auto;
+}
+
+.diagram-hint, .diagram-note {
+  margin: 0.5rem 0 0;
+  color: var(--report-muted);
+  font: 0.8125rem/1.45 var(--report-sans);
+}
+
+.diagram-hint {
+  display: none;
+}
+
+.diagram[data-overflow] .diagram-hint {
+  display: block;
+}
+
+.diagram-failed .diagram-note {
+  margin: 0 0 0.5rem;
+}
+
+.diagram-failed pre {
+  margin: 0;
+}
+
+.chart-canvas {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Templates */
+
+/* Comparisons may use the whole width, so the deciding columns stay in view. */
+main[data-template="comparison"] {
+  --wide: 120rem;
+}
+
+main[data-template="visual"] {
+  --wide: 84rem;
+}
+
+[data-template="comparison"] .table-frame,
+[data-template="visual"] :is(figure, .figure-grid) {
+  position: relative;
+  left: 50%;
+  width: max-content;
+  min-width: 100%;
+  max-width: var(--span);
+  translate: -50% 0;
+}
+
+/* A diagram wider than the column may widen past it, centred, in every
+   template: up to 54rem in report and comparison, the full span in visual. */
+.diagram {
+  position: relative;
+  left: 50%;
+  width: max-content;
+  min-width: 100%;
+  max-width: min(54rem, 100cqi - 2 * var(--gutter));
+  translate: -50% 0;
+}
+
+[data-template="visual"] :is(.diagram, .chart) {
+  position: relative;
+  left: 50%;
+  width: var(--span);
+  min-width: 0;
+  max-width: none;
+  translate: -50% 0;
+}
+
+.diagram.diagram-failed {
+  left: auto;
+  width: auto;
+  max-width: none;
+  translate: none;
+}
+
+[data-template="visual"] .figure-grid > figure {
+  left: auto;
+  width: auto;
+  min-width: 0;
+  translate: none;
+}
+
+[data-template="visual"] figure {
+  margin-block: 2.5rem;
+}
+
+[data-template="visual"] figcaption {
+  margin-inline: auto;
+  text-align: center;
+}
+
+[data-template="comparison"] .table-frame {
+  margin-block: 2.5rem;
+}
+
+[data-template="comparison"] :is(th, td) {
+  padding: 0.75rem 1rem;
+  border-bottom: 0;
+}
+
+[data-template="comparison"] thead th {
+  border-bottom: 1px solid var(--report-muted);
+}
+
+[data-template="comparison"] tbody tr:nth-child(even) > * {
+  background: var(--report-tint);
+}
+
+[data-template="comparison"] tbody tr:last-child > * {
+  border-bottom: 1px solid var(--report-rule);
+}
+
+[data-template="comparison"] :is(th, td):first-child {
+  padding-left: 0.75rem;
+}
+
+[data-template="comparison"] :is(th, td):last-child {
+  padding-right: 0.75rem;
+}
+
+/* A heading sits close above the table, figure, code or note it introduces. */
+main[data-template] :is(h2, h3, h4, h5, h6) + :is(.table-frame, figure, .figure-grid, .code-block, pre, .callout, .diagram, .chart, blockquote, details) {
+  margin-top: 1rem;
+}
+
+/* A diagram waiting to be drawn keeps its room and nothing else. */
+.diagram[data-pending] .diagram-scroll {
+  background: none;
+}
+
+/* Phones */
+
+@media (max-width: 37.5rem) {
+  body {
+    font-size: 1.0625rem;
+    line-height: 1.65;
+  }
+
+  main {
+    padding-top: 1.75rem;
+    padding-bottom: 3.5rem;
+  }
+
+  main > p:first-child,
+  main > h1:first-child + p {
+    font-size: 1.125rem;
+  }
+
+  h2 {
+    margin-top: 2.5rem;
+    font-size: 1.375rem;
+  }
+
+  h3 {
+    margin-top: 2rem;
+    font-size: 1.125rem;
+  }
+
+  table {
+    font-size: 0.875rem;
+  }
+
+  td.long {
+    min-width: 11em;
+  }
+
+  /* Comparisons give their text columns more room, so rows are not kept
+     tall by a cell wrapping out of sight. */
+  [data-template="comparison"] td.long {
+    min-width: 16em;
+  }
+
+  [data-template="comparison"] td:not(.num, .short, .long) {
+    min-width: 8em;
+  }
+
+  th, td,
+  [data-template="comparison"] :is(th, td) {
+    padding: 0.5rem 0.625rem;
+  }
+
+  [data-template="comparison"] :is(th, td):first-child {
+    padding-left: 0.5rem;
+  }
+
+  [data-template="comparison"] :is(th, td):last-child {
+    padding-right: 0.5rem;
+  }
+
+  /* On a phone a short or numeric column is as wide as its longest word or
+     value, and the first column gives up a little room, so a four-column
+     table fits the screen whole rather than cutting its last heading. */
+  thead th:is(.num, .short, [align="right"]),
+  td[align="right"]:not(.long) {
+    min-width: 0;
+  }
+
+  :is(th, td):first-child:not(.num, .short) {
+    min-width: min(9em, 30cqi);
+  }
+
+  pre {
+    font-size: 0.8125rem;
+  }
+
+  .callout:is([data-kind="verdict"], [data-kind="summary"]) {
+    padding: 1rem 1.125rem;
+    font-size: 1.0625rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
+
+@media print {
+  :root, :root[data-report-scheme], :root[data-report-palette], :root[data-report-scheme][data-report-palette], :root[data-report-palette="mono"]:not([data-report-scheme="dark"]) {
+    color-scheme: light;
+    --report-paper: #ffffff;
+    --report-ink: #000000;
+    --report-muted: #3d4a52;
+    --report-rule: #b9c4ca;
+    --report-accent: #0f4e66;
+    --report-code: #f3f6f8;
+    --report-tint: #eef2f4;
+    --report-shade: transparent;
+  }
+
+  body {
+    font-size: 11pt;
+    line-height: 1.5;
+  }
+
+  main {
+    max-width: none;
+    padding: 0;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    break-after: avoid;
+    break-inside: avoid;
+  }
+
+  p, li {
+    orphans: 3;
+    widows: 3;
+  }
+
+  figure, img, pre, tr, .callout, .chart, .diagram, details {
+    break-inside: avoid;
+  }
+
+  .table-scroll, pre, .diagram-scroll {
+    overflow: visible;
+  }
+
+  pre {
+    background: var(--report-code);
+  }
+
+  .diagram-scroll {
+    background: none;
+  }
+
+  .code-block > pre, pre {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  .diagram-hint {
+    display: none;
+  }
+
+  .diagram[data-pending] .diagram-scroll {
+    display: none;
+  }
+
+  .diagram[data-pending] > .diagram-source[hidden] {
+    display: block;
+  }
+
+  .table-scroll {
+    -webkit-mask-image: none;
+    mask-image: none;
+    animation: none;
+  }
+
+  :is(th, td) {
+    position: static;
+    box-shadow: none !important;
+    transform: none !important;
+    animation: none !important;
+  }
+
+  td:is(.long, :not(.num, .short, .long)) {
+    min-width: 0;
+  }
+
+  :is(.table-frame, figure, .figure-grid, .diagram, .chart) {
+    left: auto;
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    translate: none;
+  }
+
+  a {
+    color: inherit;
+  }
+
+  main a[href^="http"]:not(.report-image)::after {
+    content: " (" attr(href) ")";
+    color: var(--report-muted);
+    font-size: 0.85em;
+    overflow-wrap: anywhere;
+  }
+
+  @page {
+    margin: 18mm 16mm;
+  }
+}

@@ -2,22 +2,22 @@
 package cairn
 
 import (
-	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"mime"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -25,24 +25,57 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-type Config struct{ DataDir, PublisherToken, PublicBaseURL, Owner string }
+type Config struct {
+	DataDir, PublisherToken, PublicBaseURL, Owner string
+	// PrivateBaseURL is the origin people and agents use to reach the
+	// private library, such as https://cairn.example.ts.net. The API builds
+	// full links from it, never from a request's Host header. Optional.
+	PrivateBaseURL string
+	// AllowedHosts are extra names the private listener answers to, beyond
+	// IP addresses, localhost, single-label names, names under .ts.net and
+	// the private base URL's host. Any other Host header is refused, so a
+	// website cannot reach the library by pointing its own name at it.
+	AllowedHosts []string
+	// Version is reported by the private /healthz.
+	Version string
+	// Logger receives one line per publication, refused credential and
+	// server error. Nil discards them.
+	Logger *slog.Logger
+	Mail   MailConfig
+}
 
 // APIVersion is served by the private GET /api index.
-const APIVersion = "1"
+const APIVersion = "1.1"
 
 type Server struct {
-	shareKey       []byte
-	authMu         sync.Mutex
-	failedUnlock   map[string]time.Time
-	csrf           string
+	shareKey []byte
+	// unlocks slows password guessing on shared pages (password.go).
+	unlocks *unlockLimiter
+	// flashes name pages the owner just deleted (library.go).
+	flashes        *deletedFlashes
+	csrf           []byte
 	cleanupPending bool
 	lock           *os.File
 	cfg            Config
 	db             *sql.DB
 	mu             sync.RWMutex
+	// The background rebuild of excerpts and the search index (search.go).
+	indexStop, indexDone chan struct{}
+	indexing             atomic.Bool
+	// Idempotency keys whose first request is still running (api.go), and
+	// the hourly purge of expired replies.
+	idemMu               sync.Mutex
+	idemHeld             map[string]bool
+	purgeStop, purgeDone chan struct{}
+	log                  *slog.Logger
+	// The Host names each listener answers (hosts.go).
+	privateHosts, publicHosts *hostPolicy
 }
 type publication struct {
-	Share           bool              `json:"-"`
+	Share bool `json:"-"`
+	// OwnerWritten marks a page the owner wrote or imported in Cairn. It may
+	// have no original request; the API always needs one.
+	OwnerWritten    bool              `json:"-"`
 	PublicSlug      string            `json:"-"`
 	Source          *sourceFile       `json:"-"`
 	Capabilities    []string          `json:"capabilities"`
@@ -72,14 +105,26 @@ func Open(cfg Config) (*Server, error) {
 		return nil, fmt.Errorf("owner name must fit 100 UTF-8 bytes")
 	}
 
-	if cfg.PublicBaseURL != "" {
-		u, err := url.Parse(cfg.PublicBaseURL)
-		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
-			return nil, fmt.Errorf("public base URL must be an HTTP(S) origin")
-		}
+	if err := cfg.Mail.validate(); err != nil {
+		return nil, err
+	}
+	if cfg.PublicBaseURL != "" && !validOrigin(cfg.PublicBaseURL) {
+		return nil, fmt.Errorf("public base URL must be an HTTP(S) origin")
+	}
+	if cfg.PrivateBaseURL != "" && !validOrigin(cfg.PrivateBaseURL) {
+		return nil, fmt.Errorf("private base URL must be an HTTP(S) origin")
+	}
+	if err := checkAllowedHosts(cfg.AllowedHosts); err != nil {
+		return nil, err
+	}
+	if cfg.Version == "" {
+		cfg.Version = "dev"
+	}
+	if cfg.Logger == nil {
+		cfg.Logger = slog.New(slog.DiscardHandler)
 	}
 	if len(cfg.PublisherToken) < 32 {
-		return nil, fmt.Errorf("publisher token must have at least 32 characters")
+		return nil, fmt.Errorf("installation token must have at least 32 characters")
 	}
 	if cfg.DataDir == "" {
 		return nil, fmt.Errorf("data directory is required")
@@ -114,48 +159,48 @@ func Open(cfg Config) (*Server, error) {
  share_enabled INTEGER NOT NULL DEFAULT 0, public_slug TEXT UNIQUE, password_hash TEXT);
  CREATE TABLE IF NOT EXISTS preferences (id INTEGER PRIMARY KEY CHECK(id=1),author TEXT NOT NULL,template TEXT NOT NULL,link_length INTEGER NOT NULL CHECK(link_length BETWEEN 3 AND 7));
 
- CREATE TABLE IF NOT EXISTS theme_preferences (id INTEGER PRIMARY KEY CHECK(id=1),admin TEXT NOT NULL DEFAULT 'cairn',reader TEXT NOT NULL DEFAULT 'cairn',public TEXT NOT NULL DEFAULT 'cairn');
+ CREATE TABLE IF NOT EXISTS theme_preferences (id INTEGER PRIMARY KEY CHECK(id=1),admin TEXT NOT NULL DEFAULT 'system',reader TEXT NOT NULL DEFAULT '',public TEXT NOT NULL DEFAULT '',version INTEGER NOT NULL DEFAULT 1);
  INSERT OR IGNORE INTO theme_preferences(id) VALUES(1);
+ CREATE TABLE IF NOT EXISTS kindle_preferences (id INTEGER PRIMARY KEY CHECK(id=1),address TEXT NOT NULL DEFAULT '');
+ INSERT OR IGNORE INTO kindle_preferences(id) VALUES(1);
  CREATE TABLE IF NOT EXISTS agent_keys (name TEXT PRIMARY KEY, digest BLOB UNIQUE, created_at TEXT NOT NULL, last_used TEXT NOT NULL DEFAULT '');
  CREATE TABLE IF NOT EXISTS author_profiles (name TEXT PRIMARY KEY,photo BLOB NOT NULL);`)
 	if err != nil {
 		db.Close()
 		return nil, err
 	}
-	if _, err := db.Exec(`INSERT OR IGNORE INTO preferences VALUES(1,?,'report',3)`, cfg.Owner); err != nil {
+	if _, err := db.Exec(`INSERT OR IGNORE INTO preferences(id,author,template,link_length) VALUES(1,?,'report',3)`, cfg.Owner); err != nil {
 		db.Close()
 		return nil, err
 	}
-	for _, column := range []string{"request_summary", "request_source"} {
-		if _, err := db.Exec("SELECT " + column + " FROM pages LIMIT 0"); err != nil {
-			if _, err := db.Exec("ALTER TABLE pages ADD COLUMN " + column + " TEXT NOT NULL DEFAULT ''"); err != nil {
-				db.Close()
-				return nil, err
-			}
-		}
+	if err := migratePages(db); err != nil {
+		db.Close()
+		return nil, err
 	}
 	if err := migrateLinkPreferences(db); err != nil {
 		db.Close()
 		return nil, err
 	}
-	if _, err := db.Exec(`SELECT preview FROM pages LIMIT 0`); err != nil {
-		if _, err = db.Exec(`ALTER TABLE pages ADD COLUMN preview TEXT NOT NULL DEFAULT ''`); err != nil {
-			db.Close()
-			return nil, err
-		}
+	if err := migrateShortcutPreference(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := migrateThemes(db); err != nil {
+		db.Close()
+		return nil, err
 	}
 	if err := os.Chmod(filepath.Join(cfg.DataDir, "cairn.sqlite"), 0600); err != nil {
 		db.Close()
 		return nil, err
 	}
-	server := &Server{cfg: cfg, db: db, lock: lock, csrf: randomID(), failedUnlock: map[string]time.Time{}}
-	if _, err := db.Exec(`SELECT share_revision FROM pages LIMIT 0`); err != nil {
-		if _, err = db.Exec(`ALTER TABLE pages ADD COLUMN share_revision INTEGER NOT NULL DEFAULT 0`); err != nil {
-			db.Close()
-			return nil, err
-		}
-	}
+	server := &Server{cfg: cfg, db: db, lock: lock, unlocks: newUnlockLimiter(), flashes: &deletedFlashes{items: map[string]deletedFlash{}}, idemHeld: map[string]bool{}, log: cfg.Logger}
+	server.privateHosts = newHostPolicy(true, []string{cfg.PrivateBaseURL}, cfg.AllowedHosts)
+	server.publicHosts = newHostPolicy(false, []string{cfg.PublicBaseURL}, nil)
 	if err := server.loadShareKey(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := server.loadFormKey(); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -163,14 +208,27 @@ func Open(cfg Config) (*Server, error) {
 		db.Close()
 		return nil, err
 	}
-	if err := server.backfillPreviews(); err != nil {
+	if err := migrateLibrary(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := migrateAPI(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := server.purgeReplies(); err != nil {
 		db.Close()
 		return nil, err
 	}
 	opened = true
+	server.startIndexing()
+	server.startPurging()
+	go compressRuntime()
 	return server, nil
 }
 func (s *Server) Close() error {
+	s.stopIndexing()
+	s.stopPurging()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	err := s.db.Close()
@@ -186,17 +244,38 @@ func randomID() string {
 	return hex.EncodeToString(b[:])
 }
 
+// validOrigin reports whether u is an http or https origin with no path,
+// query, fragment or user name.
+func validOrigin(u string) bool {
+	parsed, err := url.Parse(u)
+	return err == nil && parsed.Host != "" && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.User == nil && parsed.RawQuery == "" && !parsed.ForceQuery && parsed.Fragment == "" && (parsed.Path == "" || parsed.Path == "/")
+}
+
+// ServeHTTP serves the private listener, compressing text responses and
+// logging publications, refused credentials and server errors.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !safeHost.MatchString(r.Host) {
-		http.Error(w, "invalid host", 400)
+	s.logRequests(w, r, "private", func(w http.ResponseWriter, r *http.Request) { compressResponses(w, r, s.serve) })
+}
+
+func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
+	if !s.privateHosts.allows(r.Host) {
+		s.refuseHost(w, r, false)
 		return
 	}
+	r = withHostPolicy(r, s.privateHosts)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	if strings.HasPrefix(r.URL.Path, "/_runtime/") {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		runtimeHandler.ServeHTTP(w, r)
+		serveRuntimeFile(w, r, s.notFound)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/_ui/") {
+		serveUI(w, r, s.notFound)
+		return
+	}
+	if r.URL.Path == "/healthz" {
+		s.health(w, r, false)
 		return
 	}
 	if r.URL.Path == "/settings" {
@@ -207,6 +286,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.manage(w, r)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path, "/edit/") {
+		s.editPage(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/_library/") {
+		s.libraryAction(w, r)
+		return
+	}
 	if r.URL.Path == "/new" {
 		s.newPage(w, r)
 		return
@@ -215,24 +302,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.importPage(w, r)
 		return
 	}
-	if (r.URL.Path == "/api/pages" && r.Method == http.MethodPost) || (strings.HasPrefix(r.URL.Path, "/api/pages/") && r.Method == http.MethodPut) {
-		s.publish(w, r)
-		return
-	}
-	if r.URL.Path == "/api" {
-		s.apiIndex(w, r)
-		return
-	}
-	if strings.HasPrefix(r.URL.Path, "/api/") {
-		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost && r.Method != http.MethodPut {
-			writeAPIError(w, http.StatusMethodNotAllowed, ErrMethodNotAllowed, "method not allowed", false)
-		} else {
-			writeAPIError(w, http.StatusNotFound, ErrNotFound, "no such API route", false)
-		}
+	if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") {
+		s.api(w, r)
 		return
 	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		http.Error(w, "method not allowed", 405)
+		s.methodNotAllowed(w, "GET, HEAD")
 		return
 	}
 	s.mu.RLock()
@@ -243,23 +318,23 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(r.URL.EscapedPath(), "%") {
-		http.NotFound(w, r)
+		s.notFound(w, r)
 		return
 	}
 	slug := strings.TrimPrefix(r.URL.Path, "/")
 	if strings.HasPrefix(slug, "_assets/") {
 		parts := strings.Split(slug, "/")
 		if len(parts) != 3 || !validSlug(parts[1]) || !assetName.MatchString(parts[2]) {
-			http.NotFound(w, r)
+			s.notFound(w, r)
 			return
 		}
 		p, err := s.getPage(parts[1])
 		if err != nil {
-			http.NotFound(w, r)
+			s.notFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
-		http.ServeFile(w, r, filepath.Join(s.cfg.DataDir, "objects", p.Object, "assets", parts[2]))
+		serveObjectFile(w, r, filepath.Join(s.cfg.DataDir, "objects", p.Object, "assets", parts[2]), s.notFound)
 		return
 	}
 	content := strings.HasPrefix(slug, "_content/")
@@ -267,26 +342,26 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		slug = strings.TrimPrefix(slug, "_content/")
 	}
 	if !validSlug(slug) {
-		http.NotFound(w, r)
+		s.notFound(w, r)
 		return
 	}
 	p, err := s.getPage(slug)
 	if err != nil {
-		http.NotFound(w, r)
+		s.notFound(w, r)
 		return
 	}
 	if r.URL.Query().Get("download") == "1" {
-		s.downloadSource(w, r, p)
+		s.downloadSource(w, r, p, s.notFound)
 		return
 	}
 	if content && r.URL.Query().Has("asset") {
 		name := r.URL.Query().Get("asset")
 		if !assetName.MatchString(name) {
-			http.NotFound(w, r)
+			s.notFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
-		http.ServeFile(w, r, filepath.Join(s.cfg.DataDir, "objects", p.Object, "assets", name))
+		serveObjectFile(w, r, filepath.Join(s.cfg.DataDir, "objects", p.Object, "assets", name), s.notFound)
 		return
 	}
 	if content {
@@ -294,11 +369,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", reportPolicy(r.Host, p.Slug))
 		data, err := os.ReadFile(filepath.Join(s.cfg.DataDir, "objects", p.Object, "page.html"))
 		if err != nil {
-			http.NotFound(w, r)
+			s.notFound(w, r)
 			return
 		}
-		_, _ = w.Write([]byte(reportDocument(string(data))))
+		if opensPage(r, true) {
+			s.markOpened(p.ID)
+		}
+		_, _ = w.Write([]byte(reportDocument(reportSchemeOf(r).apply(fileCardFor(string(data), true)))))
 		return
+	}
+	if opensPage(r, false) {
+		s.markOpened(p.ID)
 	}
 	s.ownerReader(w, r, p)
 }
@@ -310,94 +391,52 @@ func (s *Server) getPage(slug string) (savedPage, error) {
 	}
 	return p, err
 }
-func (s *Server) publish(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Origin") != "" || (r.Header.Get("Sec-Fetch-Site") != "" && r.Header.Get("Sec-Fetch-Site") != "none") {
-		writeAPIError(w, http.StatusForbidden, ErrBrowserOriginForbidden, "browser publication is not permitted", false)
-		return
-	}
-	author, authenticated := s.publisherIdentity(r)
-	if !authenticated {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="cairn"`)
-		writeAPIError(w, http.StatusUnauthorized, ErrAuthenticationRequired, "publisher credential required", false)
-		return
-	}
-	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || media != "application/json" {
-		writeAPIError(w, http.StatusUnsupportedMediaType, ErrUnsupportedMediaType, "application/json required", false)
-		return
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 16<<20)
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	var in publication
-	if err := decoder.Decode(&in); err != nil {
-		if isPayloadTooLarge(err) {
-			writeAPIError(w, http.StatusRequestEntityTooLarge, ErrPayloadTooLarge, "publication exceeds the 16 MiB request limit", false)
-		} else {
-			writeAPIError(w, http.StatusBadRequest, ErrInvalidJSON, "invalid publication JSON", false)
-		}
-		return
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		if isPayloadTooLarge(err) {
-			writeAPIError(w, http.StatusRequestEntityTooLarge, ErrPayloadTooLarge, "publication exceeds the 16 MiB request limit", false)
-		} else {
-			writeAPIError(w, http.StatusBadRequest, ErrInvalidJSON, "expected one publication", false)
-		}
-		return
-	}
-	if author != "" {
-		in.Agent = author
-		r = r.WithContext(context.WithValue(r.Context(), publisherAuthorKey{}, author))
-	}
-	s.savePublication(w, r, in)
-}
+
+// savePublication checks, stores and answers one publication. The API, the
+// editor and import all save through it, so they share every rule.
 func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publication) {
-	var err error
-	if err := preparePublication(&in); err != nil {
-		writeAPIError(w, http.StatusBadRequest, ErrValidationFailed, err.Error(), false)
+	ctx := publishContextOf(r)
+	if ctx == nil {
+		ctx = &publishContext{}
+	}
+	problems, rendered := preparePage(&in)
+	if len(problems) > 0 {
+		writeAPIProblems(w, http.StatusBadRequest, ErrValidationFailed, problems)
 		return
 	}
-	if err := addRuntime(&in); err != nil {
-		writeAPIError(w, http.StatusBadRequest, ErrValidationFailed, err.Error(), false)
-		return
-	}
-	if err := validatePublication(in); err != nil {
-		writeAPIError(w, http.StatusBadRequest, ErrValidationFailed, err.Error(), false)
-		return
-	}
+	warnings := append(ctx.warnings, renderWarnings(rendered)...)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cleanupPending {
 		if err := s.removeUnreferencedObjects(); err != nil {
-			writeAPIError(w, http.StatusServiceUnavailable, ErrCleanupPending, "pending storage cleanup failed; check data-directory permissions", true)
+			failRequest(r, err)
+			writeAPIError(w, http.StatusServiceUnavailable, ErrCleanupPending, "Cairn could not clear old files from its storage. The owner needs to check the data directory's permissions; try again after that.", true)
 			return
 		}
 		s.cleanupPending = false
 	}
 	replace := r.Method == http.MethodPut
 	var previous savedPage
+	var err error
 	if replace {
 		slug := strings.TrimPrefix(r.URL.Path, "/api/pages/")
 		if !validSlug(slug) {
-			writeAPIError(w, http.StatusNotFound, ErrNotFound, "no such page", false)
+			noPage(w, slug, true)
 			return
 		}
 		previous, err = s.getPage(slug)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				writeAPIError(w, http.StatusNotFound, ErrNotFound, "no such page", false)
-			} else {
-				writeAPIError(w, http.StatusInternalServerError, ErrStorageUnavailable, "storage unavailable", true)
-			}
+		if err != nil && err != sql.ErrNoRows {
+			failRequest(r, err)
+			writeAPIError(w, http.StatusInternalServerError, ErrStorageUnavailable, "Cairn's storage did not answer. Try again in a moment.", true)
 			return
 		}
-		if author, _ := r.Context().Value(publisherAuthorKey{}).(string); author != "" && previous.Agent != author {
-			writeAPIError(w, http.StatusForbidden, ErrForbidden, "this key can only replace its own author’s pages", false)
+		// Another author's page answers as if it were missing.
+		if err == sql.ErrNoRows || !ctx.cred.reaches(previous.Agent) {
+			noPage(w, slug, true)
 			return
 		}
 		if in.Slug != "" && in.Slug != slug {
-			writeAPIErrorField(w, http.StatusBadRequest, ErrValidationFailed, "slug", "replacement cannot change slug", false)
+			writeAPIProblems(w, http.StatusBadRequest, ErrValidationFailed, []FieldError{{Code: FieldInvalidValue, Field: "slug", Message: "slug cannot change when replacing a page. Leave it out, or send " + strconv.Quote(slug) + ".", Actual: clip(in.Slug, 70)}})
 			return
 		}
 		in.Slug = slug
@@ -405,17 +444,22 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 		if in.Slug == "" {
 			in.Slug, err = s.randomSlug()
 			if err != nil {
-				writeAPIError(w, http.StatusInternalServerError, ErrLinkAllocationFailed, "could not create a link", true)
+				failRequest(r, err)
+				writeAPIError(w, http.StatusInternalServerError, ErrLinkAllocationFailed, "Cairn could not choose a free address. Try again.", true)
 				return
 			}
 		}
-		taken, lookupErr := s.slugTaken(in.Slug)
+		existing, lookupErr := s.slugHolder(in.Slug)
 		if lookupErr != nil {
-			writeAPIError(w, http.StatusInternalServerError, ErrStorageUnavailable, "storage unavailable", true)
+			failRequest(r, lookupErr)
+			writeAPIError(w, http.StatusInternalServerError, ErrStorageUnavailable, "Cairn's storage did not answer. Try again in a moment.", true)
 			return
 		}
-		if taken {
-			writeAPIErrorField(w, http.StatusConflict, ErrSlugConflict, "slug", "slug already exists; use explicit replacement", false)
+		if existing != "" {
+			// The same words whether or not the case matches, and never the
+			// other page's slug: it may be another author's.
+			message := "slug " + strconv.Quote(in.Slug) + " is taken. Slugs that differ only in letter case count as the same. Leave slug out and Cairn chooses a free one; replace a page only when the owner asks."
+			writeAPIErrorBody(w, http.StatusConflict, APIError{Code: ErrSlugConflict, Message: message, Field: "slug", Errors: []FieldError{{Code: FieldSlugTaken, Field: "slug", Message: message, Actual: in.Slug}}})
 			return
 		}
 	}
@@ -439,9 +483,10 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 	}
 	id := previous.ID
 	created := previous.CreatedAt
+	now := time.Now().UTC().Format(time.RFC3339)
 	if !replace {
 		id = randomID()
-		created = time.Now().UTC().Format(time.RFC3339)
+		created = now
 	}
 	if replace {
 		if in.RequestSummary == "" {
@@ -451,29 +496,73 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 			in.RequestSource = previous.RequestSource
 		}
 	}
+	preview, body := pageText(in.HTML, in.Title)
+	sourceName := ""
+	if in.Source != nil {
+		sourceName = in.Source.Name
+	}
 	object, err := s.writeObject(in)
 	if err != nil {
-		writeAPIError(w, http.StatusInternalServerError, ErrStorageUnavailable, "storage unavailable", true)
+		failRequest(r, err)
+		writeAPIError(w, http.StatusInternalServerError, ErrStorageUnavailable, "Cairn could not write the page to its storage. Try again in a moment.", true)
 		return
 	}
-	if replace {
-		_, err = s.db.Exec(`UPDATE pages SET title=?,agent=?,original_request=?,object=?,preview=?,request_summary=?,request_source=? WHERE id=?`, in.Title, in.Agent, in.OriginalRequest, object, previewText(in.HTML), in.RequestSummary, in.RequestSource, id)
-	} else {
-		_, err = s.db.Exec(`INSERT INTO pages (id,slug,title,agent,original_request,created_at,object,preview,request_summary,request_source,share_enabled,public_slug) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, id, in.Slug, in.Title, in.Agent, in.OriginalRequest, created, object, previewText(in.HTML), in.RequestSummary, in.RequestSource, in.Share, func() any {
-			if in.Share {
-				return in.PublicSlug
+	// The page row and its search index change together.
+	stamp := indexStamp(object, in.Title, in.RequestSummary, in.OriginalRequest, in.Agent)
+	tx, err := s.db.Begin()
+	if err == nil {
+		if replace {
+			_, err = tx.Exec(`UPDATE pages SET title=?,agent=?,original_request=?,object=?,preview=?,request_summary=?,request_source=?,source_name=?,index_version=?,index_source=?,updated_at=? WHERE id=?`, in.Title, in.Agent, in.OriginalRequest, object, preview, in.RequestSummary, in.RequestSource, sourceName, derivedVersion, stamp, now, id)
+		} else {
+			// The owner has seen what they wrote or imported themselves.
+			opened := ""
+			if in.OwnerWritten {
+				opened = created
 			}
-			return nil
-		}())
+			_, err = tx.Exec(`INSERT INTO pages (id,slug,title,agent,original_request,created_at,object,preview,request_summary,request_source,share_enabled,public_slug,source_name,index_version,index_source,opened_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, in.Slug, in.Title, in.Agent, in.OriginalRequest, created, object, preview, in.RequestSummary, in.RequestSource, in.Share, func() any {
+				if in.Share {
+					return in.PublicSlug
+				}
+				return nil
+			}(), sourceName, derivedVersion, stamp, opened, now)
+		}
+		if err == nil {
+			err = writeIndex(tx, pageIndex{ID: id, Title: in.Title, Summary: in.RequestSummary, Request: in.OriginalRequest, Agent: in.Agent, Body: body})
+		}
+		if err == nil {
+			err = tx.Commit()
+		} else {
+			tx.Rollback()
+		}
 	}
 	if err != nil {
 		s.removeObject(object)
-		writeAPIError(w, http.StatusInternalServerError, ErrStorageUnavailable, "could not save page", true)
+		failRequest(r, err)
+		writeAPIError(w, http.StatusInternalServerError, ErrStorageUnavailable, "Cairn could not save the page. Try again in a moment.", true)
 		return
 	}
 	if replace {
 		s.removeObject(previous.Object)
 	}
+	result := apiPageWrite{}
+	if page, _, err := s.pageResource(in.Slug); err == nil {
+		result.apiPage = page
+	} else {
+		result.apiPage = apiPage{ID: id, Slug: in.Slug, URL: "/" + in.Slug, PrivateURL: s.privateURL("/" + in.Slug), Title: in.Title, Agent: in.Agent, Assets: []string{}, CreatedAt: created, UpdatedAt: now}
+	}
+	if s.cleanupPending {
+		result.Warning = "page saved; temporary storage cleanup pending"
+		warnings = append(warnings, apiWarning{Code: "storage_cleanup_pending", Message: "The page was saved, but Cairn could not remove the old version's files. It tries again before the next save."})
+	}
+	result.Warnings = s.writeWarnings(warnings)
+	event, credentialKind := "publish", "owner"
+	if replace {
+		event = "replace"
+	}
+	if ctx.cred.Scope != "" {
+		credentialKind = ctx.cred.kind()
+	}
+	noteRequest(r, event, slog.String("slug", in.Slug), slog.String("agent", in.Agent), slog.String("credential", credentialKind), slog.String("format", result.Format), slog.Int("warnings", len(result.Warnings)))
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Location", "/"+in.Slug)
 	if replace {
@@ -481,103 +570,25 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 	} else {
 		w.WriteHeader(http.StatusCreated)
 	}
-	result := map[string]any{"id": id, "url": "/" + in.Slug}
-	if s.cleanupPending {
-		result["warning"] = "page saved; temporary storage cleanup pending"
-	}
-	_ = json.NewEncoder(w).Encode(result)
-}
-
-// apiIndex is the private API contract in JSON form: version, endpoints,
-// limits and error codes. It mirrors contract.md. Public listener never serves it.
-func (s *Server) apiIndex(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		writeAPIError(w, http.StatusMethodNotAllowed, ErrMethodNotAllowed, "method not allowed", false)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	if r.Method == http.MethodHead {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-	index := map[string]any{
-		"version": APIVersion,
-		"endpoints": []map[string]string{
-			{"method": "GET", "path": "/api", "description": "This index: version, endpoints, limits and examples."},
-			{"method": "POST", "path": "/api/pages", "description": "Publish a private page. Body: title, agent or key byline, original_request, exactly one of html or markdown, optional slug, template, capabilities, assets, request_summary, request_source."},
-			{"method": "PUT", "path": "/api/pages/{slug}", "description": "Replace a page completely. The slug cannot change; omitted assets are removed."},
-		},
-		"reading": map[string]string{
-			"reader":  "GET /{slug} renders the private owner reader with metadata.",
-			"content": "GET /_content/{slug} renders report HTML only, without private metadata.",
-			"asset":   "GET /_content/{slug}?asset=name.png or GET /_assets/{slug}/name.png serves that page's managed image.",
-		},
-		"limits": map[string]any{
-			"request_bytes":      16 << 20,
-			"html_bytes":         2 << 20,
-			"markdown_bytes":     2 << 20,
-			"asset_bytes_each":   4 << 20,
-			"asset_count":        32,
-			"default_slug_chars": 3,
-			"slug_chars":         s.preferences().LinkLength,
-		},
-		"error_codes": []string{
-			ErrAuthenticationRequired, ErrBrowserOriginForbidden, ErrForbidden,
-			ErrUnsupportedMediaType, ErrInvalidJSON, ErrValidationFailed,
-			ErrSlugConflict, ErrPublicSlugUnavailable, ErrNotFound,
-			ErrMethodNotAllowed, ErrPayloadTooLarge, ErrStorageUnavailable,
-			ErrCleanupPending, ErrSharingUnavailable, ErrLinkAllocationFailed,
-		},
-		"example": map[string]any{
-			"request":  map[string]string{"method": "POST", "path": "/api/pages"},
-			"response": map[string]string{"id": "...", "url": "/AbC"},
-		},
-	}
-	_ = json.NewEncoder(w).Encode(index)
+	_ = apiEncoder(w).Encode(result)
 }
 
 var slugPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`)
 var assetName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,95}\.(png|jpg|jpeg|gif|webp)$`)
 
 func validSlug(slug string) bool {
-	switch strings.ToLower(slug) {
-	case "settings", "new", "manage", "import", "api", "healthz", "library", "assets", "admin", "login", "logout":
-		return false
-	}
-	return slugPattern.MatchString(slug)
+	return slugPattern.MatchString(slug) && !slices.Contains(reservedSlugs, strings.ToLower(slug))
 }
-func validatePublication(in publication) error {
-	if len(strings.Fields(in.RequestSummary)) > 40 || len(in.RequestSummary) > 1000 {
-		return fmt.Errorf("request_summary must be at most 40 words and 1000 bytes")
-	}
-	if len(in.RequestSource) > 80 || strings.ContainsAny(in.RequestSource, "\r\n") {
-		return fmt.Errorf("request_source must be a single label of at most 80 bytes")
-	}
 
-	if strings.TrimSpace(in.Title) == "" || len(in.Title) > 300 || strings.TrimSpace(in.Agent) == "" || len(in.Agent) > 100 || strings.TrimSpace(in.OriginalRequest) == "" || len(in.OriginalRequest) > 32768 || strings.TrimSpace(in.HTML) == "" || len(in.HTML) > 2<<20 {
-		return fmt.Errorf("title, agent, original_request and html are required and must fit documented limits")
-	}
-	if in.Slug != "" && !validSlug(in.Slug) {
-		return fmt.Errorf("invalid or reserved slug")
-	}
-	if len(in.Assets) > 32 {
-		return fmt.Errorf("too many assets")
-	}
-	for name, data := range in.Assets {
-		if !assetName.MatchString(name) || len(data) == 0 || len(data) > 4<<20 {
-			return fmt.Errorf("invalid asset name or size")
-		}
-		media := http.DetectContentType(data)
-		switch media {
-		case "image/png", "image/jpeg", "image/gif", "image/webp":
-		default:
-			return fmt.Errorf("assets must be PNG, JPEG, GIF or WebP images")
-		}
+// validatePublication checks a publication's fields and returns the first
+// problem. savePublication reports all of them; the editor's preview needs
+// one sentence.
+func validatePublication(in publication) error {
+	if problems := checkFields(in); len(problems) > 0 {
+		return &fieldProblem{problems[0]}
 	}
 	return nil
 }
-
-var safeHost = regexp.MustCompile(`^[A-Za-z0-9.\[\]:-]+$`)
 
 func (s *Server) removeObject(object string) {
 	if err := os.RemoveAll(filepath.Join(s.cfg.DataDir, "objects", object)); err != nil {

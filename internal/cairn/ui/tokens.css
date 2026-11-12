@@ -1,0 +1,509 @@
+/*
+ * Tokens: every colour, size, radius, shadow and duration Cairn's own
+ * interface uses. Report documents keep their own styles inside the iframe.
+ *
+ * Four themes, chosen in Settings and set on <html data-theme>:
+ *
+ *   cairn       Tide by day: blue-grey paper and the Blue Hour cover.
+ *   dark        Tide at night: the same family on deep blue-grey, lighter
+ *               surfaces rising towards you, the cover still a blue band.
+ *   minimal     Black on white, hairlines, no web font. Light only.
+ *   futuristic  Midnight indigo with violet actions, reports included.
+ *
+ * "system" is a fifth choice that shows Cairn or Dark, following the
+ * device's light or dark setting. Its dark block below must stay identical
+ * to the Dark block; themes_test.go checks.
+ *
+ * A theme changes tokens only. What a theme changes beyond its tokens lives
+ * in themes.css. The settings preview cards reuse the same blocks through
+ * [data-preset], so a sample always matches its theme.
+ */
+
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(dm-sans-400.woff2) format('woff2');
+}
+
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(dm-sans-500.woff2) format('woff2');
+}
+
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(dm-sans-600.woff2) format('woff2');
+}
+
+/* Cairn, the default. */
+:root,
+[data-preset="cairn"] {
+  color-scheme: light;
+
+  /* Type families */
+  --font-ui: 'DM Sans', sans-serif;
+  --font-display: var(--font-ui);
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Surfaces, from the page up */
+  --bg: #eef2f5;
+  --paper: #fcfdfe;
+  --line: #d5dfe6;
+  --field-line: #74899b;
+  --table-bg: #f6f9fb;
+  --hover-bg: #f0f5fa;
+  --selected-bg: #dce6ee;
+  --control-bg: #e3ecf4;
+  --badge-bg: #edf2f6;
+  --icon-bg: #e3eaf0;
+  --avatar-bg: #e9eff4;
+  --avatar-ring: transparent;
+
+  /* Text */
+  --ink: #253b4c;
+  --muted: #52697c;
+  --selected-ink: #254e72;
+  --icon-ink: #547188;
+  --avatar-ink: #42627a;
+
+  /* Actions and focus */
+  --accent: #315c83;
+  --accent-hover: #254966;
+  --on-accent: #fff;
+  --button-divider: #7795ae;
+  --focus: #315c83;
+
+  /* Status */
+  --success-bg: #e4eee8;
+  --success-ink: #356249;
+  --error-bg: #f9e9e6;
+  --error-ink: #803735;
+  --warning-ink: #94600a;
+  --danger-bg: #9b3e42;
+  --on-danger: #fff;
+
+  /* Reader cover */
+  --cover: #29485f;
+  --cover-ink: #f2f6f8;
+  --cover-muted: #d7e3ec;
+  --cover-button: #f1f5f8;
+  --cover-button-ink: #29485f;
+  --cover-focus: #b8d4e8;
+
+  /* The report frame before the report paints, and the contents rail's
+     colours until the report says what it uses. */
+  --frame-paper: #fff;
+  --frame-ink: #132b38;
+  --frame-accent: #176582;
+  /* How far a report in its own light design sits in from the page's edges.
+     Light themes run it edge to edge; dark ones set it on the page as a
+     sheet of paper. */
+  --fixed-inset: 0px;
+  /* The keyboard ring on a report frame: inside its edge when the report
+     runs edge to edge, outside it when the report sits on the page. */
+  --frame-ring-offset: -2px;
+
+  /* Initials avatars: six tints, chosen by a hash of the author's name. */
+  --tint-1-bg: #dfe9f3;
+  --tint-1-ink: #2b5379;
+  --tint-2-bg: #d9ecea;
+  --tint-2-ink: #1f5d5a;
+  --tint-3-bg: #e1ede4;
+  --tint-3-ink: #2f6142;
+  --tint-4-bg: #f2e8d6;
+  --tint-4-ink: #684a17;
+  --tint-5-bg: #f5e3e3;
+  --tint-5-ink: #7e3a40;
+  --tint-6-bg: #e8e4f3;
+  --tint-6-ink: #4e4482;
+
+  /* Browser surfaces */
+  --selection: #c9dceb;
+  --scrollbar: #8da4b5;
+  --backdrop: #253b4c40;
+
+  /* Elevation: three shadows, from the resting sheet to modal dialogs */
+  --shadow-sheet: 0 12px 36px #344e6010;
+  --shadow-float: 0 12px 32px #253b4c26;
+  --shadow-modal: 0 18px 48px #253b4c40;
+
+  /* Corners */
+  --radius-mark: 4px;
+  --radius-control: 7px;
+  --radius-menu: 10px;
+  --radius-panel: 14px;
+  --radius-round: 50%;
+}
+
+:root {
+  /* Type scale: eight steps, never below 12px, in rem so text follows the
+     reader's own font size. */
+  --text-meta: 0.75rem;      /* 12px dates, counts, badges, captions */
+  --text-label: 0.8125rem;   /* 13px buttons, navigation, labels, help */
+  --text-body: 0.9375rem;    /* 15px body copy, list titles, inputs */
+  --text-lead: 1.0625rem;    /* 17px writing canvas, panel titles */
+  --text-heading: 1.25rem;   /* 20px section and dialog headings */
+  --text-title: 1.625rem;    /* 26px compact page titles, the wordmark */
+  --text-headline: 2.125rem; /* 34px page headings */
+  --text-display: 2.625rem;  /* 42px the library heading */
+
+  /* Form fields: the body size, and the lead size on touch screens, where
+     iOS zooms into any field under 16px. */
+  --text-field: var(--text-body);
+
+  /* A report in its own design keeps its own paper. Until it says what its
+     colours are, the contents rail assumes Cairn's light report. */
+  --fixed-paper: #fff;
+  --fixed-ink: #132b38;
+  --fixed-accent: #176582;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+  --gutter: 4vw;
+
+  /* Control sizes. --target is the smallest comfortable hit area: 24px for
+     a mouse, 44px for touch. */
+  --control-height: 40px;    /* buttons, fields and menu rows */
+  --control-height-sm: 36px; /* compact and icon-only buttons */
+  --target: 24px;
+
+  /* Motion */
+  --duration-fast: 140ms;
+  --duration-base: 220ms;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+}
+
+@media (pointer: coarse) {
+  :root {
+    --target: 44px;
+    --text-field: var(--text-lead);
+  }
+}
+
+/* Dark: Tide at night. Surfaces get lighter as they rise, shadows give way
+   to a faint edge, and the action colour turns to a pale steel blue that
+   reads on every surface. The page matches the paper of a dark report. */
+:root[data-theme="dark"],
+[data-preset="dark"] {
+  color-scheme: dark;
+
+  --bg: #111b22;
+  --paper: #18232a;
+  --line: #2d3940;
+  --field-line: #617581;
+  --table-bg: #151f25;
+  --hover-bg: #1f2c34;
+  --selected-bg: #223b4a;
+  --control-bg: #23333c;
+  --badge-bg: #233037;
+  --icon-bg: #28363f;
+  --avatar-bg: #273944;
+
+  --ink: #e0e7ec;
+  --muted: #a1b1ba;
+  --selected-ink: #d7ebfa;
+  --icon-ink: #a7c2d5;
+  --avatar-ink: #c9dae7;
+
+  /* Initials avatars: six tints, chosen by a hash of the author's name. */
+  --tint-1-bg: #1f3a52;
+  --tint-1-ink: #b9d8f5;
+  --tint-2-bg: #173f3d;
+  --tint-2-ink: #a6e0db;
+  --tint-3-bg: #1d3d2a;
+  --tint-3-ink: #b0e2c0;
+  --tint-4-bg: #3d331f;
+  --tint-4-ink: #ecd5a8;
+  --tint-5-bg: #45292c;
+  --tint-5-ink: #f5c4c8;
+  --tint-6-bg: #302b48;
+  --tint-6-ink: #d4cdf6;
+
+  --accent: #92c0e8;
+  --accent-hover: #aed3f3;
+  --on-accent: #0c1a25;
+  --button-divider: #537693;
+  --focus: #92c0e8;
+
+  --success-bg: #1a3728;
+  --success-ink: #a0debc;
+  --error-bg: #482422;
+  --error-ink: #fbbbb5;
+  --warning-ink: #e8b45a;
+  --danger-bg: #bc504c;
+  --on-danger: #fff;
+
+  --cover: #163549;
+  --cover-ink: #eaf1f6;
+  --cover-muted: #bed1df;
+  --cover-button: #2b495d;
+  --cover-button-ink: #eff4f8;
+  --cover-focus: #a1d1f4;
+
+  --frame-paper: #111b22;
+  --frame-ink: #dde6ec;
+  --frame-accent: #7db8da;
+  --fixed-inset: clamp(var(--space-2), 2.5vw, var(--space-7));
+  --frame-ring-offset: 2px;
+
+  --selection: #30506c;
+  --scrollbar: #4f606d;
+  --backdrop: #04090d99;
+
+  --shadow-sheet: 0 0 0 1px #ffffff0d;
+  --shadow-float: 0 0 0 1px #ffffff14, 0 12px 32px #00000066;
+  --shadow-modal: 0 0 0 1px #ffffff14, 0 18px 48px #00000080;
+}
+
+/* System: the Cairn block applies by day; this one by night. Keep it
+   identical to the Dark block above. */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    color-scheme: dark;
+
+    --bg: #111b22;
+    --paper: #18232a;
+    --line: #2d3940;
+    --field-line: #617581;
+    --table-bg: #151f25;
+    --hover-bg: #1f2c34;
+    --selected-bg: #223b4a;
+    --control-bg: #23333c;
+    --badge-bg: #233037;
+    --icon-bg: #28363f;
+    --avatar-bg: #273944;
+
+    --ink: #e0e7ec;
+    --muted: #a1b1ba;
+    --selected-ink: #d7ebfa;
+    --icon-ink: #a7c2d5;
+    --avatar-ink: #c9dae7;
+
+    /* Initials avatars: six tints, chosen by a hash of the author's name. */
+    --tint-1-bg: #1f3a52;
+    --tint-1-ink: #b9d8f5;
+    --tint-2-bg: #173f3d;
+    --tint-2-ink: #a6e0db;
+    --tint-3-bg: #1d3d2a;
+    --tint-3-ink: #b0e2c0;
+    --tint-4-bg: #3d331f;
+    --tint-4-ink: #ecd5a8;
+    --tint-5-bg: #45292c;
+    --tint-5-ink: #f5c4c8;
+    --tint-6-bg: #302b48;
+    --tint-6-ink: #d4cdf6;
+
+    --accent: #92c0e8;
+    --accent-hover: #aed3f3;
+    --on-accent: #0c1a25;
+    --button-divider: #537693;
+    --focus: #92c0e8;
+
+    --success-bg: #1a3728;
+    --success-ink: #a0debc;
+    --error-bg: #482422;
+    --error-ink: #fbbbb5;
+    --warning-ink: #e8b45a;
+    --danger-bg: #bc504c;
+    --on-danger: #fff;
+
+    --cover: #163549;
+    --cover-ink: #eaf1f6;
+    --cover-muted: #bed1df;
+    --cover-button: #2b495d;
+    --cover-button-ink: #eff4f8;
+    --cover-focus: #a1d1f4;
+
+    --frame-paper: #111b22;
+    --frame-ink: #dde6ec;
+    --frame-accent: #7db8da;
+    --fixed-inset: clamp(var(--space-2), 2.5vw, var(--space-7));
+    --frame-ring-offset: 2px;
+
+    --selection: #30506c;
+    --scrollbar: #4f606d;
+    --backdrop: #04090d99;
+
+    --shadow-sheet: 0 0 0 1px #ffffff0d;
+    --shadow-float: 0 0 0 1px #ffffff14, 0 12px 32px #00000066;
+    --shadow-modal: 0 0 0 1px #ffffff14, 0 18px 48px #00000080;
+  }
+}
+
+/* Minimal: black type on white, hierarchy from size, weight and space, one
+   hairline where Cairn uses a surface. The fonts are the device's own, so
+   nothing downloads. Red is kept for errors and deleting only. */
+:root[data-theme="minimal"],
+[data-preset="minimal"] {
+  color-scheme: light;
+  --font-ui: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-display: var(--font-ui);
+
+  --bg: #fff;
+  --paper: #fff;
+  --line: #e2e2e2;
+  --field-line: #858585;
+  --table-bg: #fff;
+  --hover-bg: #f6f6f6;
+  --selected-bg: #fff;
+  --control-bg: #f2f2f2;
+  --badge-bg: #f2f2f2;
+  --icon-bg: #f2f2f2;
+  --avatar-bg: #f2f2f2;
+
+  --ink: #111;
+  --muted: #5e5e5e;
+  --selected-ink: #111;
+  --icon-ink: #5e5e5e;
+  --avatar-ink: #333;
+  --avatar-ring: #c4c4c4;
+
+  /* Initials avatars: six tints, chosen by a hash of the author's name. */
+  --tint-1-bg: #f4f4f4;
+  --tint-1-ink: #111;
+  --tint-2-bg: #e8e8e8;
+  --tint-2-ink: #111;
+  --tint-3-bg: #dcdcdc;
+  --tint-3-ink: #111;
+  --tint-4-bg: #f4f4f4;
+  --tint-4-ink: #111;
+  --tint-5-bg: #e8e8e8;
+  --tint-5-ink: #111;
+  --tint-6-bg: #dcdcdc;
+  --tint-6-ink: #111;
+
+  --accent: #111;
+  --accent-hover: #333;
+  --on-accent: #fff;
+  --button-divider: #6b6b6b;
+  --focus: #111;
+
+  --success-bg: #f2f2f2;
+  --success-ink: #111;
+  --error-bg: #fbeeed;
+  --error-ink: #8a2f2a;
+  --warning-ink: #805500;
+  --danger-bg: #a3302b;
+  --on-danger: #fff;
+
+  --cover: #fff;
+  --cover-ink: #111;
+  --cover-muted: #5e5e5e;
+  --cover-button: #f2f2f2;
+  --cover-button-ink: #111;
+  --cover-focus: #111;
+
+  --frame-paper: #fff;
+  --frame-ink: #111;
+  --frame-accent: #111;
+
+  --selection: #e2e2e2;
+  --scrollbar: #b5b5b5;
+  --backdrop: #00000033;
+
+  --shadow-sheet: none;
+  --shadow-float: 0 0 0 1px #e2e2e2, 0 8px 24px #0000000f;
+  --shadow-modal: 0 0 0 1px #e2e2e2, 0 16px 40px #0000001a;
+
+  --radius-mark: 0;
+  --radius-control: 2px;
+  --radius-menu: 2px;
+  --radius-panel: 0;
+}
+
+/* Futuristic: midnight indigo surfaces, lavender text and violet actions,
+   squarer corners and Avenir Next headings where the device has it.
+   Reports turn the same colours. */
+:root[data-theme="futuristic"],
+[data-preset="futuristic"] {
+  color-scheme: dark;
+  --font-ui: 'DM Sans', sans-serif;
+  --font-display: 'Avenir Next', 'Century Gothic', 'DM Sans', sans-serif;
+
+  --bg: #1a1b26;
+  --paper: #24283b;
+  --line: #414868;
+  --field-line: #737aa2;
+  --table-bg: #202334;
+  --hover-bg: #292e42;
+  --selected-bg: #36334f;
+  --control-bg: #292e42;
+  --badge-bg: #292e42;
+  --icon-bg: #292e42;
+  --avatar-bg: #36334f;
+
+  --ink: #c0caf5;
+  --muted: #a9b1d6;
+  --selected-ink: #c0caf5;
+  --icon-ink: #bb9af7;
+  --avatar-ink: #c0caf5;
+
+  /* Initials avatars: six tints, chosen by a hash of the author's name. */
+  --tint-1-bg: #2a3352;
+  --tint-1-ink: #9fbcfa;
+  --tint-2-bg: #203a47;
+  --tint-2-ink: #8fd6f7;
+  --tint-3-bg: #283a2c;
+  --tint-3-ink: #aedb85;
+  --tint-4-bg: #3d3424;
+  --tint-4-ink: #e6bd7f;
+  --tint-5-bg: #40283a;
+  --tint-5-ink: #f79cb0;
+  --tint-6-bg: #352e52;
+  --tint-6-ink: #c8aef9;
+
+  --accent: #bb9af7;
+  --accent-hover: #ad8ee6;
+  --on-accent: #1a1b26;
+  --button-divider: #565f89;
+  --focus: #bb9af7;
+
+  --success-bg: #273028;
+  --success-ink: #a3cf8c;
+  --error-bg: #3b283a;
+  --error-ink: #ff9fb2;
+  --warning-ink: #e0af68;
+  --danger-bg: #f7768e;
+  --on-danger: #1a1b26;
+
+  --cover: #13141c;
+  --cover-ink: #c0caf5;
+  --cover-muted: #a9b1d6;
+  --cover-button: #292e42;
+  --cover-button-ink: #c0caf5;
+  --cover-focus: #bb9af7;
+
+  --frame-paper: #1a1b26;
+  --frame-ink: #c0caf5;
+  --frame-accent: #bb9af7;
+  --fixed-inset: clamp(var(--space-2), 2.5vw, var(--space-7));
+  --frame-ring-offset: 2px;
+
+  --selection: #414868;
+  --scrollbar: #565f89;
+  --backdrop: #0e0e1499;
+
+  --shadow-sheet: none;
+  --shadow-float: 0 0 0 1px #414868, 0 12px 32px #0e0e1466;
+  --shadow-modal: 0 0 0 1px #414868, 0 18px 48px #0e0e1499;
+
+  --radius-mark: 2px;
+  --radius-control: 3px;
+  --radius-menu: 3px;
+  --radius-panel: 5px;
+}

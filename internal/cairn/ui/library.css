@@ -1,0 +1,1130 @@
+/* Library: the page list, its search, row menu and paging, the first-run
+   ways in, the preview drawer and the keyboard shortcut sheet. */
+
+.workspace {
+  max-width: 1280px;
+  margin: auto;
+  padding: var(--space-7) var(--space-8) var(--space-8);
+}
+
+.heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-5);
+  margin-bottom: var(--space-6);
+}
+
+.heading-text {
+  min-width: 0;
+}
+
+.heading p {
+  margin-top: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-label);
+}
+
+/* New page, with an arrow that reveals the other ways to add a page. The
+   two halves draw their focus ring inside their own edge, so neither ring
+   crosses the other. */
+
+/* On wide screens the dock is no box at all; on phones it is the bar along
+   the bottom that holds New page. */
+.create-dock {
+  display: contents;
+}
+
+.split-create {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+}
+
+.split-create > .button {
+  border-radius: var(--radius-control) 0 0 var(--radius-control);
+}
+
+.split-create > .button:focus-visible,
+.create-menu > summary:focus-visible {
+  outline-color: var(--on-accent);
+  outline-offset: -5px;
+}
+
+.create-menu {
+  position: static;
+}
+
+.create-menu > summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: max(40px, var(--target));
+  height: 100%;
+  padding: 0;
+  border-left: 1px solid var(--button-divider);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+  background: var(--accent);
+  color: var(--on-accent);
+  list-style: none;
+}
+
+.create-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.create-menu > summary:hover {
+  background: var(--accent-hover);
+}
+
+.create-menu[open] > summary .icon {
+  transform: rotate(180deg);
+}
+
+.create-options {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 5;
+  width: 280px;
+  padding: var(--space-1);
+  border-radius: var(--radius-menu);
+  background: var(--paper);
+  box-shadow: var(--shadow-float);
+}
+
+.create-options > a {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: max(var(--control-height), var(--target));
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  font-size: var(--text-label);
+  text-decoration: none;
+}
+
+.create-options > a > .icon {
+  color: var(--muted);
+}
+
+.create-options > a:hover {
+  background: var(--badge-bg);
+}
+
+.create-options small {
+  display: block;
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .create-options,
+  .row-menu:popover-open {
+    animation: menu-in var(--duration-fast) var(--ease-out);
+  }
+}
+
+@keyframes menu-in {
+  from {
+    opacity: .6;
+    transform: translateY(-4px);
+  }
+}
+
+/* The sheet */
+
+.sheet {
+  overflow: hidden;
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+  box-shadow: var(--shadow-sheet);
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-6);
+  border-bottom: 1px solid var(--line);
+}
+
+.search {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  color: var(--muted);
+}
+
+.search input {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-2) 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--text-field);
+  text-overflow: ellipsis;
+}
+
+.search input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+/* The whole search field, icon included, carries the focus ring. */
+.search:focus-within {
+  border-radius: var(--radius-control);
+  outline: 2px solid var(--focus);
+  outline-offset: var(--space-1);
+}
+
+.search input:focus-visible {
+  outline-color: transparent;
+}
+
+/* The / hint shows only to keyboard-and-mouse users, and only at rest. */
+.search-key {
+  display: none;
+}
+
+@media (pointer: fine) and (min-width: 651px) {
+  :root:not([data-shortcuts="off"]) .search:not(:focus-within):has(input:placeholder-shown) .search-key {
+    display: inline-flex;
+  }
+}
+
+.filter-selects {
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The author and order choices read as quiet text with their own chevron;
+   the words and chevron mark them out, so they need no edge. */
+.filters select {
+  min-width: 0;
+  max-width: 200px;
+  padding: 0 var(--space-6) 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background-color: transparent;
+  background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52%;
+  color: var(--muted);
+  font-size: var(--text-label);
+  text-overflow: ellipsis;
+  appearance: none;
+  cursor: pointer;
+}
+
+.filters select:hover {
+  background-color: var(--control-bg);
+  color: var(--ink);
+}
+
+/* iOS zooms into any field under 16px. */
+@media (pointer: coarse) {
+  .filters select {
+    font-size: var(--text-field);
+  }
+}
+
+.filter-toggle {
+  position: relative;
+  flex-shrink: 0;
+  min-width: max(var(--control-height-sm), var(--target));
+  min-height: max(var(--control-height-sm), var(--target));
+  padding: 0 var(--space-2);
+  background: transparent;
+  color: var(--muted);
+}
+
+.filter-toggle:hover,
+.filter-toggle[aria-expanded="true"] {
+  filter: none;
+  background: var(--control-bg);
+  color: var(--ink);
+}
+
+.filter-dot {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  display: none;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-round);
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--paper);
+}
+
+.filter-toggle.is-filtered .filter-dot {
+  display: block;
+}
+
+.search-submit {
+  min-height: max(var(--control-height-sm), var(--target));
+  padding: 0 var(--space-3);
+  background: var(--control-bg);
+  color: var(--accent);
+}
+
+.sheet[aria-busy="true"] .rows {
+  opacity: .72;
+  transition: opacity var(--duration-fast) ease-out var(--duration-base);
+}
+
+/* Rows: page, author, date and menu, the same columns as the head above
+   them. Every row is two lines tall: the title and one line under it. */
+
+.results {
+  --row-columns: minmax(0, 1fr) 176px 104px max(36px, var(--target));
+  --row-gap: var(--space-4);
+}
+
+.table-head {
+  display: grid;
+  grid-template-columns: var(--row-columns);
+  align-items: center;
+  gap: var(--row-gap);
+  padding: var(--space-2) var(--space-5) var(--space-2) var(--space-7);
+  border-bottom: 1px solid var(--line);
+  background: var(--table-bg);
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+.report-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--row-columns);
+  align-items: center;
+  gap: var(--row-gap);
+  min-height: 72px;
+  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-7);
+  border-bottom: 1px solid var(--line);
+  transition: background var(--duration-fast) ease-out;
+}
+
+.rows > :last-child {
+  border-bottom: 0;
+}
+
+.report-row:hover,
+.report-row:focus-within {
+  background: var(--hover-bg);
+}
+
+.report-row.is-selected {
+  background: var(--control-bg);
+}
+
+/* From the keyboard the whole row carries the ring, not its title alone. */
+.report-row:has(.row-title:focus-visible) {
+  z-index: 1;
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  border-radius: var(--radius-control);
+}
+
+:root[data-input-modality="pointer"] .report-row:has(.row-title:focus-visible) {
+  outline: none;
+}
+
+.report-row .row-title:focus-visible {
+  outline: none;
+}
+
+.row-main {
+  position: relative;
+  min-width: 0;
+}
+
+.row-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.row-head h2 {
+  min-width: 0;
+  font-size: var(--text-body);
+}
+
+.row-title {
+  display: block;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--text-body);
+  font-weight: 500;
+  line-height: 1.5;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row-title:hover {
+  text-decoration: underline;
+}
+
+/* On touch screens the title's hit area covers the whole of the row's text,
+   so a tap anywhere left of its menu opens the page. */
+@media (pointer: coarse) {
+  .row-title::after {
+    position: absolute;
+    inset: 0;
+    content: "";
+  }
+
+  /* The link's own box reaches the touch size too, without moving the line. */
+  .row-title {
+    padding-block: calc((var(--target) - 1.5em) / 2);
+    margin-block: calc((1.5em - var(--target)) / 2);
+  }
+}
+
+/* A page the owner has not opened yet: a quiet dot in the row's margin and a
+   slightly heavier title. */
+.unread-dot {
+  position: absolute;
+  top: 9px;
+  left: calc(-1 * var(--space-5));
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-round);
+  background: var(--accent);
+}
+
+.is-unread .row-title {
+  font-weight: 600;
+}
+
+.row-badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-mark);
+  background: var(--success-bg);
+  color: var(--success-ink);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  line-height: 1.75;
+  white-space: nowrap;
+}
+
+.row-badge .icon {
+  width: 12px;
+  height: 12px;
+}
+
+/* One line of whole words: the line wraps at a word boundary and the rest
+   is cut off, never a word or number in half. The end of a full line
+   fades, which says there is more. */
+.excerpt,
+.snippet {
+  max-width: 44rem;
+  height: 1.5em;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-label);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  mask-image: linear-gradient(to right, currentColor calc(100% - 4em), transparent);
+}
+
+.where {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* Matched words, in titles, agents and snippets. */
+.report-row mark {
+  padding: 0 1px;
+  border-radius: var(--radius-mark);
+  background: var(--selection);
+  color: var(--ink);
+}
+
+.agent-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+.agent-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.avatar {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  overflow: hidden;
+  border-radius: var(--radius-round);
+  font-size: var(--text-meta);
+  font-weight: 600;
+}
+
+.date {
+  color: var(--muted);
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.row-more {
+  min-width: max(var(--control-height-sm), var(--target));
+  min-height: max(var(--control-height-sm), var(--target));
+  padding: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--muted);
+}
+
+a.row-more {
+  display: inline-grid;
+  place-items: center;
+}
+
+.row-more:hover,
+.row-more[aria-expanded="true"] {
+  filter: none;
+  background: var(--control-bg);
+  color: var(--ink);
+}
+
+.mobile-meta {
+  display: none;
+}
+
+/* Paging and the count */
+
+.more {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-5) var(--space-6);
+  border-top: 1px solid var(--line);
+}
+
+.show-more[aria-disabled="true"] {
+  pointer-events: none;
+  opacity: .7;
+}
+
+.list-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-5);
+  min-height: calc(var(--target) + var(--space-6));
+  padding: var(--space-3) 0;
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+.shortcut-hint {
+  gap: var(--space-2);
+  min-height: var(--target);
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-meta);
+  text-decoration: none;
+}
+
+.shortcut-hint:hover {
+  filter: none;
+  color: var(--ink);
+}
+
+@media (pointer: coarse) {
+  .shortcut-hint {
+    display: none;
+  }
+}
+
+kbd {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-mark);
+  background: var(--table-bg);
+  color: var(--ink);
+  font: 500 var(--text-meta)/1 var(--font-ui);
+}
+
+/* Empty states */
+
+.empty {
+  padding: var(--space-8) var(--space-6);
+  text-align: center;
+}
+
+.empty h2 {
+  margin-bottom: var(--space-2);
+  overflow-wrap: anywhere;
+}
+
+.empty p {
+  max-width: 52ch;
+  margin: auto;
+  color: var(--muted);
+}
+
+.empty .button {
+  margin-top: var(--space-5);
+}
+
+/* First run: the three ways a page gets into Cairn, as one list. */
+
+.ways {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ways li + li {
+  border-top: 1px solid var(--line);
+}
+
+.way {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-6) var(--space-7);
+  color: var(--ink);
+  text-decoration: none;
+  transition: background var(--duration-fast) ease-out;
+}
+
+.way:hover {
+  background: var(--hover-bg);
+}
+
+.way:focus-visible {
+  outline-offset: -2px;
+}
+
+.way-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-control);
+  background: var(--icon-bg);
+  color: var(--icon-ink);
+}
+
+.way-text strong {
+  display: block;
+  font-size: var(--text-lead);
+  font-weight: 500;
+}
+
+.way-text span {
+  display: block;
+  max-width: 62ch;
+  margin-top: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-label);
+  line-height: 1.5;
+}
+
+.way > .icon:last-child {
+  color: var(--muted);
+  transition: transform var(--duration-fast) var(--ease-out), color var(--duration-fast) ease-out;
+}
+
+.way:hover > .icon:last-child {
+  color: var(--accent);
+  transform: translateX(3px);
+}
+
+/* Row actions: one menu, filled for the row that opened it. */
+
+.row-menu {
+  position: fixed;
+  inset: auto;
+  width: 248px;
+  margin: 0;
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-menu);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow-float);
+}
+
+.row-menu a,
+.row-menu button {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: max(var(--control-height), var(--target));
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--ink);
+  font-size: var(--text-label);
+  text-align: left;
+  text-decoration: none;
+}
+
+.row-menu a:hover,
+.row-menu button:hover,
+.row-menu [role=menuitem]:focus {
+  filter: none;
+  background: var(--badge-bg);
+}
+
+.row-menu [role=menuitem]:focus-visible {
+  outline-offset: -2px;
+}
+
+.row-menu .menu-rule {
+  height: 1px;
+  margin: var(--space-1) var(--space-2);
+  background: var(--line);
+}
+
+.row-menu .icon {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+
+.row-menu small {
+  display: block;
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+/* Preview drawer */
+
+.preview {
+  inset: 0 0 0 auto;
+  width: min(1120px, calc(100vw - var(--space-8)));
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow-modal);
+}
+
+.preview[open] {
+  display: flex;
+  flex-direction: column;
+  animation: slide-in var(--duration-base) var(--ease-out);
+}
+
+.preview::backdrop {
+  background: var(--backdrop);
+}
+
+.preview-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-4) var(--space-5) var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--line);
+}
+
+.preview-heading {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.preview-head h2 {
+  font-size: var(--text-lead);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+/* Focus lands on the title when the drawer opens; it is a heading, not a
+   control, so it shows no ring. */
+.preview-head h2:focus {
+  outline: none;
+}
+
+.preview-head p {
+  margin-top: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+.preview-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.quiet-control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: max(var(--control-height-sm), var(--target));
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-label);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.quiet-control:hover,
+.quiet-control[aria-expanded="true"] {
+  filter: none;
+  background: var(--control-bg);
+  color: var(--ink);
+}
+
+.quiet-control .icon {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.quiet-control[aria-expanded="true"] .icon {
+  transform: rotate(180deg);
+}
+
+.preview-steps {
+  display: flex;
+  margin-right: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+
+.preview-steps .step {
+  min-width: max(var(--control-height-sm), var(--target));
+  min-height: max(var(--control-height-sm), var(--target));
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+}
+
+.preview-steps .step:first-child {
+  border-radius: var(--radius-control) 0 0 var(--radius-control);
+}
+
+.preview-steps .step:last-child {
+  border-left: 1px solid var(--line);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+
+.preview-steps .step:hover:not(:disabled) {
+  filter: none;
+  background: var(--control-bg);
+}
+
+.preview-steps .step:disabled {
+  color: var(--line);
+  cursor: default;
+}
+
+.preview-request {
+  max-height: 30vh;
+  padding: var(--space-3) var(--space-6) var(--space-4);
+  overflow: auto;
+  border-bottom: 1px solid var(--line);
+  background: var(--table-bg);
+}
+
+.preview-request-label {
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+#preview-request-text {
+  max-width: 75ch;
+  margin-top: var(--space-1);
+  font-size: var(--text-label);
+  white-space: pre-wrap;
+}
+
+.preview iframe {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: var(--frame-paper);
+}
+
+@keyframes slide-in {
+  from {
+    opacity: .65;
+    transform: translateX(35px);
+  }
+}
+
+/* Keyboard shortcuts */
+
+.key-sheet {
+  width: min(440px, calc(100vw - var(--space-7)));
+  padding: var(--space-6);
+  border: 0;
+  border-radius: var(--radius-panel);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow-modal);
+}
+
+.key-sheet::backdrop {
+  background: var(--backdrop);
+}
+
+.key-sheet-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-4);
+}
+
+.key-sheet-head h2 {
+  font-size: var(--text-heading);
+}
+
+.key-list {
+  display: grid;
+  margin: 0;
+}
+
+.key-list > div {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--line);
+}
+
+.key-list dt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+.key-list dd {
+  margin: 0;
+  font-size: var(--text-label);
+}
+
+.key-sheet-note {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: var(--text-meta);
+}
+
+@media (max-width: 480px) {
+  .key-list > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-1);
+  }
+}
+
+@media (max-width: 1000px) {
+  .workspace {
+    padding: var(--space-6) var(--space-6) var(--space-8);
+  }
+
+  .results {
+    --row-columns: minmax(0, 1fr) 132px 88px max(36px, var(--target));
+    --row-gap: var(--space-3);
+  }
+}
+
+/* Phones: one compact bar, the list in the first screen, filters behind one
+   control and New page in reach of the thumb. */
+@media (max-width: 650px) {
+  .workspace {
+    padding: var(--space-4) var(--space-4) calc(var(--space-8) + 56px);
+  }
+
+  .heading {
+    margin-bottom: var(--space-4);
+  }
+
+  .heading h1 {
+    font-size: var(--text-title);
+  }
+
+  /* New page sits in a bar docked to the bottom edge, in reach of the
+     thumb. Rows pass under the bar's rule as they pass under the top bar's,
+     so the button never sits on a row's title, badge, excerpt or menu. */
+  .create-dock {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 30;
+    display: flex;
+    justify-content: flex-end;
+    padding: var(--space-2) var(--space-4) max(var(--space-2), env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line);
+    background: var(--bg);
+  }
+
+  .split-create {
+    border-radius: var(--radius-control);
+  }
+
+  .split-create > .button {
+    min-height: 48px;
+    padding: 0 var(--space-5) 0 var(--space-4);
+    font-size: var(--text-body);
+    font-weight: 500;
+  }
+
+  .create-menu > summary {
+    width: 48px;
+  }
+
+  .create-options {
+    top: auto;
+    bottom: calc(100% + var(--space-2));
+  }
+
+  /* Toasts rise above the bar that holds New page. */
+  body:has(.split-create) .toasts {
+    bottom: calc(max(var(--space-2), env(safe-area-inset-bottom)) + 48px + var(--space-2) + var(--space-3));
+  }
+
+  .filters {
+    flex-wrap: wrap;
+    gap: 0 var(--space-1);
+    padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
+  }
+
+  .search {
+    flex: 1;
+  }
+
+  .filter-selects {
+    flex-basis: 100%;
+    gap: var(--space-2);
+    padding: 0 0 var(--space-2);
+  }
+
+  .filters select {
+    flex: 1 1 0;
+    max-width: none;
+    min-height: var(--target);
+    padding-left: var(--space-2);
+    background-color: var(--control-bg);
+    color: var(--ink);
+  }
+
+  .table-head {
+    display: none;
+  }
+
+  .results {
+    --row-columns: minmax(0, 1fr) max(36px, var(--target));
+    --row-gap: var(--space-2);
+  }
+
+  .report-row {
+    min-height: 0;
+    padding: var(--space-3) var(--space-1) var(--space-3) var(--space-5);
+  }
+
+  .unread-dot {
+    left: calc(-1 * var(--space-3) - 2px);
+  }
+
+  .row-head {
+    display: block;
+  }
+
+  .row-title {
+    display: -webkit-box;
+    white-space: normal;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .row-badge {
+    margin-top: var(--space-1);
+  }
+
+  .agent-cell,
+  .date {
+    display: none;
+  }
+
+  .mobile-meta {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: var(--text-meta);
+    overflow-wrap: anywhere;
+  }
+
+  .way {
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: var(--space-4);
+    padding: var(--space-5);
+  }
+
+  .way > .icon:last-child {
+    display: none;
+  }
+
+  .list-foot {
+    gap: var(--space-4);
+  }
+
+  .preview {
+    width: 100vw;
+  }
+}
+
+/* With scripting, phones fold the author and order choices behind one
+   Filters control. */
+@media (max-width: 650px) and (scripting: enabled) {
+  .filter-toggle:not([hidden]) {
+    display: inline-flex;
+  }
+
+  .filters:not(.show-filters) .filter-selects {
+    display: none;
+  }
+}
+
+@media (min-width: 651px) {
+  .filter-toggle {
+    display: none;
+  }
+}
