@@ -244,7 +244,7 @@ Sharing is in [docs/sharing.md](sharing.md). The API can share a new page only w
 
 ## Sharing a new page
 
-Publish privately by default. Set `share_enabled` to `true` on `POST /api/pages` only when the owner asked for this page to be shared. Never set it otherwise. Tell the owner the saved `public_url` afterwards, as well as the private address. Sharing must be configured or creation fails with 503 `public_sharing_unavailable` without saving. Omitted or `false` stays private. Any supplied value on PUT is refused; replacement preserves sharing, link names and passwords. Files start private.
+Publish privately by default. Set `share_enabled` to `true` on `POST /api/pages` only when the owner asked for this page to be shared. Never set it otherwise. Tell the owner the saved `public_url` afterwards, as well as the private address. Sharing must be configured or creation fails with 503 `public_sharing_unavailable` without saving. Omitted or `false` stays private. Any supplied value on PUT is refused; replacement preserves sharing, link names and passwords. Agent-created files start private.
 
 ## Files
 
@@ -256,13 +256,14 @@ Publish privately by default. Set `share_enabled` to `true` on `POST /api/pages`
 - `agent`: only for the installation token, as for pages.
 - `share_enabled`: optional multipart text `true` or `false`, creation only. Omitted or `false` stays private. Use `true` only when the owner asks; sharing must be configured. Any supplied value on replacement is refused.
 
-Any other field or file part is rejected with `validation_failed`. The whole request may be at most 68 MiB. Cairn streams the file to a temporary file inside the data directory, never into memory or `/tmp`, and renames it into the page's object once it is complete. Interrupted uploads are removed at startup.
+Any other field or file part is rejected with `validation_failed`. The whole request may be at most 530 MiB, including fields and multipart overhead. Cairn streams the file to a temporary file inside the data directory, never into memory or `/tmp`, and renames it into the page's object once it is complete. Interrupted uploads are removed at startup.
 
 ```sh
 curl --fail-with-body --silent --show-error \
   -X POST "http://127.0.0.1:8080/api/files" \
   -H "Authorization: Bearer $CAIRN_PUBLISHER_TOKEN" \
   -F "file=@quarterly-figures.xlsx" \
+  -F "agent=Research assistant" \
   -F "original_request=Keep the quarterly figures spreadsheet"
 ```
 
