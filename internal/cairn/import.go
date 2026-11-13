@@ -204,10 +204,8 @@ func (s *Server) importPage(w http.ResponseWriter, r *http.Request) {
 // else, including renderable types over their page limits, becomes a file page.
 func renderableImport(name string, size int64) bool {
 	switch strings.ToLower(filepath.Ext(name)) {
-	case ".md", ".markdown", ".html", ".htm", ".mmd", ".mermaid", ".txt", ".json", ".php", ".csv", ".xml", ".yaml", ".yml", ".log", ".svg":
+	case ".md", ".markdown", ".html", ".htm", ".mmd", ".mermaid", ".txt", ".json", ".php", ".csv", ".xml", ".yaml", ".yml", ".log":
 		return size <= 2<<20
-	case ".png", ".jpg", ".jpeg", ".gif", ".webp":
-		return size <= 4<<20
 	case ".docx":
 		return size <= 10<<20
 	}
@@ -241,15 +239,7 @@ func prepareImport(in *publication, name string, data []byte) error {
 			return err
 		}
 		return importBody(in, `<pre><code class="language-mermaid">`+template.HTMLEscapeString(string(data))+`</code></pre>`)
-	case ".png", ".jpg", ".jpeg", ".gif", ".webp":
-		if len(data) > 4<<20 {
-			return fmt.Errorf("Images can be up to 4 MB. This one is larger.")
-		}
-		asset := "image" + ext
-		in.Assets[asset] = data
-		in.Template = "visual"
-		return importBody(in, `<img alt="`+template.HTMLEscapeString(in.Title)+`" src="?asset=`+asset+`">`)
-	case ".txt", ".json", ".php", ".csv", ".xml", ".yaml", ".yml", ".log", ".svg":
+	case ".txt", ".json", ".php", ".csv", ".xml", ".yaml", ".yml", ".log":
 		if err := text(); err != nil {
 			return err
 		}

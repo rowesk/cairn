@@ -1128,3 +1128,27 @@ kbd {
     display: none;
   }
 }
+
+.library-tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.library-tabs a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  text-decoration: none;
+}
+.library-tabs a[aria-current="page"] {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+.search-hint {
+  padding: var(--space-3) var(--space-5);
+  color: var(--muted);
+}

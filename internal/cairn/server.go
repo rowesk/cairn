@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
@@ -94,7 +95,7 @@ type publication struct {
 type savedPage struct {
 	ID, Slug, Title, Agent, OriginalRequest, CreatedAt, Object string
 	RequestSummary, RequestSource                              string
-	FileName                                                   string
+	Kind, FileName                                             string
 	File                                                       bool
 	FileSize                                                   int64
 }
@@ -229,6 +230,10 @@ func Open(cfg Config) (*Server, error) {
 		return nil, err
 	}
 	if err := migrateLibrary(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := migrateKinds(db, cfg.DataDir); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -412,7 +417,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) getPage(slug string) (savedPage, error) {
 	var p savedPage
-	err := s.db.QueryRow(`SELECT id,slug,title,agent,original_request,created_at,object,request_summary,request_source,file_page,file_size FROM pages WHERE slug=?`, slug).Scan(&p.ID, &p.Slug, &p.Title, &p.Agent, &p.OriginalRequest, &p.CreatedAt, &p.Object, &p.RequestSummary, &p.RequestSource, &p.File, &p.FileSize)
+	err := s.db.QueryRow(`SELECT id,slug,title,agent,original_request,created_at,object,request_summary,request_source,file_page,file_size,kind FROM pages WHERE slug=?`, slug).Scan(&p.ID, &p.Slug, &p.Title, &p.Agent, &p.OriginalRequest, &p.CreatedAt, &p.Object, &p.RequestSummary, &p.RequestSource, &p.File, &p.FileSize, &p.Kind)
 	if err == nil {
 		p.FileName = s.sourceName(p)
 	}
@@ -490,8 +495,22 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 			return
 		}
 	}
+	autoShare := in.File && !replace
+	if autoShare {
+		in.Share = true
+		for {
+			in.PublicSlug, err = s.randomSlug()
+			if err != nil || in.PublicSlug != in.Slug {
+				break
+			}
+		}
+		if err != nil {
+			writeAPIError(w, http.StatusInternalServerError, ErrLinkAllocationFailed, "Cairn could not choose a free address. Try again.", true)
+			return
+		}
+	}
 	if in.Share {
-		if replace || s.cfg.PublicBaseURL == "" {
+		if replace || (s.cfg.PublicBaseURL == "" && !autoShare) {
 			writeAPIError(w, http.StatusServiceUnavailable, ErrSharingUnavailable, "public sharing is not configured yet", true)
 			return
 		}
@@ -523,6 +542,10 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 			in.RequestSource = previous.RequestSource
 		}
 	}
+	kind := "page"
+	if in.File {
+		kind = "file"
+	}
 	preview, body := pageText(in.HTML, in.Title)
 	var fileName string
 	var fileSize int64
@@ -544,19 +567,19 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 	tx, err := s.db.Begin()
 	if err == nil {
 		if replace {
-			_, err = tx.Exec(`UPDATE pages SET title=?,agent=?,original_request=?,object=?,preview=?,request_summary=?,request_source=?,source_name=?,index_version=?,index_source=?,updated_at=?,file_page=?,file_name=?,file_size=? WHERE id=?`, in.Title, in.Agent, in.OriginalRequest, object, preview, in.RequestSummary, in.RequestSource, sourceName, derivedVersion, stamp, now, in.File, fileName, fileSize, id)
+			_, err = tx.Exec(`UPDATE pages SET title=?,agent=?,original_request=?,object=?,preview=?,request_summary=?,request_source=?,source_name=?,index_version=?,index_source=?,updated_at=?,file_page=?,file_name=?,file_size=?,kind=? WHERE id=?`, in.Title, in.Agent, in.OriginalRequest, object, preview, in.RequestSummary, in.RequestSource, sourceName, derivedVersion, stamp, now, in.File, fileName, fileSize, kind, id)
 		} else {
 			// The owner has seen what they wrote or imported themselves.
 			opened := ""
 			if in.OwnerWritten {
 				opened = created
 			}
-			_, err = tx.Exec(`INSERT INTO pages (id,slug,title,agent,original_request,created_at,object,preview,request_summary,request_source,share_enabled,public_slug,source_name,index_version,index_source,opened_at,updated_at,file_page,file_name,file_size) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, in.Slug, in.Title, in.Agent, in.OriginalRequest, created, object, preview, in.RequestSummary, in.RequestSource, in.Share, func() any {
+			_, err = tx.Exec(`INSERT INTO pages (id,slug,title,agent,original_request,created_at,object,preview,request_summary,request_source,share_enabled,public_slug,source_name,index_version,index_source,opened_at,updated_at,file_page,file_name,file_size,kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, in.Slug, in.Title, in.Agent, in.OriginalRequest, created, object, preview, in.RequestSummary, in.RequestSource, in.Share, func() any {
 				if in.Share {
 					return in.PublicSlug
 				}
 				return nil
-			}(), sourceName, derivedVersion, stamp, opened, now, in.File, fileName, fileSize)
+			}(), sourceName, derivedVersion, stamp, opened, now, in.File, fileName, fileSize, kind)
 		}
 		if err == nil {
 			err = writeIndex(tx, pageIndex{ID: id, Title: in.Title, Summary: in.RequestSummary, Request: in.OriginalRequest, Agent: in.Agent, Body: body})
@@ -630,4 +653,62 @@ func (s *Server) removeObject(object string) {
 		s.cleanupPending = true
 		log.Print("Cairn: temporary object cleanup failed; will retry before next publication and at restart")
 	}
+}
+
+// migrateKinds runs once. Read source metadata because an older library may
+// not have rebuilt its derived source_name column yet.
+func migrateKinds(db *sql.DB, dataDir string) error {
+	if _, err := db.Exec("SELECT kind FROM pages LIMIT 0"); err == nil {
+		return nil
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("ALTER TABLE pages ADD COLUMN kind TEXT NOT NULL DEFAULT 'page' CHECK(kind IN ('page','file','link'))"); err != nil {
+		return err
+	}
+	rows, err := tx.Query(`SELECT id,object,file_page FROM pages`)
+	if err != nil {
+		return err
+	}
+	type fileRow struct {
+		id, name string
+		size     int64
+	}
+	var files []fileRow
+	for rows.Next() {
+		var id, object string
+		var file bool
+		if err := rows.Scan(&id, &object, &file); err != nil {
+			rows.Close()
+			return err
+		}
+		var source struct{ Name string }
+		metadata, _ := os.ReadFile(filepath.Join(dataDir, "objects", object, "source.json"))
+		_ = json.Unmarshal(metadata, &source)
+		switch strings.ToLower(filepath.Ext(source.Name)) {
+		case ".png", ".jpg", ".jpeg", ".gif", ".webp":
+			file = true
+		}
+		if file {
+			var size int64
+			if info, err := os.Stat(filepath.Join(dataDir, "objects", object, "source.bin")); err == nil {
+				size = info.Size()
+			}
+			files = append(files, fileRow{id, source.Name, size})
+		}
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, f := range files {
+		if _, err := tx.Exec(`UPDATE pages SET kind='file',file_name=?,file_size=? WHERE id=?`, f.name, f.size, f.id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }

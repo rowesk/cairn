@@ -47,13 +47,19 @@ type libraryItem struct {
 // libraryQuery is what the library shows: a collection, a search, an agent,
 // an order and a window of rows.
 type libraryQuery struct {
-	Text, Agent, Sort string
-	Archived, Shared  bool
-	Offset, Limit     int
+	Text, Agent, Sort, Kind string
+	Archived, Shared        bool
+	Offset, Limit           int
 }
 
 func readLibraryQuery(v url.Values) libraryQuery {
 	q := libraryQuery{Text: strings.TrimSpace(v.Get("q")), Agent: v.Get("agent"), Archived: v.Get("archived") == "1", Limit: pageSize}
+	switch v.Get("kind") {
+	case "files":
+		q.Kind = "file"
+	case "links":
+		q.Kind = "link"
+	}
 	q.Shared = v.Get("shared") == "1" && !q.Archived
 	if len(q.Text) > 200 {
 		q.Text = strings.ToValidUTF8(q.Text[:200], "")
@@ -79,6 +85,12 @@ func readLibraryQuery(v url.Values) libraryQuery {
 // values is the query string that reproduces this view, without its window.
 func (q libraryQuery) values() url.Values {
 	v := url.Values{}
+	if q.Kind == "file" {
+		v.Set("kind", "files")
+	}
+	if q.Kind == "link" {
+		v.Set("kind", "links")
+	}
 	if q.Archived {
 		v.Set("archived", "1")
 	}
@@ -114,11 +126,21 @@ type sortOption struct {
 	Selected     bool
 }
 
+type libraryTab struct {
+	Name, Href string
+	Count      int
+	Current    bool
+}
+type searchHint struct{ Text, Href string }
+
 type libraryViewData struct {
 	ownerChrome
-	Theme string
-	// Sharing is on when the server has a public address; without it the
-	// Shared collection only shows while it still holds pages.
+	Theme                                string
+	Kind, Noun, Nouns                    string
+	Tabs                                 []libraryTab
+	Hints                                []searchHint
+	LibraryHref, SharedHref, ArchiveHref string
+	// Sharing is on when the server has a public address.
 	Sharing                                 bool
 	Query, Agent                            string
 	Archived, Shared                        bool
@@ -163,9 +185,9 @@ func (d libraryViewData) CountText() string {
 	case d.Total == 0:
 		return ""
 	case len(d.Items) < d.Total:
-		return strconv.Itoa(len(d.Items)) + " of " + plural(d.Total, "page", "pages")
+		return strconv.Itoa(len(d.Items)) + " of " + plural(d.Total, d.Noun, d.Nouns)
 	default:
-		return plural(d.Total, "page", "pages")
+		return plural(d.Total, d.Noun, d.Nouns)
 	}
 }
 
@@ -200,7 +222,7 @@ func (s *Server) library(w http.ResponseWriter, r *http.Request) {
 		// The page and the list fragment always start at the top.
 		q.Offset = 0
 	}
-	data := libraryViewData{Theme: s.themes().Admin, Query: q.Text, Agent: q.Agent, Archived: q.Archived, Shared: q.Shared}
+	data := libraryViewData{Kind: q.kind(), Noun: q.kind(), Nouns: q.kind() + "s", Theme: s.themes().Admin, Query: q.Text, Agent: q.Agent, Archived: q.Archived, Shared: q.Shared}
 	fail := func() { s.showError(w, http.StatusInternalServerError, problemStorage(r.URL.RequestURI())) }
 	items, total, err := s.listPages(q)
 	if err != nil {
@@ -211,11 +233,59 @@ func (s *Server) library(w http.ResponseWriter, r *http.Request) {
 		items[i].Row = q.Offset + i + 1
 	}
 	data.Items, data.Total = items, total
-	if err := s.db.QueryRow(`SELECT count(CASE WHEN archived=0 THEN 1 END),count(CASE WHEN archived=0 AND share_enabled=1 THEN 1 END),count(CASE WHEN archived=1 THEN 1 END) FROM pages`).Scan(&data.LibraryCount, &data.SharedCount, &data.ArchiveCount); err != nil {
+	if err := s.db.QueryRow(`SELECT count(CASE WHEN archived=0 THEN 1 END),count(CASE WHEN archived=0 AND share_enabled=1 THEN 1 END),count(CASE WHEN archived=1 THEN 1 END) FROM pages WHERE kind=?`, q.kind()).Scan(&data.LibraryCount, &data.SharedCount, &data.ArchiveCount); err != nil {
 		fail()
 		return
 	}
-	data.FirstRun = data.LibraryCount == 0 && data.ArchiveCount == 0
+	for _, kind := range []string{"page", "file", "link"} {
+		tabQuery := q
+		tabQuery.Kind, tabQuery.Text, tabQuery.Agent = kind, "", ""
+		var count int
+		if err := s.db.QueryRow(`SELECT count(*) FROM pages WHERE kind=? AND archived=? AND (?=0 OR share_enabled=1)`, kind, q.Archived, q.Shared).Scan(&count); err != nil {
+			fail()
+			return
+		}
+		data.Tabs = append(data.Tabs, libraryTab{Name: strings.ToUpper(kind[:1]) + kind[1:] + "s", Href: tabQuery.href(nil), Count: count, Current: kind == q.kind()})
+	}
+	base := libraryQuery{Kind: q.Kind}
+	data.LibraryHref = base.href(nil)
+	base.Shared = true
+	data.SharedHref = base.href(nil)
+	base.Shared, base.Archived = false, true
+	data.ArchiveHref = base.href(nil)
+	var all int
+	if err := s.db.QueryRow(`SELECT count(*) FROM pages`).Scan(&all); err != nil {
+		fail()
+		return
+	}
+	data.FirstRun = all == 0 && q.kind() == "page"
+	if q.Text != "" && total == 0 {
+		for _, kind := range []string{"page", "file", "link"} {
+			for _, archived := range []bool{false, true} {
+				if kind == q.kind() && archived == q.Archived {
+					continue
+				}
+				other := q
+				other.Kind, other.Archived, other.Shared, other.Limit = kind, archived, false, 1
+				_, count, err := s.listPages(other)
+				if err != nil {
+					fail()
+					return
+				}
+				if count > 0 {
+					one, many := kind, kind+"s"
+					if archived {
+						one, many = "archived "+one, "archived "+many
+					}
+					verb := " match."
+					if count == 1 {
+						verb = " matches."
+					}
+					data.Hints = append(data.Hints, searchHint{Text: plural(count, one, many) + verb, Href: other.href(nil)})
+				}
+			}
+		}
+	}
 	if data.Agents, err = s.agentNames(); err != nil {
 		fail()
 		return
@@ -234,7 +304,7 @@ func (s *Server) library(w http.ResponseWriter, r *http.Request) {
 		data.MoreOffset = shown
 		data.MoreHref = q.href(url.Values{"n": {strconv.Itoa(shown + pageSize)}}) + "#page-row-" + strconv.Itoa(shown+1)
 	}
-	data.ClearHref = libraryQuery{Archived: q.Archived, Shared: q.Shared}.href(nil)
+	data.ClearHref = libraryQuery{Kind: q.Kind, Archived: q.Archived, Shared: q.Shared}.href(nil)
 	data.From = q.fromQuery()
 	data.Here = q.href(nil)
 	if q.Limit > pageSize {
@@ -397,14 +467,21 @@ func (s *Server) agentNames() ([]string, error) {
 }
 
 // libraryColumns are the page fields a row needs, read from pages AS p.
-const libraryColumns = `p.id,p.slug,p.title,p.agent,p.request_summary,p.original_request,p.created_at,p.preview,p.archived,p.share_enabled,coalesce(p.password_hash,'')!='',p.opened_at,p.source_name,coalesce(p.public_slug,''),p.file_page,p.file_name,p.file_size`
+const libraryColumns = `p.id,p.slug,p.title,p.agent,p.request_summary,p.original_request,p.created_at,p.preview,p.archived,p.share_enabled,coalesce(p.password_hash,'')!='',p.opened_at,p.source_name,coalesce(p.public_slug,''),p.kind='file',CASE WHEN p.file_name='' THEN p.source_name ELSE p.file_name END,p.file_size,p.object`
 
 // libraryFilter limits a query to the collection and agent; its arguments
 // follow from filterArgs.
-const libraryFilter = `p.archived=? AND (?=0 OR p.share_enabled=1) AND (?='' OR p.agent=?)`
+const libraryFilter = `(?='*' OR p.kind=?) AND p.archived=? AND (?=0 OR p.share_enabled=1) AND (?='' OR p.agent=?)`
+
+func (q libraryQuery) kind() string {
+	if q.Kind == "" {
+		return "page"
+	}
+	return q.Kind
+}
 
 func (q libraryQuery) filterArgs() []any {
-	return []any{q.Archived, q.Shared, q.Agent, q.Agent}
+	return []any{q.kind(), q.kind(), q.Archived, q.Shared, q.Agent, q.Agent}
 }
 
 func (q libraryQuery) order() string {
@@ -496,10 +573,15 @@ func (s *Server) scanItems(query string, args ...any) ([]libraryItem, []int, []s
 	base := strings.TrimRight(s.cfg.PublicBaseURL, "/")
 	for rows.Next() {
 		var p libraryItem
-		var id, summary, request, opened, source, publicSlug string
+		var id, summary, request, opened, source, publicSlug, object string
 		var tier int
-		if err := rows.Scan(&id, &p.Slug, &p.Title, &p.Agent, &summary, &request, &p.CreatedAt, &p.Preview, &p.Archived, &p.Shared, &p.Protected, &opened, &source, &publicSlug, &p.File, &p.FileName, &p.FileSize, &tier); err != nil {
+		if err := rows.Scan(&id, &p.Slug, &p.Title, &p.Agent, &summary, &request, &p.CreatedAt, &p.Preview, &p.Archived, &p.Shared, &p.Protected, &opened, &source, &publicSlug, &p.File, &p.FileName, &p.FileSize, &object, &tier); err != nil {
 			return nil, nil, nil, err
+		}
+		if p.File && p.FileSize == 0 {
+			if info, err := os.Stat(filepath.Join(s.cfg.DataDir, "objects", object, "source.bin")); err == nil {
+				p.FileSize = info.Size()
+			}
 		}
 		p.Photo = photos[p.Agent]
 		p.Access, p.AccessLong = "Private", "Private. Only your devices can open it."

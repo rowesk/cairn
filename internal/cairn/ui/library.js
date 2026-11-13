@@ -29,7 +29,7 @@
  if (frame) cairnFollowScheme(frame);
  const narrow = matchMedia('(max-width: 650px)');
  const keysOff = () => root.dataset.shortcuts === 'off';
- const pages = n => n === 1 ? '1 page' : n + ' pages';
+ const pages = n => n + ' ' + (n === 1 ? sheet.dataset.noun : sheet.dataset.nouns);
  const rows = () => $$('#rows .report-row');
  const rowOf = el => el?.closest?.('.report-row');
  // A row on screen now, even if the list was redrawn since it was picked.
@@ -84,7 +84,7 @@
   let text = body.dataset.count;
   if (shown && shown < total && text.includes(' ·')) text = shown + ' of ' + pages(total) + text.slice(text.indexOf(' ·'));
   count.textContent = text;
-  status.textContent = search.value.trim() ? (total ? pages(total) + ' match' : 'No pages match') : (text || 'No pages here');
+  status.textContent = search.value.trim() ? (total ? pages(total) + ' match' : 'No ' + sheet.dataset.nouns + ' match') : (text || 'No ' + sheet.dataset.nouns + ' here');
  };
 
  // Row actions: the "…" link to Manage becomes a menu button.
@@ -170,10 +170,21 @@
  };
 
  // Archive or restore in place, with Undo.
- const counts = delta => {
-  const add = (el, n) => { if (el) el.textContent = Math.max(0, Number(el.textContent) + n); };
-  add($('.topnav a[href="/"] .count'), delta);
-  add($('.topnav a[href="/?archived=1"] .count'), -delta);
+ let countRequest;
+ const counts = async () => {
+  countRequest?.abort();
+  const controller = new AbortController();
+  countRequest = controller;
+  try {
+   const response = await fetch(location.href, {signal: controller.signal});
+   if (!response.ok) return;
+   const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+   if (controller.signal.aborted) return;
+   for (const selector of ['.topbar .topnav, .topbar .topbar-spacer', '.library-tabs']) {
+    const current = $(selector), updated = $(selector, doc);
+    if (current && updated) current.replaceWith(updated);
+   }
+  } catch { /* Keep the links already on screen if the refresh fails. */ }
  };
  const post = async (slug, archived) => {
   const body = new URLSearchParams();
@@ -193,7 +204,7 @@
   const hadFocus = row.contains(document.activeElement) || dialog.open;
   try { await post(slug, toArchive); } catch (error) { say(error.message, null, 'error'); return; }
   row.remove();
-  counts(toArchive ? -1 : 1);
+  counts();
   adjustTotal(-1);
   if (hadFocus && neighbour) select(neighbour, true);
   const undo = async () => {
@@ -201,7 +212,7 @@
    if (!list.isConnected) { load(location.href, 'none'); say((toArchive ? 'Restored “' : 'Archived “') + title + '”.'); return; }
    const before = next && next.isConnected ? next : null;
    list.insertBefore(row, before);
-   counts(toArchive ? 1 : -1);
+   counts();
    adjustTotal(1);
    select(row, true);
    say((toArchive ? 'Restored “' : 'Archived “') + title + (toArchive ? '” to your library.' : '” again.'));
@@ -213,7 +224,7 @@
   if (!body) return;
   const total = Number(body.dataset.total) + delta;
   body.dataset.total = total;
-  body.dataset.count = body.dataset.count.replace(/^(\d+ of )?\d+ pages?/, pages(total));
+  body.dataset.count = body.dataset.count.replace(/^(\d+ of )?\d+ (?:pages?|files?|links?)/, pages(total));
   announce();
  };
 

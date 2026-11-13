@@ -918,7 +918,7 @@ func (s *Server) apiRead(w http.ResponseWriter, r *http.Request, cred credential
 func (s *Server) apiList(w http.ResponseWriter, r *http.Request, cred credential) {
 	values := r.URL.Query()
 	var problems []FieldError
-	q := libraryQuery{Text: strings.TrimSpace(values.Get("q")), Agent: values.Get("agent"), Limit: defaultListLimit}
+	q := libraryQuery{Kind: "*", Text: strings.TrimSpace(values.Get("q")), Agent: values.Get("agent"), Limit: defaultListLimit}
 	if len(q.Text) > 200 {
 		problems = append(problems, FieldError{Code: FieldTooLong, Field: "q", Message: fmt.Sprintf("q is %d bytes; the limit is 200 bytes.", len(q.Text)), Limit: 200, Actual: len(q.Text), Unit: "bytes"})
 	}

@@ -167,8 +167,11 @@ func TestFilePageAPIPublishReadAndDownload(t *testing.T) {
 	if code != 200 || !bytes.Equal(got, data) || h.Get("Content-Type") != "application/octet-stream" || h.Get("Content-Disposition") != `attachment; filename="Q3 numbers.xlsx"` {
 		t.Fatalf("download: %d %v len=%d", code, h, len(got))
 	}
-	_, _, list := request(t, srv, "GET", "/", nil, "")
-	if !strings.Contains(string(list), "doc-mark file-mark") || !strings.Contains(string(list), "XLSX · <span class=\"file-row-size\">2.9 KB</span>") {
+	if _, _, pages := request(t, srv, "GET", "/", nil, ""); strings.Contains(string(pages), `data-slug="q3"`) {
+		t.Fatal("file appears under Pages")
+	}
+	_, _, list := request(t, srv, "GET", "/?kind=files", nil, "")
+	if !strings.Contains(string(list), `data-shared`) || !strings.Contains(string(list), "doc-mark file-mark") || !strings.Contains(string(list), "Q3 numbers.xlsx · <span class=\"file-row-size\">2.9 KB</span>") {
 		t.Fatal("library row is not a file row")
 	}
 	// An explicit title wins over the filename.
@@ -274,7 +277,7 @@ func TestFilePageImportRouting(t *testing.T) {
 		file       bool
 	}{
 		{"huge.png", "huge", large, false, true},
-		{"small.png", "small", png, false, false},
+		{"small.png", "small", png, false, true},
 		{"notes.md", "notes", []byte("# Notes\n\nKeep me."), true, true},
 		{"cover.psd", "cover", []byte("8BPS fixture"), false, true},
 	} {
@@ -296,8 +299,8 @@ func TestFilePageImportRouting(t *testing.T) {
 			}
 		})
 	}
-	if _, _, b := request(t, srv, "GET", "/_content/small", nil, ""); !strings.Contains(string(b), "?asset=image.png") {
-		t.Fatal("small image is not a visual page")
+	if _, _, b := request(t, srv, "GET", "/_content/small", nil, ""); !strings.Contains(string(b), "Open this page in Cairn to download the file.") {
+		t.Fatal("small image is not a file page")
 	}
 	if _, _, b := request(t, srv, "GET", "/cover", nil, ""); !strings.Contains(string(b), "Photoshop document") {
 		t.Fatal("psd type")
@@ -495,7 +498,7 @@ func TestFilePageSurvivesRestartAndWipesUploads(t *testing.T) {
 	if c, _, got := request(t, srv, "GET", "/kept?download=1", nil, ""); c != 200 || !bytes.Equal(got, data) {
 		t.Fatal("download lost after restart")
 	}
-	if _, _, list := request(t, srv, "GET", "/", nil, ""); !strings.Contains(string(list), "ZIP · <span class=\"file-row-size\">2 KB</span>") {
+	if _, _, list := request(t, srv, "GET", "/?kind=files", nil, ""); !strings.Contains(string(list), "kept.zip · <span class=\"file-row-size\">2 KB</span>") {
 		t.Fatal("library row lost after restart")
 	}
 }

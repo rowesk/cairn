@@ -113,6 +113,7 @@ func (s *Server) followLibraryView(d *readerData, p savedPage, in string) {
 		return
 	}
 	q := readLibraryQuery(v)
+	q.Kind = p.Kind
 	q.Offset, q.Limit = 0, 1000
 	if q.fromQuery() == "" {
 		return
@@ -175,9 +176,9 @@ func (s *Server) renderReader(w http.ResponseWriter, r *http.Request, p savedPag
 		// File pages offer Download in place of the content frame.
 		d.Download = p.FileName != "" && !d.Editable && !p.File
 		d.Archived, d.Previous, d.Next = s.readerNeighbours(p)
-		d.BackHref = "/"
+		d.BackHref = (libraryQuery{Kind: p.Kind}).href(nil)
 		if d.Archived {
-			d.BackHref = "/?archived=1"
+			d.BackHref = (libraryQuery{Kind: p.Kind, Archived: true}).href(nil)
 		}
 		s.followLibraryView(&d, p, r.URL.Query().Get("in"))
 	}
@@ -274,13 +275,13 @@ func (s *Server) readerNeighbours(p savedPage) (archived bool, previous, next *r
 	}
 	find := func(query string) *readerPage {
 		var n readerPage
-		if s.db.QueryRow(query, archived, p.CreatedAt, p.CreatedAt, rowid).Scan(&n.Slug, &n.Title) != nil {
+		if s.db.QueryRow(query, p.Kind, archived, p.CreatedAt, p.CreatedAt, rowid).Scan(&n.Slug, &n.Title) != nil {
 			return nil
 		}
 		return &n
 	}
-	previous = find(`SELECT slug,title FROM pages WHERE archived=? AND (created_at>? OR (created_at=? AND rowid>?)) ORDER BY created_at ASC,rowid ASC LIMIT 1`)
-	next = find(`SELECT slug,title FROM pages WHERE archived=? AND (created_at<? OR (created_at=? AND rowid<?)) ORDER BY created_at DESC,rowid DESC LIMIT 1`)
+	previous = find(`SELECT slug,title FROM pages WHERE kind=? AND archived=? AND (created_at>? OR (created_at=? AND rowid>?)) ORDER BY created_at ASC,rowid ASC LIMIT 1`)
+	next = find(`SELECT slug,title FROM pages WHERE kind=? AND archived=? AND (created_at<? OR (created_at=? AND rowid<?)) ORDER BY created_at DESC,rowid DESC LIMIT 1`)
 	return archived, previous, next
 }
 

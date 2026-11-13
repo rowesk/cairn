@@ -127,7 +127,7 @@ func TestImportedFilesAndDownloadAccess(t *testing.T) {
 		{"script.php", []byte("<?php system('id'); ?><script>alert(1)</script>"), "&lt;?php"},
 		{"values.json", []byte(`{"a":1}`), "&#34;a&#34;"},
 		{"flow.mmd", []byte("graph TD; A-->B"), "/_runtime/mermaid.js"},
-		{"photo.png", png, "?asset=image.png"},
+		{"photo.png", png, "Open this page in Cairn to download the file."},
 		{"document.docx", doc.Bytes(), "Word text &amp; more"},
 		{"document.pdf", []byte("%PDF-1.4\nfixture"), "Open this page in Cairn to download the file."},
 	} {
