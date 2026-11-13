@@ -56,4 +56,5 @@ for relative, package in sorted(lock['packages'].items()):
     else:
         raise SystemExit('Missing npm licence: ' + name)
 include('DM Sans font', [root / 'internal/cairn/ui/OFL.txt'])
+include('Lucide icons', [root / 'internal/cairn/ui/LUCIDE-LICENSE'])
 output.write_text(''.join(sections))

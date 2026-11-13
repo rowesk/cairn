@@ -32,7 +32,7 @@ func TestReaderSaysASharedPageNeedsItsPassword(t *testing.T) {
 		_, _, body := request(t, private, "GET", "/"+slug, nil, "")
 		return shownMarkup(body)
 	}
-	lock := `<rect x="5" y="10" width="14" height="11" rx="2"/>`
+	lock := `<path d="M7 11V7a5 5 0 0 1 10 0v4"/>`
 	locked := get("locked")
 	status := regexp.MustCompile(`(?s)<p class="access-status">(.*?)</p>`).FindStringSubmatch(locked)
 	if status == nil || !strings.Contains(status[1], "Shared with a password") || !strings.Contains(status[1], lock) {

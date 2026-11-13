@@ -610,7 +610,7 @@ func TestNoticesShowInOnePersistentRegion(t *testing.T) {
 		t.Error("failed send points at the wrong fix")
 	}
 	// Each kind has its own icon, so colour is never the only signal.
-	for kind, icon := range map[string]string{"sent": `<path d="m5 12 5 5 9-10"/>`, "failed": `<path d="M12 7.5v5.5M12 16.5h.01"/>`, "expired": `<path d="M12 11v5.5M12 7.5h.01"/>`} {
+	for kind, icon := range map[string]string{"sent": `<path d="M20 6 9 17l-5-5"/>`, "failed": `<line x1="12" x2="12" y1="8" y2="12"/>`, "expired": `<path d="M12 16v-4"/>`} {
 		_, _, body := request(t, private, "GET", "/first?kindle="+kind, nil, "")
 		parts := strings.SplitN(string(body), `data-toast>`, 2)
 		if len(parts) < 2 || !strings.Contains(strings.SplitN(parts[1], "toast-body", 2)[0], icon) {
