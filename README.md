@@ -8,7 +8,9 @@ Cairn gives your agents a place to publish finished work as standalone pages. Th
 
 [Download Cairn](https://github.com/rowesk/cairn/releases/latest) · [Installation guide](docs/install.md) · [Publishing API](docs/publishing.md)
 
-![Cairn's private library: a search field above a list of pages with their authors, dates and access](docs/images/library.png)
+This README describes the current code on `main`. Some of it, including search, editing, the wider API, `cairn publish` and Send to Kindle, has not reached a published release yet. The [changelog](CHANGELOG.md) lists what is still unreleased.
+
+![Cairn's private library: a search field above a list of pages with their authors and dates](docs/images/library.png)
 
 ## What you get
 
@@ -70,13 +72,14 @@ Reading a page: C opens the contents, [ and ] go to the previous and next page i
 
 Download the Linux archive and `checksums.txt` from [GitHub Releases](https://github.com/rowesk/cairn/releases/latest). Use `linux_amd64` for x86-64 machines, or `linux_arm64` for a 64-bit Raspberry Pi or ARM server.
 
-On ARM64, with both files in the current directory:
+On ARM64, with both files in the current directory, set `VERSION` to the version in the archive's name. These commands match the code on `main`; v0.1.0 starts differently, so for that release follow the README inside its archive.
 
 ```sh
+VERSION=v0.0.0   # replace with the version you downloaded
 sha256sum --ignore-missing --check checksums.txt
 # Check that your archive reports OK before continuing.
-tar -xzf cairn_v0.2.0_linux_arm64.tar.gz
-cd cairn_v0.2.0_linux_arm64
+tar -xzf cairn_${VERSION}_linux_arm64.tar.gz
+cd cairn_${VERSION}_linux_arm64
 ./cairn init -data ./data -owner "Alex"
 ./cairn serve -data ./data
 ```
@@ -109,7 +112,7 @@ Or let the `cairn` binary send the file and its images, and print the page's add
 cairn publish notes.md -request "summarise this week's reading"
 ```
 
-Agents can also list and search their pages, read one back with its Markdown, replace it and archive it. `GET /api` is a short index with a complete example, and `/api/openapi.json` is the full OpenAPI 3.1 contract. Every failure names each field to fix. The [publishing reference](docs/publishing.md) has the details. Listing, reading, archiving, `cairn publish` and the key dialog arrive in the next release; v0.2.0 has publishing and replacement only (see the [changelog](CHANGELOG.md)).
+Agents can also list and search their pages, read one back with its Markdown, replace it and archive it. `GET /api` is a short index with a complete example, and `/api/openapi.json` is the full OpenAPI 3.1 contract. Every failure names each field to fix. The [publishing reference](docs/publishing.md) has the details.
 
 ## Sharing a page
 
@@ -119,7 +122,7 @@ Turn on **Sharing** for a page under **Manage page** and it is readable at its p
 
 ## Reading on a Kindle
 
-New in the next release, not in v0.2.0: add an SMTP account and your Kindle's email address, and every page gets a Send to Kindle action in the library menu and the reader. Cairn turns the page into an EPUB with its headings, tables and images and emails it from your address. The [Kindle guide](docs/kindle.md) covers app passwords and Amazon's approved sender list.
+Add an SMTP account and your Kindle's email address, and every page gets a Send to Kindle action in the library menu and the reader. Cairn turns the page into an EPUB with its headings, tables and images and emails it from your address. The [Kindle guide](docs/kindle.md) covers app passwords and Amazon's approved sender list.
 
 Cairn is built for one owner. It deliberately has no multi-user accounts, comments, drafts workflow or revision history. Updating a page replaces it in place.
 
@@ -128,5 +131,3 @@ Cairn is built for one owner. It deliberately has no multi-user accounts, commen
 [Writing and importing](docs/authoring.md) · [Send to Kindle](docs/kindle.md) · [Backups and upgrades](docs/operations.md) · [Troubleshooting](docs/troubleshooting.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 Cairn is [MIT licensed](LICENSE). Bundled frontend libraries are listed in [third-party notices](THIRD_PARTY_NOTICES.md).
-
-Publish privately by default. Set `share_enabled` to `true` on `POST /api/pages` only when the owner asked for this page to be shared. Never set it otherwise. Tell the owner the saved `public_url` afterwards, as well as the private address. Sharing must be configured or creation fails with 503 `public_sharing_unavailable` without saving. Omitted or `false` stays private. Any supplied value on PUT is refused; replacement preserves sharing, link names and passwords. Files start private.
