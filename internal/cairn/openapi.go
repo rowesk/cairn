@@ -339,7 +339,7 @@ func openAPIDocument() map[string]any {
 
 // fileOperation describes the streamed multipart API, not JSON publication.
 func fileOperation(summary, id string, status int) map[string]any {
-	fields := map[string]any{"file": map[string]any{"type": "string", "format": "binary", "description": "One inert file, up to 50 MiB.", "x-max-bytes": maxFileBytes}}
+	fields := map[string]any{"file": map[string]any{"type": "string", "format": "binary", "description": "One inert file, up to 512 MiB.", "x-max-bytes": maxFileBytes}}
 	for _, f := range publicationFields {
 		switch f.Name {
 		case "title", "agent", "original_request", "request_summary", "request_source", "slug":

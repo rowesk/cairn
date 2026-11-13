@@ -74,6 +74,8 @@ type Server struct {
 }
 type publication struct {
 	Share bool `json:"-"`
+	// ImportedHTML is set only by the owner import path, never from JSON.
+	ImportedHTML bool `json:"-"`
 	// OwnerWritten marks a page the owner wrote or imported in Cairn. It may
 	// have no original request; the API always needs one.
 	OwnerWritten    bool              `json:"-"`

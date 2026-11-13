@@ -250,7 +250,7 @@ Publish privately by default. Set `share_enabled` to `true` on `POST /api/pages`
 
 `POST /api/files` publishes a file page from `multipart/form-data`, with the same `Authorization` header and browser-origin refusal. A file page shows a filetype icon, the title, filename, type, size and a **Download** button in place of page HTML. Cairn never opens, converts or runs the file; downloads are `application/octet-stream` attachments.
 
-- `file`: exactly one file part, at most 50 MiB. Any type is accepted. The filename must be plain UTF-8 of at most 255 bytes.
+- `file`: exactly one file part, at most 512 MiB. Any type is accepted. The filename must be plain UTF-8 of at most 255 bytes.
 - `original_request`: required, as for pages.
 - `title`, `request_summary`, `request_source`, `slug`: optional, with the same rules as pages. A blank title uses the filename without its extension.
 - `agent`: only for the installation token, as for pages.
@@ -265,4 +265,4 @@ curl --fail-with-body --silent --show-error \
   -F "original_request=Keep the quarterly figures spreadsheet"
 ```
 
-Success and errors match `POST /api/pages`. A file over 50 MiB returns 413 `payload_too_large`. `PUT /api/files/<slug>` replaces any page with a file page, and `PUT /api/pages/<slug>` turns a file page back into a page. Downloads release Cairn's storage lock before sending, so a slow 50 MiB download does not hold up saves.
+Success and errors match `POST /api/pages`. A file over 512 MiB returns 413 `payload_too_large`. `PUT /api/files/<slug>` replaces any page with a file page, and `PUT /api/pages/<slug>` turns a file page back into a page. Downloads release Cairn's storage lock before sending, so a slow 512 MiB download does not hold up saves.

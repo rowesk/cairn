@@ -233,7 +233,7 @@ func TestFilePageSizeCap(t *testing.T) {
 	dir := t.TempDir()
 	srv, close := start(t, dir)
 	defer close()
-	const limit = 50 << 20
+	const limit = 512 << 20
 	meta := [][2]string{{"agent", "FileAgent"}, {"original_request", "Big file"}, {"slug", "big"}}
 	status, body := sendFile(t, srv, "POST", "/api/files", meta, []filePart{{"file", "big.bin", patterned(limit)}}, nil)
 	if status != 201 {

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Keep streamed file pages up to 50 MiB and explicit, creation-only agent sharing alongside the new reader and publishing API.
+- Keep streamed file pages up to 512 MiB and explicit, creation-only agent sharing alongside the new reader and publishing API.
 - Require Go 1.26.11.
 
 ### Reading

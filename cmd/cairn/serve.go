@@ -356,7 +356,9 @@ func (c *cli) runServer(ctx context.Context, cfg serveConfig) error {
 	}
 	defer app.Close()
 	makeServer := func(handler http.Handler) *http.Server {
-		return &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
+		// Transfers can take minutes over Tailscale. Bound headers and idle
+		// connections without imposing a deadline on uploads or downloads.
+		return &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	}
 	privateListener, err := net.Listen("tcp", cfg.listen.value)
 	if err != nil {

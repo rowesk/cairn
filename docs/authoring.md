@@ -60,7 +60,7 @@ Cairn stores each page as rendered HTML. Pages saved before these changes keep t
 
 ## Imports
 
-Import accepts any file up to 50 MiB. Cairn opens a file as a page when it can: UTF-8 text up to 2 MiB, images up to 4 MiB and DOCX up to 10 MiB. Everything else, including those types over their limits, becomes a file page with a filetype icon, the filename, size and a **Download** button. Tick **Save as a file page, even if Cairn can open it** to keep a file you could otherwise read as a page, such as a Markdown file you want to hand on unchanged. Supporting images must fit 4 MiB each.
+Import accepts any file up to 512 MiB. Cairn opens a file as a page when it can: UTF-8 HTML up to 25 MiB, other UTF-8 text up to 2 MiB and DOCX up to 10 MiB. Images become file pages. Everything else, including those types over their limits, becomes a file page with a filetype icon, the filename, size and a **Download** button. Tick **Save as a file page, even if Cairn can open it** to keep a file you could otherwise read as a page, such as a Markdown file you want to hand on unchanged. Supporting images must fit 4 MiB each.
 
 | File | Reading view |
 | --- | --- |

@@ -96,7 +96,7 @@ func TestImportTitlesAndFileCards(t *testing.T) {
 		t.Errorf("PDF excerpt: %s", regexp.MustCompile(`<p class="excerpt">[^<]*</p>`).FindAllString(string(list), -1))
 	}
 	_, _, form := request(t, private, "GET", "/import", nil, "")
-	if !strings.Contains(string(form), "Any file up to 50 MiB") || !strings.Contains(string(form), `class="dropzone is-compact`) || !strings.Contains(string(form), `<form method="post" enctype="multipart/form-data" class="stacked-form" novalidate>`) {
+	if !strings.Contains(string(form), "Any file up to 512 MiB") || !strings.Contains(string(form), `class="dropzone is-compact`) || !strings.Contains(string(form), `<form method="post" enctype="multipart/form-data" class="stacked-form" novalidate>`) {
 		t.Error("import form: hint, supporting images zone or novalidate")
 	}
 }

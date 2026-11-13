@@ -16,7 +16,7 @@ import (
 
 // File pages keep one uploaded file as the page itself: an icon, title and
 // download button instead of rendered report HTML.
-const maxFileBytes = 50 << 20
+const maxFileBytes = 512 << 20
 
 // Supporting images held in memory per request, and the whole request:
 // field values, those images and multipart overhead on top of the file.
@@ -200,7 +200,7 @@ func (s *Server) publishFile(w http.ResponseWriter, r *http.Request) {
 	u, err := s.readUpload(r, "file", 0)
 	if err != nil {
 		if errors.Is(err, errUploadTooLarge) {
-			writeAPIError(w, http.StatusRequestEntityTooLarge, ErrPayloadTooLarge, "the file must fit 50 MiB", false)
+			writeAPIError(w, http.StatusRequestEntityTooLarge, ErrPayloadTooLarge, "the file must fit 512 MiB", false)
 		} else {
 			writeAPIError(w, http.StatusBadRequest, ErrValidationFailed, err.Error(), false)
 		}
@@ -238,7 +238,7 @@ func (s *Server) publishFile(w http.ResponseWriter, r *http.Request) {
 }
 
 // serveSource opens the stored file under the read lock, then releases the
-// lock before sending it. A slow 50 MiB download must not hold up saves.
+// lock before sending it. A slow 512 MiB download must not hold up saves.
 // The open descriptor stays valid if the page is replaced or deleted meanwhile.
 func (s *Server) serveSource(w http.ResponseWriter, r *http.Request, p savedPage, unlock func()) {
 	if p.FileName == "" {

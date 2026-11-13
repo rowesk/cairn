@@ -671,6 +671,10 @@ func checkFields(in publication) []FieldError {
 	} else if strings.ContainsAny(in.RequestSource, "\r\n") {
 		add(FieldError{Code: FieldMultipleLines, Field: "request_source", Message: "request_source must be one line, such as Claude Code."})
 	}
+	htmlLimit := maxContentBytes
+	if in.ImportedHTML {
+		htmlLimit = maxImportHTMLBytes
+	}
 	hasMarkdown, hasHTML := strings.TrimSpace(in.Markdown) != "", strings.TrimSpace(in.HTML) != ""
 	switch {
 	case !hasMarkdown && !hasHTML:
@@ -679,8 +683,8 @@ func checkFields(in publication) []FieldError {
 		add(FieldError{Code: FieldConflict, Field: "html", Message: "html and markdown were both sent. Send one of them."})
 	case len(in.Markdown) > maxContentBytes:
 		tooLong("markdown", len(in.Markdown), maxContentBytes)
-	case len(in.HTML) > maxContentBytes:
-		tooLong("html", len(in.HTML), maxContentBytes)
+	case len(in.HTML) > htmlLimit:
+		tooLong("html", len(in.HTML), htmlLimit)
 	}
 	if in.Template != "" && !slices.Contains(pageTemplates, in.Template) {
 		add(FieldError{Code: FieldInvalidValue, Field: "template", Message: "template " + strconv.Quote(clip(in.Template, 40)) + " is not one of report, comparison or visual.", Actual: clip(in.Template, 40), Allowed: pageTemplates})
@@ -1630,7 +1634,7 @@ func apiIndexDocument(linkLength int) map[string]any {
 			{"method": "GET", "path": "/api", "description": "This index. No key needed."},
 			{"method": "GET", "path": "/api/openapi.json", "description": "The full OpenAPI 3.1 contract. No key needed."},
 			{"method": "POST", "path": "/api/pages", "description": "Publish a page from Markdown or HTML. Private by default; share_enabled opts into sharing on creation only when the owner asks."},
-			{"method": "POST", "path": "/api/files", "description": "Publish a private file page, up to 50 MiB, with multipart/form-data."},
+			{"method": "POST", "path": "/api/files", "description": "Publish a private file page, up to 512 MiB, with multipart/form-data."},
 			{"method": "PUT", "path": "/api/files/{slug}", "description": "Replace a page with a file. Sharing and passwords stay."},
 			{"method": "GET", "path": "/api/pages", "description": "List your pages, newest first, or search them with q."},
 			{"method": "GET", "path": "/api/pages/{slug}", "description": "Read a page with its request and the Markdown or HTML Cairn kept. HEAD checks that it exists."},

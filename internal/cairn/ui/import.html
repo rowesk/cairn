@@ -20,7 +20,7 @@
 </div>
 </div>
 <p class="field-error" id="document-error"{{if .Errors.document}} role="alert"{{else}} hidden{{end}}>{{icon "alert"}}<span>{{.Errors.document}}</span></p>
-<p class="field-help" id="document-hint">Any file up to 50 MiB. Text up to 2 MiB, images up to 4 MiB and DOCX up to 10 MiB open as pages. Other files get a download page.</p>
+<p class="field-help" id="document-hint">Any file up to 512 MiB. HTML up to 25 MiB, text up to 2 MiB and DOCX up to 10 MiB open as pages. Other files get a download page.</p>
 {{- with .Errors.rechoose}}
 <p class="field-note">{{icon "info"}}<span>{{if $.FileName}}Choose “{{$.FileName}}” again to import it.{{else}}{{.}}{{end}} Browsers don’t keep a chosen file when the form reloads.</span></p>
 {{- end}}

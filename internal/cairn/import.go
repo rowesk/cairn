@@ -26,9 +26,12 @@ const importAccept = ""
 // checks the same limit and type list before uploading, with the same words.
 const importLimit = maxFileBytes
 
+// Only owner HTML imports use this limit. JSON publications keep maxContentBytes.
+const maxImportHTMLBytes = 25 << 20
+
 const (
 	importUnsupported = "Choose a file to import."
-	importTooLarge    = "This file is larger than 50 MiB. Choose a smaller one."
+	importTooLarge    = "The file must fit 512 MiB. Choose a smaller one."
 	importExpired     = "This form had expired, so nothing was imported. Choose the file again and import it."
 )
 
@@ -76,7 +79,7 @@ func (s *Server) importPage(w http.ResponseWriter, r *http.Request) {
 		d.Errors["document"] = "Cairn could not read that upload. Choose the file again."
 		if errors.Is(err, errUploadTooLarge) {
 			status = 413
-			d.Errors["document"] = "The file must fit 50 MiB and each supporting image 4 MiB."
+			d.Errors["document"] = "The file must fit 512 MiB and each supporting image 4 MiB."
 		}
 		s.renderImport(w, d, status)
 		return
@@ -138,7 +141,7 @@ func (s *Server) importPage(w http.ResponseWriter, r *http.Request) {
 			}
 			if err == nil {
 				// Dry run of the save checks, so a file that cannot become a page
-				// (non-UTF-8 text, HTML grown past 2 MiB) is kept as a download.
+				// (non-UTF-8 text, rendered text grown past 2 MiB) is kept as a download.
 				check := in
 				err = validatePublication(check)
 			}
@@ -204,7 +207,9 @@ func (s *Server) importPage(w http.ResponseWriter, r *http.Request) {
 // else, including renderable types over their page limits, becomes a file page.
 func renderableImport(name string, size int64) bool {
 	switch strings.ToLower(filepath.Ext(name)) {
-	case ".md", ".markdown", ".html", ".htm", ".mmd", ".mermaid", ".txt", ".json", ".php", ".csv", ".xml", ".yaml", ".yml", ".log":
+	case ".html", ".htm":
+		return size <= maxImportHTMLBytes
+	case ".md", ".markdown", ".mmd", ".mermaid", ".txt", ".json", ".php", ".csv", ".xml", ".yaml", ".yml", ".log":
 		return size <= 2<<20
 	case ".docx":
 		return size <= 10<<20
@@ -230,9 +235,13 @@ func prepareImport(in *publication, name string, data []byte) error {
 		}
 		in.Markdown = string(data)
 	case ".html", ".htm":
-		if err := text(); err != nil {
-			return err
+		if len(data) > maxImportHTMLBytes {
+			return fmt.Errorf("HTML files must fit 25 MiB.")
 		}
+		if !utf8.Valid(data) {
+			return fmt.Errorf("Save the HTML file as UTF-8 and try again.")
+		}
+		in.ImportedHTML = true
 		in.HTML = string(data)
 	case ".mmd", ".mermaid":
 		if err := text(); err != nil {
