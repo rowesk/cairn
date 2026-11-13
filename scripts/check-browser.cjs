@@ -1,6 +1,15 @@
 const {chromium}=require('playwright');
 const {spawn}=require('node:child_process');
 const fs=require('node:fs');const os=require('node:os');const path=require('node:path');const net=require('node:net');
+async function freePort() {
+ const net = require('node:net');
+ for (;;) {
+  const port = 49152 + Math.floor(Math.random() * 16384);
+  const server = net.createServer();
+  const ok = await new Promise(resolve => { server.once('error', () => resolve(false)); server.listen(port, '127.0.0.1', () => resolve(true)); });
+  if (ok) { await new Promise(resolve => server.close(resolve)); return port; }
+ }
+}
 (async()=>{
  // A loopback relay stands in for the owner's mail account so Send to Kindle runs end to end.
  // relayMode makes it refuse the sign-in ('auth') or the message for now ('busy').
@@ -17,9 +26,10 @@ const fs=require('node:fs');const os=require('node:os');const path=require('node
    }
   });
  });
- await new Promise(resolve=>relay.listen(0,'127.0.0.1',resolve));
+ const relayPort=await freePort();
+ await new Promise(resolve=>relay.listen(relayPort,'127.0.0.1',resolve));
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'cairn-browser-'));
- const child=spawn(process.env.CAIRN_BINARY || path.resolve('cairn'),['-data',dir,'-listen','127.0.0.1:0','-public-listen','127.0.0.1:0','-public-base-url','https://reports.example.com'],{env:{...process.env,CAIRN_PUBLISHER_TOKEN:'browser-smoke-token-at-least-32-characters',CAIRN_MAIL_FROM:'owner@example.com',CAIRN_SMTP_SERVER:'127.0.0.1:'+relay.address().port,CAIRN_SMTP_PASSWORD:'browser-relay-password'}});
+ const child=spawn(process.env.CAIRN_BINARY || path.resolve('cairn'),['-data',dir,'-listen','127.0.0.1:' + await freePort(),'-public-listen','127.0.0.1:' + await freePort(),'-public-base-url','https://reports.example.com'],{env:{...process.env,CAIRN_PUBLISHER_TOKEN:'browser-smoke-token-at-least-32-characters',CAIRN_MAIL_FROM:'owner@example.com',CAIRN_SMTP_SERVER:'127.0.0.1:'+relay.address().port,CAIRN_SMTP_PASSWORD:'browser-relay-password'}});
  let browser;let publicAddress;
  try{
   const address=await new Promise((resolve,reject)=>{
@@ -186,7 +196,24 @@ const fs=require('node:fs');const os=require('node:os');const path=require('node
   await page.goto(base+'/file-check');
   const [saved]=await Promise.all([page.waitForEvent('download'),page.getByRole('link',{name:'Download',exact:true}).click()]);
   if(saved.suggestedFilename()!=='Holiday photos.zip')throw Error('file download named '+saved.suggestedFilename());
-  await page.goto(base+'/');await page.locator('.report-row .file-mark .file-icon-archive').waitFor();
+  await page.goto(base+'/?kind=files');await page.locator('.report-row .file-mark .file-icon-archive').waitFor();
+  // Files and Links have independent rows and keep the collection in navigation.
+  for (const tab of ['Pages','Files','Links']) {
+   await page.getByRole('link',{name:new RegExp('^'+tab+' \\d+$')}).click();
+   await page.locator('.library-tabs a[aria-current="page"]').filter({hasText:tab}).waitFor();
+  }
+  await page.getByRole('link',{name:'New link',exact:true}).first().click();
+  await page.getByLabel('Target URL',{exact:true}).fill('https://example.org/reading');
+  await page.getByLabel('Link name, optional').fill('browser-short');
+  await page.getByRole('button',{name:'Create link',exact:true}).click();
+  await page.waitForURL('**/browser-short');
+  await page.getByRole('heading',{name:'Target URL',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Copy link',exact:true}).waitFor();
+  await page.goto(base+'/?kind=files');
+  await page.locator('.report-row[data-slug="file-check"]').getByRole('button',{name:/Actions/}).click();
+  await page.locator('.row-menu:popover-open').getByRole('menuitem',{name:'Copy direct link',exact:true}).click();
+  const direct=await page.evaluate(()=>navigator.clipboard.readText()).catch(()=>null);
+  if(direct!==null && !direct.endsWith('.zip'))throw Error('wrong direct link: '+direct);
   await page.goto(base+'/import');
   await page.locator('[name=document]').setInputFiles({name:'custom.html',mimeType:'text/html',buffer:Buffer.from('<h1>Custom HTML import</h1>')});
   await page.locator('[name=title]').fill('Custom HTML');await page.locator('details summary').click();await page.locator('[name=agent]').fill('the owner');await page.locator('[name=original_request]').fill('Private HTML request');await page.locator('[name=slug]').fill('html-import');
@@ -197,7 +224,12 @@ const fs=require('node:fs');const os=require('node:os');const path=require('node
   await page.getByText('Title saved.').waitFor();
   await page.getByRole('button',{name:'Archive page',exact:true}).click();await page.getByText('Archived. The page is hidden').waitFor();
   await page.goto(base+'/');if(await page.getByRole('heading',{name:'Renamed import',exact:true}).count())throw Error('archived page visible');
-  await page.getByRole('link',{name:/^Archive \d+$/}).click();await page.getByRole('heading',{name:'Renamed import',exact:true}).waitFor();
+  await page.getByRole('searchbox').fill('Private HTML request');
+  const hint=page.locator('.search-hint').filter({hasText:/archive/i}).getByRole('link');
+  await hint.waitFor();await hint.click();
+  await page.getByRole('heading',{name:'Renamed import',exact:true}).waitFor();
+  await page.goto(base+'/');
+  await page.getByRole('link',{name:/^Archive(?: \d+)?$/}).click();await page.getByRole('heading',{name:'Renamed import',exact:true}).waitFor();
   await page.goto(base+'/manage/html-import');await page.getByRole('button',{name:'Restore to library',exact:true}).click();await page.getByText('Restored.').waitFor();
   // The confirmation is a toast over the page; put it away like a person would before reaching under it.
   await page.locator('.toast-close').click();await page.locator('.toast').waitFor({state:'detached'});
@@ -1288,8 +1320,9 @@ const fs=require('node:fs');const os=require('node:os');const path=require('node
     const end=await m.evaluate(()=>{const rows=[...document.querySelectorAll('.report-row')],last=rows[rows.length-1].getBoundingClientRect();return {last:last.bottom,dock:document.querySelector('.create-dock').getBoundingClientRect().top};});
     if(end.last>end.dock)throw Error('the last row ends under New page: '+JSON.stringify(end));
     await m.evaluate(()=>scrollTo(0,0));
+    await m.goto(base+'/?kind=files');
     const pdfRow=await m.locator('.report-row[data-slug="p9-pdf"] .excerpt').evaluate(e=>{const r=document.createRange();r.selectNodeContents(e);return {text:e.textContent,whole:r.getBoundingClientRect().right<=e.getBoundingClientRect().right+0.5};});
-    if(!/^PDF · 47 KB$/.test(pdfRow.text)||!pdfRow.whole)throw Error('the PDF row does not read whole: '+JSON.stringify(pdfRow));
+    if(!/^boiler-service-2026.pdf · 47 KB$/.test(pdfRow.text)||!pdfRow.whole)throw Error('the PDF row does not read whole: '+JSON.stringify(pdfRow));
     // 13. The preview on a phone fits a four-column table whole.
     await m.goto(base+'/new');await m.getByLabel('Title',{exact:true}).fill('Loft conversion quotes, first look');
     await m.getByLabel('Markdown',{exact:true}).fill('Two came back within a week.\n\n## The quotes\n\n| Firm | Price | Weeks | Includes stairs |\n|---|---:|---:|---|\n| Loftcraft | £48,500 | 9 | Yes |\n| Hartley Builds | £52,000 | 8 | Yes |\n');

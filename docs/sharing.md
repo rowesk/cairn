@@ -1,6 +1,6 @@
 # Public sharing
 
-Public sharing is optional. Private reading and agent publishing work without a public domain. Pages stay private by default. When the owner explicitly asks for a shared page, an agent can send `share_enabled: true` to the private `POST /api/pages` endpoint. Cairn saves it as shared and returns both its private `url` and absolute `public_url`. Without a configured public origin, the request fails without saving a page. The API cannot change existing sharing, link names or passwords; replacements preserve those settings. File creation stays private. See [publishing](publishing.md) for the request and error contract.
+Public sharing is optional. Private reading and agent publishing work without a public domain. Pages stay private by default. When the owner explicitly asks for a shared page, an agent can send `share_enabled: true` to the private `POST /api/pages` endpoint. Cairn saves it as shared and returns both its private `url` and absolute `public_url`. Without a configured public origin, the request fails without saving a page. The API cannot change existing sharing, link names or passwords; replacements preserve those settings. Owner file uploads and owner-created links are shared on creation. Agent-created files and links stay private unless the request sets `share_enabled: true`. See [publishing](publishing.md) for the request and error contract.
 
 Cairn uses two listeners. Port 8080 in the examples is the private library, editor, Settings and publishing API. Port 8081 serves only shared pages, their content and images, the password screen, and Cairn's own stylesheet, fonts and scripts. Never route a public hostname to the private listener.
 
@@ -40,7 +40,7 @@ Link names Cairn picks are three letters and digits, mixed case, by default; you
 
 Sharing keeps the page's link name on the public address. A link name you change in Manage page replaces the old one; the page's original short address also keeps working while the page is shared. Stopping sharing turns off every public link to the page and leaves private reading alone. Changing a password signs out everyone who unlocked the page. Archiving hides a page from the library; it does not stop sharing.
 
-Visitors see the page, its byline and the author's photo, and its images. They never see your request, its summary or source, your library, or the file the page was made from: Download original is offered only to you.
+Visitors see the page, its byline, the author's photo and its images. They never see your request, its summary or source, or your library. File pages offer their stored file to visitors with access. Shared HTML imports also expose their original HTML at a sandboxed direct address. Other page sources and Download original stay owner-only.
 
 ## Security model
 
@@ -55,3 +55,17 @@ One wrong password costs nothing, so a visitor who mistypes and retypes gets str
 ## Themes on shared pages
 
 Shared pages use the theme chosen in Settings → Appearance, or the one set for shared pages under **Customise per view**. With System, each visitor's own device decides between Cairn and Dark; Cairn stores nothing about them. Pages written in Markdown take the theme's colours; pages in a design of their own keep it.
+
+## Direct files and short links
+
+A shared file has a reader and a direct address, such as `/abc.png`. Image, PDF, video and audio addresses show inline. HTML and SVG use a CSP sandbox with an opaque origin, `connect-src 'none'` and `form-action 'none'`. Other binary types download as attachments. Direct addresses check sharing and passwords just like the reader. Wrong extensions and unshared items return 404. Range requests support seeking and partial downloads.
+
+Short links redirect with HTTP 302 and an empty body. GET visits increment the click count; HEAD does not. They have no password option. Stopping sharing disables public redirects while the owner can still edit the target privately.
+
+Public page and file readers include Open Graph and Twitter preview tags. Protected pages and files show only a generic title and Cairn's preview image, even after unlocking. Original requests never appear in preview metadata.
+
+## A private domain
+
+A private reverse proxy can use `CAIRN_ALLOWED_HOSTS` to allow its hostname and `CAIRN_PRIVATE_BASE_URL` to set the private addresses returned by the API. Keep that proxy reachable only by your trusted devices, for example through Tailscale. Neither variable adds authentication or changes the public listener. See the installation guide for host configuration.
+
+The private listener has no absolute upload or download deadline. The public listener keeps a 30-second read timeout for password forms and no write deadline for downloads. Both listeners bound headers to five seconds and idle connections to 60 seconds. Configure proxy transfer limits to suit your connection.

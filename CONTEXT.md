@@ -26,7 +26,11 @@ A saved answer meant to be read outside chat, with a title, its author, its crea
 
 ### File page
 
-A page whose content is one stored file, shown with a filetype icon, its name, size and a download button. Cairn keeps the file as uploaded and never opens or runs it.
+A page whose content is one stored file, shown with a filetype icon, its name, size and a download button. Cairn keeps the file as uploaded. Its reader previews images, PDFs, video and audio; direct HTML and SVG run in an opaque-origin sandbox.
+
+### Short link
+
+A stored HTTP or HTTPS target with a public address that redirects and counts GET visits. Owner-created links start shared; agent-created links stay private unless sharing is requested. Links have no passwords.
 
 ### Library
 
@@ -34,7 +38,7 @@ The owner's private collection of pages. Sharing a page does not grant access to
 
 ### Private page
 
-A page only the owner's authorised devices can open. New pages start private.
+A page only the owner's authorised devices can open. New written pages and agent publications start private. Owner file uploads and owner-created links start shared.
 
 ### Shared page
 

@@ -29,7 +29,7 @@
  if (frame) cairnFollowScheme(frame);
  const narrow = matchMedia('(max-width: 650px)');
  const keysOff = () => root.dataset.shortcuts === 'off';
- const pages = n => n === 1 ? '1 page' : n + ' pages';
+ const pages = n => n + ' ' + (n === 1 ? sheet.dataset.noun : sheet.dataset.nouns);
  const rows = () => $$('#rows .report-row');
  const rowOf = el => el?.closest?.('.report-row');
  // A row on screen now, even if the list was redrawn since it was picked.
@@ -84,7 +84,7 @@
   let text = body.dataset.count;
   if (shown && shown < total && text.includes(' ·')) text = shown + ' of ' + pages(total) + text.slice(text.indexOf(' ·'));
   count.textContent = text;
-  status.textContent = search.value.trim() ? (total ? pages(total) + ' match' : 'No pages match') : (text || 'No pages here');
+  status.textContent = search.value.trim() ? (total ? pages(total) + ' match' : 'No ' + sheet.dataset.nouns + ' match') : (text || 'No ' + sheet.dataset.nouns + ' here');
  };
 
  // Row actions: the "…" link to Manage becomes a menu button.
@@ -105,14 +105,15 @@
  const buildMenu = row => {
   menuRow = row;
   const slug = row.dataset.slug;
-  const wanted = {edit: 'editable' in row.dataset, copy: true, archive: view !== 'archive', restore: view === 'archive', kindle: true, 'kindle-setup': true, manage: true};
+  const wanted = {edit: 'editable' in row.dataset || !!row.dataset.target, target: !!row.dataset.target, copy: true, 'copy-direct': !!row.dataset.directLink, archive: view !== 'archive', restore: view === 'archive', kindle: !row.dataset.target, 'kindle-setup': !row.dataset.target, manage: true};
   rowMenu.replaceChildren(...$('#row-menu-items').content.cloneNode(true).children);
   $$('[role=menuitem]', rowMenu).forEach(item => { item.tabIndex = -1; });
   $$('[data-act]', rowMenu).forEach(item => {
    const act = item.dataset.act;
    if (!wanted[act]) { item.remove(); return; }
    if (act === 'kindle') item.action = '/manage/' + slug;
-   if (act === 'edit') item.href = '/edit/' + slug;
+   if (act === 'edit') item.href = (row.dataset.target ? '/manage/' : '/edit/') + slug;
+   if (act === 'target') item.href = row.dataset.target;
    if (act === 'manage') item.href = '/manage/' + slug;
   });
  };
@@ -147,12 +148,12 @@
   const item = event.target.closest('[data-act]');
   if (!item || !menuRow) return;
   const row = menuRow, act = item.dataset.act;
-  if (act === 'copy') { event.preventDefault(); rowMenu.hidePopover(); copyLink(row); }
+  if (act === 'copy' || act === 'copy-direct') { event.preventDefault(); rowMenu.hidePopover(); copyLink(row, act === 'copy-direct'); }
   else if (act === 'archive' || act === 'restore') { event.preventDefault(); rowMenu.hidePopover(); archive(row); }
  });
 
- const copyLink = async row => {
-  const link = new URL(row.dataset.link, location.href).href;
+ const copyLink = async (row, direct = false) => {
+  const link = new URL(direct ? row.dataset.directLink : row.dataset.link, location.href).href;
   try {
    if (navigator.clipboard && isSecureContext) await navigator.clipboard.writeText(link);
    else {
@@ -170,10 +171,21 @@
  };
 
  // Archive or restore in place, with Undo.
- const counts = delta => {
-  const add = (el, n) => { if (el) el.textContent = Math.max(0, Number(el.textContent) + n); };
-  add($('.topnav a[href="/"] .count'), delta);
-  add($('.topnav a[href="/?archived=1"] .count'), -delta);
+ let countRequest;
+ const counts = async () => {
+  countRequest?.abort();
+  const controller = new AbortController();
+  countRequest = controller;
+  try {
+   const response = await fetch(location.href, {signal: controller.signal});
+   if (!response.ok) return;
+   const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+   if (controller.signal.aborted) return;
+   for (const selector of ['.topbar .topnav, .topbar .topbar-spacer', '.library-tabs']) {
+    const current = $(selector), updated = $(selector, doc);
+    if (current && updated) current.replaceWith(updated);
+   }
+  } catch { /* Keep the links already on screen if the refresh fails. */ }
  };
  const post = async (slug, archived) => {
   const body = new URLSearchParams();
@@ -193,7 +205,7 @@
   const hadFocus = row.contains(document.activeElement) || dialog.open;
   try { await post(slug, toArchive); } catch (error) { say(error.message, null, 'error'); return; }
   row.remove();
-  counts(toArchive ? -1 : 1);
+  counts();
   adjustTotal(-1);
   if (hadFocus && neighbour) select(neighbour, true);
   const undo = async () => {
@@ -201,7 +213,7 @@
    if (!list.isConnected) { load(location.href, 'none'); say((toArchive ? 'Restored “' : 'Archived “') + title + '”.'); return; }
    const before = next && next.isConnected ? next : null;
    list.insertBefore(row, before);
-   counts(toArchive ? 1 : -1);
+   counts();
    adjustTotal(1);
    select(row, true);
    say((toArchive ? 'Restored “' : 'Archived “') + title + (toArchive ? '” to your library.' : '” again.'));
@@ -213,7 +225,7 @@
   if (!body) return;
   const total = Number(body.dataset.total) + delta;
   body.dataset.total = total;
-  body.dataset.count = body.dataset.count.replace(/^(\d+ of )?\d+ pages?/, pages(total));
+  body.dataset.count = body.dataset.count.replace(/^(\d+ of )?\d+ (?:pages?|files?|links?)/, pages(total));
   announce();
  };
 
@@ -469,7 +481,7 @@
   else if (key === '?') { event.preventDefault(); sheetOfKeys.showModal(); }
   else if (key === 'j' || key === 'J') { event.preventDefault(); move(1); }
   else if (key === 'k' || key === 'K') { event.preventDefault(); move(-1); }
-  else if ((key === ' ' || key === 'p' || key === 'P') && onRow && event.target.matches('.row-title')) { event.preventDefault(); trigger = event.target; show(onRow); }
+  else if ((key === ' ' || key === 'p' || key === 'P') && onRow && !onRow.dataset.target && event.target.matches('.row-title')) { event.preventDefault(); trigger = event.target; show(onRow); }
   else if ((key === 'e' || key === 'E') && onRow) { event.preventDefault(); archive(onRow); }
  });
 

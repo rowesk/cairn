@@ -269,6 +269,11 @@ func openAPIDocument() map[string]any {
 				"operationId": "openapi", "summary": "This document.", "security": []any{},
 				"responses": map[string]any{"200": response("This document.", map[string]any{"type": "object"})},
 			}},
+			"/api/links": map[string]any{"post": map[string]any{
+				"operationId": "createLink", "summary": "Create a short link. Private by default; share only when the owner asks.",
+				"requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"type": "object", "required": []string{"url"}, "additionalProperties": false, "properties": map[string]any{"url": map[string]any{"type": "string", "maxLength": 2048, "description": "An http or https URL with a valid host, outside this server's public link paths."}, "slug": map[string]any{"type": "string", "maxLength": 64}, "share_enabled": map[string]any{"type": "boolean", "default": false}}}}}},
+				"responses":   errorResponses(map[string]any{"201": response("The link was saved. public_url is present only when shared.", ref("PageWrite"))}, 400, 401, 403, 409, 413, 415, 500, 503),
+			}},
 			"/api/files":        map[string]any{"post": fileOperation("Publish a private file page.", "publishFile", 201)},
 			"/api/files/{slug}": map[string]any{"parameters": []any{slug}, "put": fileOperation("Replace a page with a file; sharing and passwords stay.", "replaceFile", 200)},
 			"/api/pages": map[string]any{
@@ -339,12 +344,16 @@ func openAPIDocument() map[string]any {
 
 // fileOperation describes the streamed multipart API, not JSON publication.
 func fileOperation(summary, id string, status int) map[string]any {
-	fields := map[string]any{"file": map[string]any{"type": "string", "format": "binary", "description": "One inert file, up to 50 MiB.", "x-max-bytes": maxFileBytes}}
+	fields := map[string]any{"file": map[string]any{"type": "string", "format": "binary", "description": "One inert file, up to 512 MiB.", "x-max-bytes": maxFileBytes}}
 	for _, f := range publicationFields {
 		switch f.Name {
 		case "title", "agent", "original_request", "request_summary", "request_source", "slug":
 			fields[f.Name] = map[string]any{"type": "string", "description": f.Description}
 		}
 	}
+	if status == 201 {
+		fields["share_enabled"] = map[string]any{"type": "boolean", "default": false, "description": "Share on creation only when the owner asks."}
+	}
+
 	return map[string]any{"operationId": id, "summary": summary, "requestBody": map[string]any{"required": true, "content": map[string]any{"multipart/form-data": map[string]any{"schema": map[string]any{"type": "object", "properties": fields, "required": []string{"file", "original_request"}, "additionalProperties": false}}}}, "responses": errorResponses(map[string]any{strconv.Itoa(status): response("The file page was saved.", ref("PageWrite"))}, 400, 401, 403, 404, 409, 413, 415, 500, 503)}
 }

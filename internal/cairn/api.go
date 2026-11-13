@@ -58,7 +58,7 @@ var (
 	pageTemplates     = []string{"report", "comparison", "visual"}
 	pageCapabilities  = []string{"mermaid", "echarts"}
 	imageTypes        = []string{"image/png", "image/jpeg", "image/gif", "image/webp"}
-	reservedSlugs     = []string{"settings", "new", "manage", "import", "api", "healthz", "library", "assets", "admin", "login", "logout"}
+	reservedSlugs     = []string{"settings", "new-link", "new", "manage", "import", "api", "healthz", "library", "assets", "admin", "login", "logout"}
 	sharingFieldNames = []string{"share", "share_enabled", "shared", "public", "public_slug", "public_url", "password"}
 	readOnlyFields    = []string{"id", "url", "private_url", "created_at", "updated_at", "format", "source", "editable", "warnings", "warning", "archived"}
 )
@@ -104,6 +104,8 @@ var warningCodes = []string{"dropped_html", "agent_ignored", "template_ignored",
 
 // apiPage is a page as the API describes it.
 type apiPage struct {
+	TargetURL       string   `json:"target_url,omitempty"`
+	Clicks          int64    `json:"clicks,omitempty"`
 	ID              string   `json:"id" doc:"Cairn's internal identifier. Routes use slug."`
 	Slug            string   `json:"slug" doc:"The page's address on this library."`
 	URL             string   `json:"url" doc:"The page's path, such as /k3T."`
@@ -111,7 +113,7 @@ type apiPage struct {
 	PublicURL       *string  `json:"public_url,omitempty" doc:"The public address while shared on reads, and after shared creation. Omitted on private creation and replacement."`
 	Title           string   `json:"title"`
 	Agent           string   `json:"agent" doc:"The byline."`
-	Format          string   `json:"format" enum:"markdown,html,file" doc:"How the page was written."`
+	Format          string   `json:"format" enum:"markdown,html,file,link" doc:"How the page was written."`
 	Template        *string  `json:"template" enum:"report,comparison,visual" doc:"The Markdown template, or null for html and files."`
 	OriginalRequest string   `json:"original_request"`
 	RequestSummary  string   `json:"request_summary"`
@@ -127,7 +129,7 @@ type apiPage struct {
 // apiSource is what Cairn kept of how a page was written.
 type apiSource struct {
 	Size        int64   `json:"size,omitempty"`
-	Format      string  `json:"format" enum:"markdown,html,file"`
+	Format      string  `json:"format" enum:"markdown,html,file,link"`
 	Name        string  `json:"name,omitempty" doc:"The kept file's name."`
 	Text        *string `json:"text" doc:"The Markdown or HTML, or null when Cairn did not keep it or it is not text."`
 	DownloadURL string  `json:"download_url,omitempty" doc:"Where the original file downloads, for imported files."`
@@ -206,6 +208,8 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	switch path := r.URL.Path; {
 	case path == "/api/files" || strings.HasPrefix(path, "/api/files/"):
 		s.publishFile(w, r)
+	case path == "/api/links":
+		s.apiShortLinks(w, r)
 	case path == "/api":
 		s.apiIndex(w, r)
 	case path == "/api/openapi.json":
@@ -671,6 +675,10 @@ func checkFields(in publication) []FieldError {
 	} else if strings.ContainsAny(in.RequestSource, "\r\n") {
 		add(FieldError{Code: FieldMultipleLines, Field: "request_source", Message: "request_source must be one line, such as Claude Code."})
 	}
+	htmlLimit := maxContentBytes
+	if in.ImportedHTML {
+		htmlLimit = maxImportHTMLBytes
+	}
 	hasMarkdown, hasHTML := strings.TrimSpace(in.Markdown) != "", strings.TrimSpace(in.HTML) != ""
 	switch {
 	case !hasMarkdown && !hasHTML:
@@ -679,8 +687,8 @@ func checkFields(in publication) []FieldError {
 		add(FieldError{Code: FieldConflict, Field: "html", Message: "html and markdown were both sent. Send one of them."})
 	case len(in.Markdown) > maxContentBytes:
 		tooLong("markdown", len(in.Markdown), maxContentBytes)
-	case len(in.HTML) > maxContentBytes:
-		tooLong("html", len(in.HTML), maxContentBytes)
+	case len(in.HTML) > htmlLimit:
+		tooLong("html", len(in.HTML), htmlLimit)
 	}
 	if in.Template != "" && !slices.Contains(pageTemplates, in.Template) {
 		add(FieldError{Code: FieldInvalidValue, Field: "template", Message: "template " + strconv.Quote(clip(in.Template, 40)) + " is not one of report, comparison or visual.", Actual: clip(in.Template, 40), Allowed: pageTemplates})
@@ -750,6 +758,15 @@ func bytesLimit(n int) string {
 // place. Chart problems are found even when other fields have problems, so
 // one reply can name them all.
 func preparePage(in *publication) ([]FieldError, renderResult) {
+	if in.TargetURL != "" {
+		var problems []FieldError
+		if in.Slug != "" {
+			if p := slugProblem(in.Slug); p != nil {
+				problems = append(problems, *p)
+			}
+		}
+		return problems, renderResult{}
+	}
 	problems := checkFields(*in)
 	var result renderResult
 	hasMarkdown, hasHTML := strings.TrimSpace(in.Markdown) != "", strings.TrimSpace(in.HTML) != ""
@@ -830,6 +847,13 @@ func (s *Server) pageResource(slug string) (apiPage, savedPage, error) {
 		if assetName.MatchString(entry.Name()) {
 			out.Assets = append(out.Assets, entry.Name())
 		}
+	}
+	if p.Kind == "link" {
+		out.Format = "link"
+		out.TargetURL = p.TargetURL
+		out.Clicks = p.Clicks
+		out.Editable = false
+		return out, p, nil
 	}
 	out.Format = "html"
 	page, _ := os.ReadFile(filepath.Join(dir, "page.html"))
@@ -918,7 +942,7 @@ func (s *Server) apiRead(w http.ResponseWriter, r *http.Request, cred credential
 func (s *Server) apiList(w http.ResponseWriter, r *http.Request, cred credential) {
 	values := r.URL.Query()
 	var problems []FieldError
-	q := libraryQuery{Text: strings.TrimSpace(values.Get("q")), Agent: values.Get("agent"), Limit: defaultListLimit}
+	q := libraryQuery{Kind: "*", Text: strings.TrimSpace(values.Get("q")), Agent: values.Get("agent"), Limit: defaultListLimit}
 	if len(q.Text) > 200 {
 		problems = append(problems, FieldError{Code: FieldTooLong, Field: "q", Message: fmt.Sprintf("q is %d bytes; the limit is 200 bytes.", len(q.Text)), Limit: 200, Actual: len(q.Text), Unit: "bytes"})
 	}
@@ -1629,8 +1653,9 @@ func apiIndexDocument(linkLength int) map[string]any {
 		"endpoints": []map[string]string{
 			{"method": "GET", "path": "/api", "description": "This index. No key needed."},
 			{"method": "GET", "path": "/api/openapi.json", "description": "The full OpenAPI 3.1 contract. No key needed."},
+			{"method": "POST", "path": "/api/links", "description": "Create a short link with url and optional slug. Private by default; share_enabled: true shares only when the owner asks. No password."},
 			{"method": "POST", "path": "/api/pages", "description": "Publish a page from Markdown or HTML. Private by default; share_enabled opts into sharing on creation only when the owner asks."},
-			{"method": "POST", "path": "/api/files", "description": "Publish a private file page, up to 50 MiB, with multipart/form-data."},
+			{"method": "POST", "path": "/api/files", "description": "Publish a private file page, up to 512 MiB, with multipart/form-data."},
 			{"method": "PUT", "path": "/api/files/{slug}", "description": "Replace a page with a file. Sharing and passwords stay."},
 			{"method": "GET", "path": "/api/pages", "description": "List your pages, newest first, or search them with q."},
 			{"method": "GET", "path": "/api/pages/{slug}", "description": "Read a page with its request and the Markdown or HTML Cairn kept. HEAD checks that it exists."},

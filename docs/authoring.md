@@ -60,25 +60,25 @@ Cairn stores each page as rendered HTML. Pages saved before these changes keep t
 
 ## Imports
 
-Import accepts any file up to 50 MiB. Cairn opens a file as a page when it can: UTF-8 text up to 2 MiB, images up to 4 MiB and DOCX up to 10 MiB. Everything else, including those types over their limits, becomes a file page with a filetype icon, the filename, size and a **Download** button. Tick **Save as a file page, even if Cairn can open it** to keep a file you could otherwise read as a page, such as a Markdown file you want to hand on unchanged. Supporting images must fit 4 MiB each.
+Import accepts any file up to 512 MiB. Cairn opens a file as a page when it can: UTF-8 HTML up to 25 MiB, other UTF-8 text up to 2 MiB and DOCX up to 10 MiB. Images become file pages. Owner file uploads are shared on creation. Imported readable pages stay private. Everything else, including those types over their limits, becomes a file page with a filetype icon, the filename, size and a **Download** button. Tick **Save as a file page, even if Cairn can open it** to keep a file you could otherwise read as a page, such as a Markdown file you want to hand on unchanged. Supporting images must fit 4 MiB each.
 
 | File | Reading view |
 | --- | --- |
 | Markdown, HTML | Existing Cairn renderer or sandboxed HTML |
-| PNG, JPEG, GIF, WebP | Image page |
+| PNG, JPEG, GIF, WebP, SVG | File page with a direct image address |
 | TXT, JSON, CSV, XML, YAML, logs | Escaped source text; valid JSON is indented |
 | Mermaid, MMD | Diagram using Cairn's bundled Mermaid runtime |
-| PHP, SVG | Escaped source text, never server execution |
+| PHP | Escaped source text, never server execution |
 | DOCX | Extracted paragraph text; original retains formatting and embedded content |
 | Other files, including ZIP, PDF, DOC, ODT, RTF, spreadsheets, video and large images | A file page with a Download button |
 
-A blank title comes from the file: a Markdown file's first `#` heading or an HTML file's `<title>`, as `cairn publish` reads them, and otherwise the file name. The author and your request have defaults; **More details** lets you change them. Every import keeps the original file. File pages offer Download to the owner and visitors with access. Ordinary pages keep their source owner-only. From the library's preview, **Open page** reaches the reader and the download.
+A blank title comes from the file: a Markdown file's first `#` heading or an HTML file's `<title>`, as `cairn publish` reads them, and otherwise the file name. The author and your request have defaults; **More details** lets you change them. Every import keeps the original file. File pages offer Download to the owner and visitors with access. Other page sources stay owner-only, except shared HTML imports, which also have a sandboxed direct HTML address. From the library's preview, **Open page** reaches the reader and the download.
 
 ## Storage and access
 
 Uploads stream to `uploads/` inside the data directory and are renamed into the page object. Cairn clears interrupted uploads at startup. File pages add `file_page`, `file_name` and `file_size` columns; existing pages stay unchanged.
 
-Original files use fixed internal names, `source.bin` and `source.json`, within the page's object directory. The uploaded filename is metadata and never a filesystem path. Cairn streams originals as `application/octet-stream` with attachment disposition, `nosniff`, a restrictive CSP and `no-store`.
+Original files use fixed internal names, `source.bin` and `source.json`, within the page's object directory. The uploaded filename is metadata and never a filesystem path. The Download action streams originals as `application/octet-stream` with attachment disposition, `nosniff`, a restrictive CSP and `no-store`.
 
 Shared file pages allow downloads behind the same password checks. Other original files stay owner-only. Deleting the page removes its original with the rest of its stored object. No PHP interpreter, office conversion process or additional Pi service is required.
 
@@ -176,3 +176,13 @@ Optional `request_source` identifies the known app, such as Hermes, Codex CLI, C
 On PUT replacement, omitted or empty summary/source fields retain their saved values. Supply a new summary when the purpose changes. Cairn does not generate summaries itself.
 
 Publish privately by default. Set `share_enabled` to `true` on `POST /api/pages` only when the owner asked for this page to be shared. Never set it otherwise. Tell the owner the saved `public_url` afterwards, as well as the private address. Sharing must be configured or creation fails with 503 `public_sharing_unavailable` without saving. Omitted or `false` stays private. Any supplied value on PUT is refused; replacement preserves sharing, link names and passwords. Files start private.
+
+## Files and links in the library
+
+Pages, Files and Links have separate tabs, each with Shared and Archive filters. Search stays in the selected tab. When it finds no matches there, Cairn offers links to matches in other tabs or the archive.
+
+File pages show previews for images, PDFs, video and audio. Copy direct link copies the stored file address, such as `/abc.pdf`. HTML imports up to 25 MiB remain report pages and also have direct `.html` addresses. Larger HTML uploads become file pages. Direct HTML and SVG use a sandbox without `allow-same-origin`, with network connections and form submissions blocked. Download always keeps the original bytes.
+
+New link in the Links tab takes a target URL and optional link name. Cairn accepts HTTP and HTTPS targets, refuses credentials and local public link paths, and never fetches the target. Owner-created links are shared immediately. Open a link in the private library to edit its target, copy its public address, stop sharing, archive or delete it. Links have no passwords. Archiving keeps their public redirects working; stopping sharing returns 404 publicly.
+
+Settings includes Storage, with total stored bytes, pages, files, everything else, free disk space and the ten largest files. Archived files still use space. The figures count stored bytes rather than filesystem allocation blocks.

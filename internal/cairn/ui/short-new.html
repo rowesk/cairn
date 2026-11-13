@@ -1,0 +1,4 @@
+{{template "owner" .}}{{define "title"}}New link · Cairn{{end}}{{define "main-class"}}form-page{{end}}{{define "main"}}
+<h1>New link</h1><form method="post"><input type="hidden" name="csrf" value="{{.CSRF}}">
+<div class="field"><label for="target">Target URL</label><input id="target" name="url" type="url" value="{{.Target}}" required maxlength="2048">{{with .Errors.url}}<p class="field-error" role="alert">{{.}}</p>{{end}}</div>
+<div class="field"><label for="slug">Link name, optional</label><input id="slug" name="slug" value="{{.Slug}}" maxlength="64">{{with .Errors.slug}}<p class="field-error" role="alert">{{.}}</p>{{end}}<p>A blank name lets Cairn choose one. This link will be shared at once.</p></div><button>Create link</button> <a href="/?kind=links">Cancel</a></form>{{end}}

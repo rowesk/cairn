@@ -90,13 +90,13 @@ func TestImportTitlesAndFileCards(t *testing.T) {
 			t.Errorf("file reader lacks %q", want)
 		}
 	}
-	_, _, list := request(t, private, "GET", "/", nil, "")
-	// The row reads "PDF · 240 KB": the title already names the file (p9).
-	if !strings.Contains(string(list), "<p class=\"excerpt\">PDF · <span class=\"file-row-size\">240 KB</span></p>") {
+	_, _, list := request(t, private, "GET", "/?kind=files", nil, "")
+	// Files show their original filename and size.
+	if !strings.Contains(string(list), "<p class=\"excerpt\">boiler-service.pdf · <span class=\"file-row-size\">240 KB</span></p>") {
 		t.Errorf("PDF excerpt: %s", regexp.MustCompile(`<p class="excerpt">[^<]*</p>`).FindAllString(string(list), -1))
 	}
 	_, _, form := request(t, private, "GET", "/import", nil, "")
-	if !strings.Contains(string(form), "Any file up to 50 MiB") || !strings.Contains(string(form), `class="dropzone is-compact`) || !strings.Contains(string(form), `<form method="post" enctype="multipart/form-data" class="stacked-form" novalidate>`) {
+	if !strings.Contains(string(form), "Any file up to 512 MiB") || !strings.Contains(string(form), `class="dropzone is-compact`) || !strings.Contains(string(form), `<form method="post" enctype="multipart/form-data" class="stacked-form" novalidate>`) {
 		t.Error("import form: hint, supporting images zone or novalidate")
 	}
 }
@@ -214,7 +214,7 @@ func TestOneTopBarAndAQuietLibrary(t *testing.T) {
 	}
 	request(t, srv, "POST", "/api/pages", page("Bulb comparison"), token)
 	_, _, library := request(t, srv, "GET", "/", nil, "")
-	for _, unwanted := range []string{"Every good answer", `href="/?shared=1"`, `href="/?archived=1"`, ">0<", "Private</span></span>", `class="badge`} {
+	for _, unwanted := range []string{"Every good answer", `href="/?shared=1"`, `href="/?archived=1"`, "Private</span></span>", `class="badge`} {
 		if strings.Contains(string(library), unwanted) {
 			t.Errorf("library shows %q", unwanted)
 		}

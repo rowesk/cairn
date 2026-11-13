@@ -120,6 +120,18 @@ Everything starts private. To send one page to a friend without opening the rest
 
 Turn on **Sharing** for a page under **Manage page** and it is readable at its public link, on your public domain, with the same link name it has privately: three random letters and digits unless you choose one. You can add a password. Your request stays private. Shared file pages offer their file for download; other pages keep their original source private. Agents publish privately by default and can share a new page only when you ask. The [sharing guide](docs/sharing.md) covers the setup.
 
+## Files and short links
+
+The library has Pages, Files and Links tabs. Search stays within the current tab, with a hint when matches sit in another tab or the archive. Shared and Archive filter each tab.
+
+Upload files up to 512 MiB through Import. Owner uploads are shared on creation; agent uploads stay private unless the owner asks for sharing. File pages offer Download and Copy direct link. Direct addresses such as `/abc.png` show images, PDFs, video and audio in the browser. HTML and SVG run in a sandbox with an opaque origin; other binary types download. Passwords protect both the file page and its direct address.
+
+![Files in Cairn's private library](docs/images/files.png)
+
+Choose New link in Links to save an HTTP or HTTPS target. Owner-created links are shared immediately. A public short link returns a 302 redirect and counts GET visits. HEAD requests do not count. Links have no passwords; stopping sharing disables the redirect. Agent-created links stay private unless `share_enabled` is true on creation.
+
+Shared page and file readers include preview tags for messaging apps. Protected items use a generic title and omit their content. Settings shows stored bytes, disk free space and the ten largest files, including archived files.
+
 ## Reading on a Kindle
 
 Add an SMTP account and your Kindle's email address, and every page gets a Send to Kindle action in the library menu and the reader. Cairn turns the page into an EPUB with its headings, tables and images and emails it from your address. The [Kindle guide](docs/kindle.md) covers app passwords and Amazon's approved sender list.

@@ -360,7 +360,7 @@ func TestFormsShowValidationBesideTheField(t *testing.T) {
 		t.Errorf("inert file import: %d", code)
 	}
 	_, _, form := request(t, private, "GET", "/import", nil, "")
-	if !strings.Contains(string(form), `data-too-large="This file is larger than 50 MiB. Choose a smaller one."`) || !strings.Contains(string(form), "Any file up to 50 MiB.") {
+	if !strings.Contains(string(form), `data-too-large="The file must fit 512 MiB. Choose a smaller one."`) || !strings.Contains(string(form), "Any file up to 512 MiB.") {
 		t.Error("drop zone lacks file limits")
 	}
 	code, body = postImport(t, private, map[string]string{"title": "No file"}, "", nil, csrf)
@@ -546,7 +546,9 @@ func TestPasswordGateSaysWhoseItIsAndWhatWentWrong(t *testing.T) {
 				t.Errorf("gate %d lacks %q", status, want)
 			}
 		}
-		if strings.Contains(body, "report") {
+		// The canonical preview URL may contain /report; check the visible copy.
+		_, visible, _ := strings.Cut(body, "</head>")
+		if strings.Contains(visible, "report") {
 			t.Error("gate still says report")
 		}
 	}

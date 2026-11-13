@@ -6,7 +6,8 @@ import (
 	"path/filepath"
 )
 
-// Source files are inert attachments. Their names never determine a disk path.
+// Source files keep the uploaded bytes. Direct routes sandbox HTML and SVG.
+// Their names never determine a disk path.
 // A large upload arrives as Path, a synced temporary file renamed into place.
 type sourceFile struct {
 	Name string

@@ -37,6 +37,7 @@ type authorProfile struct {
 	KeyUsedLabel, KeyUsedFull       string
 }
 type settingsData struct {
+	Storage storageUsage
 	ownerChrome
 	// Notice confirms the last save, or says why it didn't happen.
 	Notice      *notice
@@ -535,6 +536,7 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 			d.Notice = d.Notices[section]
 		}
 	}
+	d.Storage = s.measureStorage(r.Context())
 	d.OwnerName = prefs.Author
 	privateFormHeaders(w)
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; "+uiAssetPolicy+"; img-src data: blob:; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")

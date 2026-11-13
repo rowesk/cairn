@@ -48,8 +48,10 @@ func readerTitle(title string) template.HTML {
 type readerPage struct{ Slug, Title string }
 
 type readerData struct {
+	Social                                                                *linkPreview
 	File                                                                  bool
 	FileSize                                                              int64
+	DirectLink, DirectPath, Preview                                       string
 	Theme                                                                 string
 	Title, Agent, CreatedAt, Slug, FileName, Request, Link, RequestSource string
 	Photo                                                                 template.URL
@@ -113,6 +115,7 @@ func (s *Server) followLibraryView(d *readerData, p savedPage, in string) {
 		return
 	}
 	q := readLibraryQuery(v)
+	q.Kind = p.Kind
 	q.Offset, q.Limit = 0, 1000
 	if q.fromQuery() == "" {
 		return
@@ -140,6 +143,13 @@ func (s *Server) followLibraryView(d *readerData, p savedPage, in string) {
 
 func (s *Server) renderReader(w http.ResponseWriter, r *http.Request, p savedPage, route string, owner, shared, protected bool, link string) {
 	d := readerData{Title: p.Title, Agent: p.Agent, CreatedAt: p.CreatedAt, Slug: route, FileName: p.FileName, Owner: owner, Shared: shared, Protected: protected, Link: link, File: p.File && p.FileName != "", FileSize: p.FileSize}
+	if ext := directExtension(p); d.File && ext != "" {
+		d.DirectLink, d.DirectPath = link+ext, "/"+route+ext
+		d.Preview = filePreview(p.FileName)
+	}
+	if !owner {
+		d.Social = s.linkPreview(p, protected)
+	}
 	themes := s.themes()
 	d.Theme = themes.public()
 	if owner {
@@ -175,9 +185,9 @@ func (s *Server) renderReader(w http.ResponseWriter, r *http.Request, p savedPag
 		// File pages offer Download in place of the content frame.
 		d.Download = p.FileName != "" && !d.Editable && !p.File
 		d.Archived, d.Previous, d.Next = s.readerNeighbours(p)
-		d.BackHref = "/"
+		d.BackHref = (libraryQuery{Kind: p.Kind}).href(nil)
 		if d.Archived {
-			d.BackHref = "/?archived=1"
+			d.BackHref = (libraryQuery{Kind: p.Kind, Archived: true}).href(nil)
 		}
 		s.followLibraryView(&d, p, r.URL.Query().Get("in"))
 	}
@@ -190,7 +200,11 @@ func (s *Server) renderReader(w http.ResponseWriter, r *http.Request, p savedPag
 		w.Header().Set("Referrer-Policy", "same-origin")
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-src 'self'; "+uiAssetPolicy+"; img-src data:; base-uri 'none'; form-action "+formAction+"; frame-ancestors 'none'")
+	filePolicy := "img-src data:;"
+	if d.File {
+		filePolicy = "img-src 'self' data:; media-src 'self';"
+	}
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-src 'self'; "+uiAssetPolicy+"; "+filePolicy+" base-uri 'none'; form-action "+formAction+"; frame-ancestors 'none'")
 	_ = readerView.Execute(w, d)
 }
 
@@ -274,13 +288,13 @@ func (s *Server) readerNeighbours(p savedPage) (archived bool, previous, next *r
 	}
 	find := func(query string) *readerPage {
 		var n readerPage
-		if s.db.QueryRow(query, archived, p.CreatedAt, p.CreatedAt, rowid).Scan(&n.Slug, &n.Title) != nil {
+		if s.db.QueryRow(query, p.Kind, archived, p.CreatedAt, p.CreatedAt, rowid).Scan(&n.Slug, &n.Title) != nil {
 			return nil
 		}
 		return &n
 	}
-	previous = find(`SELECT slug,title FROM pages WHERE archived=? AND (created_at>? OR (created_at=? AND rowid>?)) ORDER BY created_at ASC,rowid ASC LIMIT 1`)
-	next = find(`SELECT slug,title FROM pages WHERE archived=? AND (created_at<? OR (created_at=? AND rowid<?)) ORDER BY created_at DESC,rowid DESC LIMIT 1`)
+	previous = find(`SELECT slug,title FROM pages WHERE kind=? AND archived=? AND (created_at>? OR (created_at=? AND rowid>?)) ORDER BY created_at ASC,rowid ASC LIMIT 1`)
+	next = find(`SELECT slug,title FROM pages WHERE kind=? AND archived=? AND (created_at<? OR (created_at=? AND rowid<?)) ORDER BY created_at DESC,rowid DESC LIMIT 1`)
 	return archived, previous, next
 }
 

@@ -2,7 +2,16 @@
 
 ## Unreleased
 
-- Keep streamed file pages up to 50 MiB and explicit, creation-only agent sharing alongside the new reader and publishing API.
+- Add Pages, Files and Links tabs, with searches scoped to each and hints for matches elsewhere.
+- Share owner uploads and owner-created links on creation. Keep agent files and links private unless sharing is requested explicitly.
+- Add direct file addresses, inline previews, password gates and Range downloads. Sandbox raw HTML and SVG with an opaque origin.
+- Accept HTML report imports up to 25 MiB and streamed files up to 512 MiB. Keep the public read timeout at 30 seconds and downloads without a write deadline.
+- Add short links with HTTP 302 redirects and GET-only click counts.
+- Add public preview tags that hide protected titles and original requests.
+- Show storage totals, free disk space and the largest files in Settings.
+- Migrate existing file and image imports into the Files tab without changing sharing.
+
+- Keep streamed file pages up to 512 MiB and explicit, creation-only agent sharing alongside the new reader and publishing API.
 - Require Go 1.26.11.
 
 ### Reading

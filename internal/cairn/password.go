@@ -367,6 +367,7 @@ func gateWait(seconds int) string {
 // Wait is how many seconds the next try must wait; the page's script holds
 // a submit until then, so what was typed stays in the field.
 type gateData struct {
+	Social                *linkPreview
 	Theme, Agent, Message string
 	Photo                 template.URL
 	Wait                  int
@@ -376,6 +377,7 @@ func (s *Server) showPassword(w http.ResponseWriter, p savedPage, message string
 	formPageHeaders(w)
 	w.WriteHeader(status)
 	d := gateData{Theme: s.themes().public(), Agent: p.Agent, Photo: s.authorPhoto(p.Agent), Message: message}
+	d.Social = s.linkPreview(p, true)
 	if len(wait) > 0 {
 		d.Wait = wait[0]
 	}

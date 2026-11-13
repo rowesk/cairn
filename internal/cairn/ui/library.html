@@ -1,21 +1,19 @@
 {{template "owner" .}}
 
-{{- define "title" -}}{{if .Archived}}Archive{{else if .Shared}}Shared pages{{else}}Your library{{end}} · Cairn{{end}}
+{{- define "title" -}}{{if .Archived}}Archive{{else if .Shared}}Shared {{.Nouns}}{{else}}Your library{{end}} · Cairn{{end}}
 
-{{- /* Collections show only when there is more than one to choose: Shared
-       while the server can share or still holds shared pages, Archive
-       once something is in it. A count shows only when it isn't zero. */ -}}
+{{- /* Shared and Archive appear when the current kind has items there. */ -}}
 {{- define "topbar" -}}
-{{- $shared := or .Sharing .SharedCount .Shared}}
+{{- $shared := or .SharedCount .Shared}}
 {{- $archive := or .ArchiveCount .Archived}}
 {{- if or $shared $archive}}
 <nav class="topnav" aria-label="Collections">
-<a href="/" {{if not (or .Archived .Shared)}}aria-current="page"{{end}}>{{icon "list"}}Library{{if .LibraryCount}} <span class="count">{{.LibraryCount}}</span>{{end}}</a>
+<a href="{{.LibraryHref}}" data-collection="library" {{if not (or .Archived .Shared)}}aria-current="page"{{end}}>{{icon "list"}}Library{{if .LibraryCount}} <span class="count">{{.LibraryCount}}</span>{{end}}</a>
 {{- if $shared}}
-<a href="/?shared=1" {{if .Shared}}aria-current="page"{{end}}>{{icon "link"}}Shared{{if .SharedCount}} <span class="count">{{.SharedCount}}</span>{{end}}</a>
+<a href="{{.SharedHref}}" data-collection="shared" {{if .Shared}}aria-current="page"{{end}}>{{icon "link"}}Shared{{if .SharedCount}} <span class="count">{{.SharedCount}}</span>{{end}}</a>
 {{- end}}
 {{- if $archive}}
-<a href="/?archived=1" {{if .Archived}}aria-current="page"{{end}}>{{icon "archive"}}Archive{{if .ArchiveCount}} <span class="count">{{.ArchiveCount}}</span>{{end}}</a>
+<a href="{{.ArchiveHref}}" data-collection="archive" {{if .Archived}}aria-current="page"{{end}}>{{icon "archive"}}Archive{{if .ArchiveCount}} <span class="count">{{.ArchiveCount}}</span>{{end}}</a>
 {{- end}}
 </nav>
 {{- else}}
@@ -29,16 +27,17 @@
 {{- $welcome := and .FirstRun (not .Archived) (not .Shared)}}
 <div class="heading">
 <div class="heading-text">
-<h1>{{if .Archived}}Archive{{else if .Shared}}Shared pages{{else if $welcome}}Welcome to Cairn{{else}}Your library{{end}}</h1>
+<h1>{{if .Archived}}Archive{{else if .Shared}}Shared {{.Nouns}}{{else if $welcome}}Welcome to Cairn{{else}}Your library{{end}}</h1>
 {{- if .Archived}}
-<p>Pages you’ve hidden from your library. Their links still work.</p>
+<p>Items you’ve hidden from your library. Their links still work.</p>
 {{- else if .Shared}}
-<p>Pages anyone with their link can read.</p>
+<p>Items anyone with their link can read.</p>
 {{- else if $welcome}}
 <p>Pages from your agents and from you collect here, private until you share one.</p>
 {{- end}}
 </div>
 {{- if not (or .Archived .Shared $welcome)}}
+{{if eq .Kind "link"}}<a class="button" href="/new-link">{{icon "plus"}}New link</a>{{else}}
 <div class="create-dock">
 <div class="split-create">
 <a class="button" href="/new">{{icon "plus"}}<span>New page</span></a>
@@ -51,8 +50,10 @@
 </details>
 </div>
 </div>
+{{end}}
 {{- end}}
 </div>
+<nav class="library-tabs" aria-label="Library tabs">{{range .Tabs}}<a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Name}} <span class="count">{{.Count}}</span></a>{{end}}</nav>
 {{- if $welcome}}
 <section class="sheet first-run" aria-labelledby="first-run-title">
 <h2 id="first-run-title" class="sr-only">Ways to add your first page</h2>
@@ -63,9 +64,10 @@
 </ul>
 </section>
 {{- else}}
-<section class="sheet" aria-label="Pages" id="pages" data-csrf="{{.CSRF}}" data-view="{{if .Archived}}archive{{else if .Shared}}shared{{else}}library{{end}}">
+<section class="sheet" aria-label="{{.Nouns}}" id="pages" data-noun="{{.Noun}}" data-nouns="{{.Nouns}}" data-csrf="{{.CSRF}}" data-view="{{if .Archived}}archive{{else if .Shared}}shared{{else}}library{{end}}">
 <form class="filters" method="get" action="/" role="search" id="filters">
-<label class="search">{{icon "search"}}<input id="search" type="search" name="q" aria-label="Search your pages" placeholder="Search titles, requests and page text" data-short-placeholder="Search pages" value="{{.Query}}" autocomplete="off" spellcheck="false" enterkeyhint="search" aria-keyshortcuts="/ Meta+K Control+K"><kbd class="search-key" aria-hidden="true">/</kbd></label>
+{{if eq .Kind "file"}}<input type="hidden" name="kind" value="files">{{else if eq .Kind "link"}}<input type="hidden" name="kind" value="links">{{end}}
+<label class="search">{{icon "search"}}<input id="search" type="search" name="q" aria-label="Search your {{.Nouns}}" placeholder="Search titles, requests and page text" data-short-placeholder="Search {{.Nouns}}" value="{{.Query}}" autocomplete="off" spellcheck="false" enterkeyhint="search" aria-keyshortcuts="/ Meta+K Control+K"><kbd class="search-key" aria-hidden="true">/</kbd></label>
 <button type="button" class="filter-toggle" id="filter-toggle" aria-expanded="false" aria-controls="filter-selects" hidden>{{icon "filter"}}<span class="filter-toggle-label">Filters</span><span class="filter-dot" aria-hidden="true"></span></button>
 <div class="filter-selects" id="filter-selects">
 <select name="agent" aria-label="Author"><option value="">All authors</option>{{range .Agents}}<option{{if eq . $.Agent}} selected{{end}}>{{.}}</option>{{end}}</select>
@@ -87,7 +89,7 @@
 {{- define "list" -}}
 <div class="list-body" data-count="{{.CountText}}{{if .CountText}} · {{.OrderText}}{{end}}" data-total="{{.Total}}">
 {{- if .Items}}
-<div class="table-head" aria-hidden="true"><span>Page</span><span>Prepared by</span><span>Saved</span><span></span></div>
+<div class="table-head" aria-hidden="true"><span>{{if eq .Kind "file"}}File{{else if eq .Kind "link"}}Link{{else}}Page{{end}}</span><span>Prepared by</span><span>Saved</span><span></span></div>
 <div class="rows" id="rows">
 {{- template "rows" .}}
 </div>
@@ -95,35 +97,47 @@
 {{- else}}
 <div class="empty">
 {{- if .Query}}
-<h2>No pages match “{{.Query}}”</h2>
-<p>Cairn looked through the titles, your requests and the words of every {{if .Archived}}archived {{else if .Shared}}shared {{end}}page{{if .Agent}} from {{.Agent}}{{end}}. Try fewer words, or the start of a word.</p>
+<h2>No {{.Nouns}} match “{{.Query}}”</h2>
+<p>Cairn looked through the titles, your requests and the words of every {{if .Archived}}archived {{else if .Shared}}shared {{end}}{{.Noun}} in this tab{{if .Agent}} from {{.Agent}}{{end}}. Try fewer words, or the start of a word.</p>
 <a class="button quiet" href="{{.ClearHref}}" data-clear-search>Clear search</a>
 {{- else if .Agent}}
-<h2>No pages from {{.Agent}} here</h2>
+<h2>No {{.Nouns}} from {{.Agent}} here</h2>
 <p>{{if .Archived}}None of {{.Agent}}’s pages are archived.{{else if .Shared}}None of {{.Agent}}’s pages are shared.{{else}}{{.Agent}}’s pages are all in the archive.{{end}}</p>
 <a class="button quiet" href="{{.ClearHref}}" data-clear-search>Show every author</a>
 {{- else if .Archived}}
 <h2>Nothing in the archive</h2>
 <p>Archive a page from its menu, or press E on it, to hide it from your library. Its links keep working, and you can restore it from here.</p>
 {{- else if .Shared}}
-<h2>No shared pages</h2>
+<h2>No shared {{.Nouns}}</h2>
 <p>{{if .Sharing}}Turn sharing on from a page’s Manage page and it appears here. Anyone with its link can read that page, and nothing else in your library.{{else}}This server has no public address, so pages can’t be shared yet. The sharing guide explains how to add one.{{end}}</p>
 {{- if not .Sharing}}
 <a class="button quiet" href="https://github.com/rowesk/cairn/blob/main/docs/sharing.md">Read the sharing guide</a>
 {{- end}}
+{{- else if eq .Kind "link"}}
+<h2>No links yet</h2>
+<p>Save a target URL and share a short address.</p><a class="button quiet" href="/new-link">New link</a>
+{{- else if eq .Kind "file"}}
+<h2>No files here</h2>
+<p>Upload a file to keep it in your library. New files are shared on creation.</p>
+<a class="button quiet" href="/import">Import a file</a>
+{{- else if not .ArchiveCount}}
+<h2>No pages yet</h2>
+<p>Write a page or import a document to add it here.</p>
+<a class="button quiet" href="/new">Write a page</a>
 {{- else}}
 <h2>Your library is clear</h2>
 <p>Every page is in the archive. Restore one from there, or add a new page.</p>
-<a class="button quiet" href="/?archived=1">Open the archive</a>
+<a class="button quiet" href="{{.ArchiveHref}}">Open the archive</a>
 {{- end}}
 </div>
 {{- end}}
+{{range .Hints}}<p class="search-hint">{{.Text}} <a href="{{.Href}}">Show them</a></p>{{end}}
 </div>
 {{- end}}
 
 {{- define "more" -}}
 {{- if .MoreHref}}
-<div class="more"><a class="button quiet show-more" href="{{.MoreHref}}" data-offset="{{.MoreOffset}}">Show more pages</a></div>
+<div class="more"><a class="button quiet show-more" href="{{.MoreHref}}" data-offset="{{.MoreOffset}}">Show more {{.Nouns}}</a></div>
 {{- end}}
 {{- end}}
 
@@ -132,21 +146,24 @@
        unusual gets a badge: Shared, with a lock when it has a password. */ -}}
 {{- define "rows" -}}
 {{- range .Items}}
-<article class="report-row{{if .Unread}} is-unread{{end}}" id="page-row-{{.Row}}" data-slug="{{.Slug}}" data-title="{{.Title}}" data-agent="{{.Agent}}" data-date="{{.WhenFull}}" data-link="{{.Link}}"{{if .Shared}} data-shared{{end}}{{if .Editable}} data-editable{{end}}>
+<article class="report-row{{if .Unread}} is-unread{{end}}" id="page-row-{{.Row}}" data-slug="{{.Slug}}" data-title="{{.Title}}" data-agent="{{.Agent}}" data-date="{{.WhenFull}}" data-link="{{.Link}}"{{if eq .Kind "link"}} data-target="{{.TargetURL}}"{{end}}{{if .DirectLink}} data-direct-link="{{.DirectLink}}"{{end}}{{if .Shared}} data-shared{{end}}{{if .Editable}} data-editable{{end}}>
 <div class="row-main{{if .File}} file-row-main{{end}}">
 {{if .File}}<span class="doc-mark file-mark" aria-hidden="true">{{fileIcon .FileName}}</span>{{end}}
 {{- if .Unread}}<span class="unread-dot" aria-hidden="true" title="Not opened yet"></span>{{end}}
 <div class="row-head">
-<h2><a class="row-title" href="/{{.Slug}}{{$.From}}" data-preview title="{{.Title}}">{{if .TitleHTML}}{{.TitleHTML}}{{else}}{{.Title}}{{end}}{{if .Unread}}<span class="sr-only">, not opened yet</span>{{end}}</a></h2>
+<h2><a class="row-title" href="/{{.Slug}}{{$.From}}" {{if ne .Kind "link"}}data-preview{{end}} title="{{.Title}}">{{if .TitleHTML}}{{.TitleHTML}}{{else}}{{.Title}}{{end}}{{if .Unread}}<span class="sr-only">, not opened yet</span>{{end}}</a></h2>
 {{- /* Private is every page's default, so only sharing is announced. */}}
 {{- if .Shared}}
 <span class="row-badge" title="{{.AccessLong}}">{{if .Protected}}{{icon "lock"}}Shared with a password{{else}}{{icon "link"}}Shared{{end}}</span>
-{{- end}}
+{{else if .File}}<span class="row-badge">Private</span>{{- end}}
 </div>
-{{- if .Snippet}}
+{{- if eq .Kind "link"}}<p class="excerpt">{{.TargetHost}} · {{.Clicks}} clicks · {{.Access}}</p>
+{{- else if .File}}
+<p class="excerpt">{{.FileName}} · <span class="file-row-size">{{fileSize .FileSize}}</span></p>
+{{- else if .Snippet}}
 <p class="snippet"><span class="where">{{.Where}}:</span> {{.Snippet}}</p>
 {{- else if .Preview}}
-<p class="excerpt">{{if .File}}{{fileShort .FileName}} · <span class="file-row-size">{{fileSize .FileSize}}</span>{{else}}{{.Preview}}{{end}}</p>
+<p class="excerpt">{{.Preview}}</p>
 {{- else if .Asked}}
 <p class="excerpt"><span class="sr-only">You asked: </span>“{{.Asked}}”</p>
 {{- end}}
@@ -163,8 +180,10 @@
 {{- if not (and .FirstRun (not .Archived) (not .Shared))}}
 <div class="row-menu" id="row-menu" popover role="menu" aria-label="Page actions"></div>
 <template id="row-menu-items">
+<a role="menuitem" data-act="target" rel="noreferrer" target="_blank">{{icon "arrow"}}<span>Open target</span></a>
 <a role="menuitem" data-act="edit">{{icon "pen"}}<span>Edit</span></a>
 <button type="button" role="menuitem" data-act="copy">{{icon "copy"}}<span>Copy link</span></button>
+<button type="button" role="menuitem" data-act="copy-direct">{{icon "copy"}}<span>Copy direct link</span></button>
 {{- if .Kindle}}
 {{- if .KindleReady}}
 <form method="post" data-act="kindle"><input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="action" value="kindle"><button role="menuitem">{{icon "kindle"}}<span>Send to Kindle</span></button></form>

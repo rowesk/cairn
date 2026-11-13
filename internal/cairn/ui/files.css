@@ -156,3 +156,16 @@
   top:50%;
   transform:translateY(-50%);
 }
+
+.file-preview {
+  display: block;
+  width: 100%;
+  max-width: var(--measure);
+  max-height: 75vh;
+  object-fit: contain;
+  margin: 0 auto var(--space-6);
+  border: 0;
+}
+.file-preview-document {
+  height: 75vh;
+}

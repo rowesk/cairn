@@ -16,7 +16,7 @@ import (
 
 // File pages keep one uploaded file as the page itself: an icon, title and
 // download button instead of rendered report HTML.
-const maxFileBytes = 50 << 20
+const maxFileBytes = 512 << 20
 
 // Supporting images held in memory per request, and the whole request:
 // field values, those images and multipart overhead on top of the file.
@@ -137,10 +137,7 @@ func (s *Server) spool(part io.Reader) (string, int64, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	size, err := io.Copy(f, io.LimitReader(part, maxFileBytes+1))
-	if err == nil && size > maxFileBytes {
-		err = errUploadTooLarge
-	}
+	size, err := copyFileUpload(f, part)
 	if err == nil {
 		err = f.Sync()
 	}
@@ -200,7 +197,7 @@ func (s *Server) publishFile(w http.ResponseWriter, r *http.Request) {
 	u, err := s.readUpload(r, "file", 0)
 	if err != nil {
 		if errors.Is(err, errUploadTooLarge) {
-			writeAPIError(w, http.StatusRequestEntityTooLarge, ErrPayloadTooLarge, "the file must fit 50 MiB", false)
+			writeAPIError(w, http.StatusRequestEntityTooLarge, ErrPayloadTooLarge, "the file must fit 512 MiB", false)
 		} else {
 			writeAPIError(w, http.StatusBadRequest, ErrValidationFailed, err.Error(), false)
 		}
@@ -209,7 +206,7 @@ func (s *Server) publishFile(w http.ResponseWriter, r *http.Request) {
 	defer u.remove()
 	for name := range u.fields {
 		switch name {
-		case "title", "agent", "original_request", "request_summary", "request_source", "slug":
+		case "title", "agent", "original_request", "request_summary", "request_source", "slug", "share_enabled":
 		default:
 			writeAPIErrorField(w, http.StatusBadRequest, ErrValidationFailed, name, "unknown field "+name, false)
 			return
@@ -225,7 +222,15 @@ func (s *Server) publishFile(w http.ResponseWriter, r *http.Request) {
 		writeAPIErrorField(w, http.StatusBadRequest, ErrValidationFailed, "file", "send exactly one file part named file", false)
 		return
 	}
-	in := publication{Title: u.fields["title"], Agent: u.fields["agent"], OriginalRequest: u.fields["original_request"], RequestSummary: u.fields["request_summary"], RequestSource: u.fields["request_source"], Slug: u.fields["slug"]}
+	shared := false
+	if value, present := u.fields["share_enabled"]; present {
+		if r.Method != http.MethodPost || (value != "true" && value != "false") {
+			writeAPIErrorField(w, 400, ErrValidationFailed, "share_enabled", "Use true or false on creation only.", false)
+			return
+		}
+		shared = value == "true"
+	}
+	in := publication{Share: shared, Title: u.fields["title"], Agent: u.fields["agent"], OriginalRequest: u.fields["original_request"], RequestSummary: u.fields["request_summary"], RequestSource: u.fields["request_source"], Slug: u.fields["slug"]}
 	if err := filePublication(&in, u.files["file"][0]); err != nil {
 		writeAPIErrorField(w, http.StatusBadRequest, ErrValidationFailed, "file", err.Error(), false)
 		return
@@ -238,9 +243,86 @@ func (s *Server) publishFile(w http.ResponseWriter, r *http.Request) {
 }
 
 // serveSource opens the stored file under the read lock, then releases the
-// lock before sending it. A slow 50 MiB download must not hold up saves.
+// lock before sending it. A slow 512 MiB download must not hold up saves.
 // The open descriptor stays valid if the page is replaced or deleted meanwhile.
 func (s *Server) serveSource(w http.ResponseWriter, r *http.Request, p savedPage, unlock func()) {
+	s.serveOriginal(w, r, p, unlock, false)
+}
+
+// Direct routes select originals by metadata, never by a user-supplied disk path.
+func directParts(route string) (string, string) {
+	ext := filepath.Ext(route)
+	if ext == "" {
+		return route, ""
+	}
+	return strings.TrimSuffix(route, ext), ext
+}
+
+func directExtension(p savedPage) string {
+	ext := filepath.Ext(p.FileName)
+	if p.File || strings.EqualFold(ext, ".html") || strings.EqualFold(ext, ".htm") {
+		return ext
+	}
+	return ""
+}
+
+func directType(name string) string {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".avif":
+		return "image/avif"
+	case ".pdf":
+		return "application/pdf"
+	case ".mp4":
+		return "video/mp4"
+	case ".webm":
+		return "video/webm"
+	case ".mov":
+		return "video/quicktime"
+	case ".mp3":
+		return "audio/mpeg"
+	case ".m4a":
+		return "audio/mp4"
+	case ".wav":
+		return "audio/wav"
+	case ".ogg", ".oga":
+		return "audio/ogg"
+	case ".flac":
+		return "audio/flac"
+	case ".html", ".htm":
+		return "text/html; charset=utf-8"
+	case ".svg":
+		return "image/svg+xml"
+	case ".txt", ".md", ".csv", ".json", ".xml", ".yaml", ".yml", ".toml",
+		".go", ".py", ".js", ".ts", ".jsx", ".tsx", ".css", ".sh", ".sql", ".c", ".h", ".cpp", ".rs", ".rb", ".java", ".log":
+		return "text/plain; charset=utf-8"
+	}
+	return ""
+}
+
+func filePreview(name string) string {
+	typ := directType(name)
+	switch {
+	case strings.HasPrefix(typ, "image/"):
+		return "image"
+	case strings.HasPrefix(typ, "video/"):
+		return "video"
+	case strings.HasPrefix(typ, "audio/"):
+		return "audio"
+	case typ == "application/pdf":
+		return "pdf"
+	}
+	return ""
+}
+
+func (s *Server) serveOriginal(w http.ResponseWriter, r *http.Request, p savedPage, unlock func(), direct bool) {
 	if p.FileName == "" {
 		unlock()
 		s.sourceNotFound(w, r)
@@ -258,9 +340,35 @@ func (s *Server) serveSource(w http.ResponseWriter, r *http.Request, p savedPage
 		s.sourceNotFound(w, r)
 		return
 	}
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": p.FileName}))
-	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
+	typ, disposition := "application/octet-stream", "attachment"
+	policy := "sandbox; default-src 'none'"
+	if direct {
+		policy = "default-src 'none'"
+		typ = directType(p.FileName)
+		if typ == "" {
+			var sample [512]byte
+			n, _ := f.Read(sample[:])
+			known, _, _ := mime.ParseMediaType(mime.TypeByExtension(strings.ToLower(filepath.Ext(p.FileName))))
+			if strings.HasPrefix(known, "text/") || (known == "" && strings.HasPrefix(http.DetectContentType(sample[:n]), "text/plain")) {
+				typ = "text/plain; charset=utf-8"
+			} else {
+				typ = "application/octet-stream"
+			}
+			if _, err := f.Seek(0, io.SeekStart); err != nil {
+				s.sourceNotFound(w, r)
+				return
+			}
+		}
+		if typ != "application/octet-stream" {
+			disposition = "inline"
+		}
+		if strings.HasPrefix(typ, "text/html") || typ == "image/svg+xml" {
+			policy = "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox; default-src 'self' data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src 'none'; form-action 'none'; base-uri 'none'"
+		}
+	}
+	w.Header().Set("Content-Type", typ)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": p.FileName}))
+	w.Header().Set("Content-Security-Policy", policy)
 	http.ServeContent(w, r, "", info.ModTime(), f)
 }
 
@@ -270,4 +378,13 @@ func (s *Server) sourceNotFound(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s.notFound(w, r)
 	}
+}
+
+// copyFileUpload bounds the streamed payload independently of multipart overhead.
+func copyFileUpload(dst io.Writer, src io.Reader) (int64, error) {
+	size, err := io.Copy(dst, io.LimitReader(src, maxFileBytes+1))
+	if err == nil && size > maxFileBytes {
+		err = errUploadTooLarge
+	}
+	return size, err
 }
