@@ -380,7 +380,12 @@ func (c *cli) runServer(ctx context.Context, cfg serveConfig) error {
 		if err != nil {
 			return listenError(cfg.publicListen, cfg.publicListen.value, err)
 		}
-		servers = append(servers, makeServer(app.PublicHandler()))
+		public := makeServer(app.PublicHandler())
+		// Visitors only send password forms, never uploads, so the public
+		// listener keeps a short body deadline. Downloads keep no write
+		// deadline, so large files still finish.
+		public.ReadTimeout = 30 * time.Second
+		servers = append(servers, public)
 		listeners = append(listeners, publicListener)
 		publicAddress = publicListener.Addr()
 	}
