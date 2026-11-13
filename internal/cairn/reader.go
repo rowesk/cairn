@@ -22,25 +22,9 @@ var readerHTML string
 var readerBodyJS string
 var readerJS = focusJS + "\n" + readerBodyJS
 var readerView = pageView("reader", readerHTML, template.FuncMap{
-	"icon":        readerIcon,
+	"icon":        uiIcon,
 	"readerTitle": readerTitle,
 })
-
-// readerIcons are drawn in the same 24px, 1.6px-stroke family as uiIcon.
-var readerIcons = map[string]string{
-	"edit":     `<path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/>`,
-	"back":     `<path d="M19 12H5m6-6-6 6 6 6"/>`,
-	"keyboard": `<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M7.5 14h9"/>`,
-	"restore":  `<path d="M4 8v12h16V8"/><rect x="3" y="3" width="18" height="5" rx="1"/><path d="m9 15 3-3 3 3M12 12v6"/>`,
-	"share":    `<path d="M12 15V3m-4 4 4-4 4 4M5 11v9h14v-9"/>`,
-}
-
-func readerIcon(name string) template.HTML {
-	if path, ok := readerIcons[name]; ok {
-		return template.HTML(`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">` + path + `</svg>`)
-	}
-	return uiIcon(name)
-}
 
 // readerTitle keeps short hyphenated terms such as "27-inch" or "USB-C"
 // whole, so a narrow cover never breaks a title inside one.

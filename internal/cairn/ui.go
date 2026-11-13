@@ -94,36 +94,73 @@ func avatarTint(name string) int {
 	return int(h.Sum32()%avatarTints) + 1
 }
 
+// uiIcons are Lucide icons (https://lucide.dev, ISC licence, lucide-static
+// 0.468.0), copied in as path data so Cairn needs no icon dependency. The
+// comment above each names the Lucide icon, so a replacement comes from the
+// same set. Licence: ui/LUCIDE-LICENSE.
+var uiIcons = map[string]string{
+	// circle-alert
+	"alert": `<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>`,
+	// archive
+	"archive": `<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>`,
+	// arrow-right
+	"arrow": `<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>`,
+	// chevron-left
+	"back": `<path d="m15 18-6-6 6-6"/>`,
+	// check
+	"check": `<path d="M20 6 9 17l-5-5"/>`,
+	// chevron-down
+	"chevron": `<path d="m6 9 6 6 6-6"/>`,
+	// x
+	"close": `<path d="M18 6 6 18"/><path d="m6 6 12 12"/>`,
+	// copy
+	"copy": `<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>`,
+	// file-text
+	"doc": `<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>`,
+	// download
+	"download": `<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>`,
+	// pencil
+	"edit": `<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>`,
+	// sliders-horizontal
+	"filter": `<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>`,
+	// circle-help
+	"help": `<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>`,
+	// info
+	"info": `<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>`,
+	// key-round
+	"key": `<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>`,
+	// keyboard
+	"keyboard": `<path d="M10 8h.01"/><path d="M12 12h.01"/><path d="M14 8h.01"/><path d="M16 12h.01"/><path d="M18 8h.01"/><path d="M6 8h.01"/><path d="M7 16h10"/><path d="M8 12h.01"/><rect width="20" height="16" x="2" y="4" rx="2"/>`,
+	// book-open-text
+	"kindle": `<path d="M12 7v14"/><path d="M16 12h2"/><path d="M16 8h2"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/><path d="M6 12h2"/><path d="M6 8h2"/>`,
+	// link
+	"link": `<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>`,
+	// library
+	"list": `<path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/>`,
+	// lock
+	"lock": `<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>`,
+	// ellipsis
+	"more": `<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>`,
+	// pen-line
+	"pen": `<path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/>`,
+	// plus
+	"plus": `<path d="M5 12h14"/><path d="M12 5v14"/>`,
+	// archive-restore
+	"restore": `<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h2"/><path d="M20 8v11a2 2 0 0 1-2 2h-2"/><path d="m9 15 3-3 3 3"/><path d="M12 12v9"/>`,
+	// search
+	"search": `<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>`,
+	// settings
+	"settings": `<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>`,
+	// share
+	"share": `<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" y2="15"/>`,
+	// chevron-up
+	"up": `<path d="m18 15-6-6-6 6"/>`,
+	// upload
+	"upload": `<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>`,
+}
+
 func uiIcon(name string) template.HTML {
-	paths := map[string]string{
-		"plus":     `<path d="M12 5v14M5 12h14"/>`,
-		"chevron":  `<path d="m7 10 5 5 5-5"/>`,
-		"list":     `<path d="M8 5h13M8 12h13M8 19h13M3 5h.1M3 12h.1M3 19h.1"/>`,
-		"link":     `<path d="m9 15 6-6M8 16l-1 1a4 4 0 0 1-5-5l5-5a4 4 0 0 1 5 0m0 1 1-1a4 4 0 0 1 5 5l-5 5a4 4 0 0 1-5 0"/>`,
-		"archive":  `<path d="M4 8v12h16V8M9 12h6"/><rect x="3" y="3" width="18" height="5" rx="1"/>`,
-		"lock":     `<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/>`,
-		"upload":   `<path d="M4 15v6h16v-6M12 16V3m-5 5 5-5 5 5"/>`,
-		"search":   `<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/>`,
-		"doc":      `<path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6M9 16h5"/>`,
-		"more":     `<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>`,
-		"arrow":    `<path d="M5 12h14m-6-6 6 6-6 6"/>`,
-		"close":    `<path d="m6 6 12 12M18 6 6 18"/>`,
-		"copy":     `<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M15 8V3H3v13h5"/>`,
-		"check":    `<path d="m5 12 5 5 9-10"/>`,
-		"kindle":   `<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M8.5 6.5h7M8.5 10h7M8.5 13.5h4.5M10.5 18.5h3"/>`,
-		"alert":    `<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/>`,
-		"info":     `<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.5h.01"/>`,
-		"up":       `<path d="m7 14 5-5 5 5"/>`,
-		"key":      `<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M15 8l2 2"/>`,
-		"pen":      `<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4ZM13.5 6.5l4 4"/>`,
-		"restore":  `<path d="M4 8v12h16V8M12 17v-6m-3 3 3-3 3 3"/><rect x="3" y="3" width="18" height="5" rx="1"/>`,
-		"back":     `<path d="m15 5-7 7 7 7"/>`,
-		"settings": `<path d="M10.2 3h3.6l.6 2.3 1.5.9 2.3-.7 1.8 3.1-1.7 1.7v1.4l1.7 1.7-1.8 3.1-2.3-.7-1.5.9-.6 2.3h-3.6l-.6-2.3-1.5-.9-2.3.7-1.8-3.1 1.7-1.7v-1.4L3.8 8.6l1.8-3.1 2.3.7 1.5-.9z"/><circle cx="12" cy="12" r="2.6"/>`,
-		"filter":   `<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>`,
-		"download": `<path d="M12 3v12m-5-5 5 5 5-5M4 19h16"/>`,
-		"help":     `<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.8M12 16.8h.01"/>`,
-	}
-	return template.HTML(`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">` + paths[name] + `</svg>`)
+	return template.HTML(`<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">` + uiIcons[name] + `</svg>`)
 }
 
 // layoutView holds the shared shell from ui/layout.html. Pages are parsed on
