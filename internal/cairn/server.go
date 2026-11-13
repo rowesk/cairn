@@ -49,7 +49,8 @@ type Config struct {
 const APIVersion = "1.1"
 
 type Server struct {
-	shareKey []byte
+	shareKey    []byte
+	clickWrites sync.WaitGroup
 	// unlocks slows password guessing on shared pages (password.go).
 	unlocks *unlockLimiter
 	// flashes name pages the owner just deleted (library.go).
@@ -73,7 +74,8 @@ type Server struct {
 	privateHosts, publicHosts *hostPolicy
 }
 type publication struct {
-	Share bool `json:"-"`
+	Share     bool   `json:"-"`
+	TargetURL string `json:"-"`
 	// ImportedHTML is set only by the owner import path, never from JSON.
 	ImportedHTML bool `json:"-"`
 	// OwnerWritten marks a page the owner wrote or imported in Cairn. It may
@@ -98,6 +100,8 @@ type savedPage struct {
 	ID, Slug, Title, Agent, OriginalRequest, CreatedAt, Object string
 	RequestSummary, RequestSource                              string
 	Kind, FileName                                             string
+	TargetURL                                                  string
+	Clicks                                                     int64
 	File                                                       bool
 	FileSize                                                   int64
 }
@@ -258,6 +262,7 @@ func (s *Server) Close() error {
 	s.stopPurging()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.clickWrites.Wait()
 	err := s.db.Close()
 	lockErr := s.lock.Close()
 	if err != nil {
@@ -319,6 +324,10 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/_library/") {
 		s.libraryAction(w, r)
+		return
+	}
+	if r.URL.Path == "/new-link" {
+		s.newShortLink(w, r)
 		return
 	}
 	if r.URL.Path == "/new" {
@@ -394,6 +403,16 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
+	if p.Kind == "link" {
+		if content || ext != "" {
+			s.notFound(w, r)
+			return
+		}
+		unlock()
+		r.URL.Path = "/manage/" + p.Slug
+		s.manage(w, r)
+		return
+	}
 	if ext != "" {
 		s.serveOriginal(w, r, p, unlock, true)
 		return
@@ -433,7 +452,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) getPage(slug string) (savedPage, error) {
 	var p savedPage
-	err := s.db.QueryRow(`SELECT id,slug,title,agent,original_request,created_at,object,request_summary,request_source,file_page,file_size,kind FROM pages WHERE slug=?`, slug).Scan(&p.ID, &p.Slug, &p.Title, &p.Agent, &p.OriginalRequest, &p.CreatedAt, &p.Object, &p.RequestSummary, &p.RequestSource, &p.File, &p.FileSize, &p.Kind)
+	err := s.db.QueryRow(`SELECT id,slug,title,agent,original_request,created_at,object,request_summary,request_source,file_page,file_size,kind,coalesce(target_url,''),clicks FROM pages WHERE slug=?`, slug).Scan(&p.ID, &p.Slug, &p.Title, &p.Agent, &p.OriginalRequest, &p.CreatedAt, &p.Object, &p.RequestSummary, &p.RequestSource, &p.File, &p.FileSize, &p.Kind, &p.TargetURL, &p.Clicks)
 	if err == nil {
 		p.FileName = s.sourceName(p)
 	}
@@ -483,6 +502,10 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 			noPage(w, slug, true)
 			return
 		}
+		if previous.Kind == "link" {
+			writeAPIError(w, 400, ErrValidationFailed, "Edit short links from Manage.", false)
+			return
+		}
 		if in.Slug != "" && in.Slug != slug {
 			writeAPIProblems(w, http.StatusBadRequest, ErrValidationFailed, []FieldError{{Code: FieldInvalidValue, Field: "slug", Message: "slug cannot change when replacing a page. Leave it out, or send " + strconv.Quote(slug) + ".", Actual: clip(in.Slug, 70)}})
 			return
@@ -511,12 +534,12 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 			return
 		}
 	}
-	// Files the owner uploads are shared at once, like a file drop. Agent
+	// Files and links the owner creates are shared at once. Agent
 	// uploads stay private until the owner asks, as pages do.
-	autoShare := in.File && in.OwnerWritten && !replace
+	autoShare := (in.File || in.TargetURL != "") && in.OwnerWritten && !replace
 	if autoShare {
 		in.Share = true
-		for {
+		for in.TargetURL == "" {
 			in.PublicSlug, err = s.randomSlug()
 			if err != nil || in.PublicSlug != in.Slug {
 				break
@@ -561,6 +584,10 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 		}
 	}
 	kind := "page"
+	if in.TargetURL != "" {
+		kind = "link"
+		in.Title = in.Slug
+	}
 	if in.File {
 		kind = "file"
 	}
@@ -592,12 +619,12 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 			if in.OwnerWritten {
 				opened = created
 			}
-			_, err = tx.Exec(`INSERT INTO pages (id,slug,title,agent,original_request,created_at,object,preview,request_summary,request_source,share_enabled,public_slug,source_name,index_version,index_source,opened_at,updated_at,file_page,file_name,file_size,kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, in.Slug, in.Title, in.Agent, in.OriginalRequest, created, object, preview, in.RequestSummary, in.RequestSource, in.Share, func() any {
+			_, err = tx.Exec(`INSERT INTO pages (id,slug,title,agent,original_request,created_at,object,preview,request_summary,request_source,share_enabled,public_slug,source_name,index_version,index_source,opened_at,updated_at,file_page,file_name,file_size,kind,target_url) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, in.Slug, in.Title, in.Agent, in.OriginalRequest, created, object, preview, in.RequestSummary, in.RequestSource, in.Share, func() any {
 				if in.Share {
 					return in.PublicSlug
 				}
 				return nil
-			}(), sourceName, derivedVersion, stamp, opened, now, in.File, fileName, fileSize, kind)
+			}(), sourceName, derivedVersion, stamp, opened, now, in.File, fileName, fileSize, kind, in.TargetURL)
 		}
 		if err == nil {
 			err = writeIndex(tx, pageIndex{ID: id, Title: in.Title, Summary: in.RequestSummary, Request: in.OriginalRequest, Agent: in.Agent, Body: body})

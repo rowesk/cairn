@@ -25,6 +25,8 @@ const pageSize = 50
 
 // libraryItem is one row of the library list.
 type libraryItem struct {
+	Kind, TargetURL, TargetHost            string
+	Clicks                                 int64
 	File                                   bool
 	FileName                               string
 	FileSize                               int64
@@ -467,7 +469,7 @@ func (s *Server) agentNames() ([]string, error) {
 }
 
 // libraryColumns are the page fields a row needs, read from pages AS p.
-const libraryColumns = `p.id,p.slug,p.title,p.agent,p.request_summary,p.original_request,p.created_at,p.preview,p.archived,p.share_enabled,coalesce(p.password_hash,'')!='',p.opened_at,p.source_name,coalesce(p.public_slug,''),p.kind='file',CASE WHEN p.file_name='' THEN p.source_name ELSE p.file_name END,p.file_size,p.object`
+const libraryColumns = `p.id,p.slug,p.title,p.agent,p.request_summary,p.original_request,p.created_at,p.preview,p.archived,p.share_enabled,coalesce(p.password_hash,'')!='',p.opened_at,p.source_name,coalesce(p.public_slug,''),p.kind='file',CASE WHEN p.file_name='' THEN p.source_name ELSE p.file_name END,p.file_size,p.object,p.kind,coalesce(p.target_url,''),p.clicks`
 
 // libraryFilter limits a query to the collection and agent; its arguments
 // follow from filterArgs.
@@ -575,13 +577,19 @@ func (s *Server) scanItems(query string, args ...any) ([]libraryItem, []int, []s
 		var p libraryItem
 		var id, summary, request, opened, source, publicSlug, object string
 		var tier int
-		if err := rows.Scan(&id, &p.Slug, &p.Title, &p.Agent, &summary, &request, &p.CreatedAt, &p.Preview, &p.Archived, &p.Shared, &p.Protected, &opened, &source, &publicSlug, &p.File, &p.FileName, &p.FileSize, &object, &tier); err != nil {
+		if err := rows.Scan(&id, &p.Slug, &p.Title, &p.Agent, &summary, &request, &p.CreatedAt, &p.Preview, &p.Archived, &p.Shared, &p.Protected, &opened, &source, &publicSlug, &p.File, &p.FileName, &p.FileSize, &object, &p.Kind, &p.TargetURL, &p.Clicks, &tier); err != nil {
 			return nil, nil, nil, err
 		}
 		if p.File && p.FileSize == 0 {
 			if info, err := os.Stat(filepath.Join(s.cfg.DataDir, "objects", object, "source.bin")); err == nil {
 				p.FileSize = info.Size()
 			}
+		}
+		if u, err := url.Parse(p.TargetURL); err == nil {
+			p.TargetHost = u.Host
+		}
+		if p.Kind == "link" {
+			p.Title = p.Slug
 		}
 		p.Photo = photos[p.Agent]
 		p.Access, p.AccessLong = "Private", "Private. Only your devices can open it."
@@ -1198,6 +1206,10 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.Confirm = confirm
+	if p.Kind == "link" && (action == "password" || action == "remove_password" || r.FormValue("password") != "") {
+		s.showError(w, 400, problem{Title: "Links have no password", Message: "Use the share switch to control access.", Action: "Back to the link", Href: back})
+		return
+	}
 	section := manageSections[action]
 	if section == "" {
 		s.showError(w, http.StatusBadRequest, problem{Title: "Cairn didn’t recognise that change", Message: "Nothing changed. Go back to the page and try again.", Action: "Back to the page", Href: back})
@@ -1221,6 +1233,19 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 	}
 	done := ""
 	switch action {
+	case "target":
+		if p.Kind != "link" {
+			s.showError(w, 400, problemUnreadable(back))
+			return
+		}
+		target := strings.TrimSpace(r.FormValue("url"))
+		if message := s.shortTargetProblem(target); message != "" {
+			d.Page.TargetURL = target
+			reject(400, "url", message)
+			return
+		}
+		_, err = s.db.Exec(`UPDATE pages SET target_url=?,updated_at=? WHERE id=?`, target, nowStamp(), p.ID)
+		done = "target"
 	case "rename":
 		// The title field wraps; line breaks typed or pasted into it are spaces.
 		title := strings.Join(strings.Fields(r.FormValue("title")), " ")
@@ -1432,11 +1457,12 @@ func forgetDraft(w http.ResponseWriter, r *http.Request, id string) {
 
 // manageSections places each change's notice in the section it concerns.
 var manageSections = map[string]string{
-	"rename": "title", "archive": "archive", "restore": "archive", "delete": "delete",
+	"target": "target", "rename": "title", "archive": "archive", "restore": "archive", "delete": "delete",
 	"share": "sharing", "unshare": "sharing", "password": "sharing", "remove_password": "sharing", "sharing": "sharing",
 }
 
 var manageExpired = map[string]string{
+	"target":  "This form had expired, so the target was not saved. Try again.",
 	"title":   "This form had expired, so the title wasn’t saved. Check it and save again.",
 	"sharing": "This form had expired, so sharing didn’t change. Check it and try again. Enter any password again.",
 	"archive": "This form had expired, so nothing changed. Try again.",
@@ -1449,6 +1475,7 @@ const passwordUnchecked = "This password was set before Cairn asked for 8 charac
 
 // manageDone confirms a change in place after the redirect back.
 var manageDone = map[string]struct{ section, text string }{
+	"target":            {"target", "Target saved."},
 	"renamed":           {"title", "Title saved."},
 	"archived":          {"archive", "Archived. The page is hidden from your library list, and its links still work."},
 	"restored":          {"archive", "Restored. The page is back in your library list."},
@@ -1515,7 +1542,7 @@ func (s *Server) manageState(p savedPage) (manageData, error) {
 
 func (s *Server) renderManage(w http.ResponseWriter, d manageData, status int) {
 	// The page has one toast; a section's notice is what it says.
-	for _, section := range []string{"title", "sharing", "archive", "delete"} {
+	for _, section := range []string{"target", "title", "sharing", "archive", "delete"} {
 		if d.Notice == nil && d.Notices[section] != nil {
 			d.Notice = d.Notices[section]
 		}
@@ -1523,5 +1550,9 @@ func (s *Server) renderManage(w http.ResponseWriter, d manageData, status int) {
 	d.ownerChrome = s.chrome()
 	formPageHeaders(w)
 	w.WriteHeader(status)
+	if d.Page.Kind == "link" {
+		_ = shortManageView.Execute(w, d)
+		return
+	}
 	_ = manageView.Execute(w, d)
 }

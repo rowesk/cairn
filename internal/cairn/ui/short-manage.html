@@ -1,0 +1,10 @@
+{{template "owner" .}}{{define "title"}}Manage link · Cairn{{end}}{{define "main-class"}}form-page manage-page{{end}}{{define "main"}}
+<h1>{{.Page.Slug}}</h1><p><a href="/?kind=links">Links</a> · {{.Page.Clicks}} clicks</p>
+
+<section class="manage-section" id="target"><h2>Target URL</h2><a href="{{.Page.TargetURL}}" rel="noreferrer" target="_blank">{{.Page.TargetURL}}</a>
+<form method="post"><input type="hidden" name="csrf" value="{{.CSRF}}"><label for="target-url">Edit target</label><input id="target-url" name="url" type="url" value="{{.Page.TargetURL}}" required maxlength="2048">{{with .Errors.url}}<p role="alert" class="field-error">{{.}}</p>{{end}}<button name="action" value="target">Save target</button></form></section>
+<section class="manage-section" id="sharing"><h2>Sharing</h2><p>{{if .Shared}}Shared{{else}}Private{{end}}</p>
+{{if .Shared}}<p><a href="{{.PublicURL}}" rel="noreferrer">{{.PublicURL}}</a></p><button type="button" data-copy-value="{{.PublicURL}}" data-status="copy-status" hidden>Copy link</button><p id="copy-status" role="status"></p>{{end}}
+<form method="post"><input type="hidden" name="csrf" value="{{.CSRF}}"><button name="action" value="{{if .Shared}}unshare{{else}}share{{end}}" role="switch" aria-checked="{{.Shared}}"{{if not .CanShare}} disabled{{end}}>{{if .Shared}}Stop sharing{{else}}Share link{{end}}</button></form></section>
+<section class="manage-section" id="archive"><h2>Archive</h2><form method="post"><input type="hidden" name="csrf" value="{{.CSRF}}"><button name="action" value="{{if .Archived}}restore{{else}}archive{{end}}">{{if .Archived}}Restore link{{else}}Archive link{{end}}</button></form></section>
+<section class="manage-section" id="delete"><h2>Delete link</h2><details{{if .Confirm}} open{{end}}><summary>Delete link</summary><form method="post" action="/manage/{{.Page.Slug}}/delete"><input type="hidden" name="csrf" value="{{.CSRF}}"><p>Delete this link permanently?</p><button name="action" value="delete">Delete permanently</button></form></details></section>{{end}}{{define "script"}}{{scriptURL "forms"}}{{end}}

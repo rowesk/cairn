@@ -37,6 +37,7 @@
 {{- end}}
 </div>
 {{- if not (or .Archived .Shared $welcome)}}
+{{if eq .Kind "link"}}<a class="button" href="/new-link">{{icon "plus"}}New link</a>{{else}}
 <div class="create-dock">
 <div class="split-create">
 <a class="button" href="/new">{{icon "plus"}}<span>New page</span></a>
@@ -49,6 +50,7 @@
 </details>
 </div>
 </div>
+{{end}}
 {{- end}}
 </div>
 <nav class="library-tabs" aria-label="Library tabs">{{range .Tabs}}<a href="{{.Href}}"{{if .Current}} aria-current="page"{{end}}>{{.Name}} <span class="count">{{.Count}}</span></a>{{end}}</nav>
@@ -87,7 +89,7 @@
 {{- define "list" -}}
 <div class="list-body" data-count="{{.CountText}}{{if .CountText}} · {{.OrderText}}{{end}}" data-total="{{.Total}}">
 {{- if .Items}}
-<div class="table-head" aria-hidden="true"><span>{{if eq .Kind "file"}}File{{else}}Page{{end}}</span><span>Prepared by</span><span>Saved</span><span></span></div>
+<div class="table-head" aria-hidden="true"><span>{{if eq .Kind "file"}}File{{else if eq .Kind "link"}}Link{{else}}Page{{end}}</span><span>Prepared by</span><span>Saved</span><span></span></div>
 <div class="rows" id="rows">
 {{- template "rows" .}}
 </div>
@@ -113,7 +115,7 @@
 {{- end}}
 {{- else if eq .Kind "link"}}
 <h2>No links yet</h2>
-<p>Saved links will appear here.</p>
+<p>Save a target URL and share a short address.</p><a class="button quiet" href="/new-link">New link</a>
 {{- else if eq .Kind "file"}}
 <h2>No files here</h2>
 <p>Upload a file to keep it in your library. New files are shared on creation.</p>
@@ -144,18 +146,19 @@
        unusual gets a badge: Shared, with a lock when it has a password. */ -}}
 {{- define "rows" -}}
 {{- range .Items}}
-<article class="report-row{{if .Unread}} is-unread{{end}}" id="page-row-{{.Row}}" data-slug="{{.Slug}}" data-title="{{.Title}}" data-agent="{{.Agent}}" data-date="{{.WhenFull}}" data-link="{{.Link}}"{{if .DirectLink}} data-direct-link="{{.DirectLink}}"{{end}}{{if .Shared}} data-shared{{end}}{{if .Editable}} data-editable{{end}}>
+<article class="report-row{{if .Unread}} is-unread{{end}}" id="page-row-{{.Row}}" data-slug="{{.Slug}}" data-title="{{.Title}}" data-agent="{{.Agent}}" data-date="{{.WhenFull}}" data-link="{{.Link}}"{{if eq .Kind "link"}} data-target="{{.TargetURL}}"{{end}}{{if .DirectLink}} data-direct-link="{{.DirectLink}}"{{end}}{{if .Shared}} data-shared{{end}}{{if .Editable}} data-editable{{end}}>
 <div class="row-main{{if .File}} file-row-main{{end}}">
 {{if .File}}<span class="doc-mark file-mark" aria-hidden="true">{{fileIcon .FileName}}</span>{{end}}
 {{- if .Unread}}<span class="unread-dot" aria-hidden="true" title="Not opened yet"></span>{{end}}
 <div class="row-head">
-<h2><a class="row-title" href="/{{.Slug}}{{$.From}}" data-preview title="{{.Title}}">{{if .TitleHTML}}{{.TitleHTML}}{{else}}{{.Title}}{{end}}{{if .Unread}}<span class="sr-only">, not opened yet</span>{{end}}</a></h2>
+<h2><a class="row-title" href="/{{.Slug}}{{$.From}}" {{if ne .Kind "link"}}data-preview{{end}} title="{{.Title}}">{{if .TitleHTML}}{{.TitleHTML}}{{else}}{{.Title}}{{end}}{{if .Unread}}<span class="sr-only">, not opened yet</span>{{end}}</a></h2>
 {{- /* Private is every page's default, so only sharing is announced. */}}
 {{- if .Shared}}
 <span class="row-badge" title="{{.AccessLong}}">{{if .Protected}}{{icon "lock"}}Shared with a password{{else}}{{icon "link"}}Shared{{end}}</span>
 {{else if .File}}<span class="row-badge">Private</span>{{- end}}
 </div>
-{{- if .File}}
+{{- if eq .Kind "link"}}<p class="excerpt">{{.TargetHost}} · {{.Clicks}} clicks · {{.Access}}</p>
+{{- else if .File}}
 <p class="excerpt">{{.FileName}} · <span class="file-row-size">{{fileSize .FileSize}}</span></p>
 {{- else if .Snippet}}
 <p class="snippet"><span class="where">{{.Where}}:</span> {{.Snippet}}</p>
@@ -177,6 +180,7 @@
 {{- if not (and .FirstRun (not .Archived) (not .Shared))}}
 <div class="row-menu" id="row-menu" popover role="menu" aria-label="Page actions"></div>
 <template id="row-menu-items">
+<a role="menuitem" data-act="target" rel="noreferrer" target="_blank">{{icon "arrow"}}<span>Open target</span></a>
 <a role="menuitem" data-act="edit">{{icon "pen"}}<span>Edit</span></a>
 <button type="button" role="menuitem" data-act="copy">{{icon "copy"}}<span>Copy link</span></button>
 <button type="button" role="menuitem" data-act="copy-direct">{{icon "copy"}}<span>Copy direct link</span></button>

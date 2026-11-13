@@ -108,6 +108,14 @@ func (s *Server) servePublic(w http.ResponseWriter, r *http.Request) {
 		s.publicNotFound(w, r)
 		return
 	}
+	if p.Kind == "link" {
+		if kind != "page" || ext != "" || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
+			s.publicNotFound(w, r)
+			return
+		}
+		s.redirectShortLink(w, r, p)
+		return
+	}
 	if r.Method == http.MethodPost {
 		// Checking a password takes bcrypt's deliberate time; nothing else
 		// waits for it.

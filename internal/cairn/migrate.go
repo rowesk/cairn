@@ -38,6 +38,8 @@ func addColumn(db *sql.DB, table, column, definition, backfill string) error {
 // migratePages adds the page columns older versions lacked, oldest first.
 func migratePages(db *sql.DB) error {
 	for _, column := range []struct{ name, definition string }{
+		{"target_url", "TEXT"},
+		{"clicks", "INTEGER NOT NULL DEFAULT 0"},
 		{"request_summary", "TEXT NOT NULL DEFAULT ''"},
 		{"request_source", "TEXT NOT NULL DEFAULT ''"},
 		{"preview", "TEXT NOT NULL DEFAULT ''"},

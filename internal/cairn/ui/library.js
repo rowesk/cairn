@@ -105,14 +105,15 @@
  const buildMenu = row => {
   menuRow = row;
   const slug = row.dataset.slug;
-  const wanted = {edit: 'editable' in row.dataset, copy: true, 'copy-direct': !!row.dataset.directLink, archive: view !== 'archive', restore: view === 'archive', kindle: true, 'kindle-setup': true, manage: true};
+  const wanted = {edit: 'editable' in row.dataset || !!row.dataset.target, target: !!row.dataset.target, copy: true, 'copy-direct': !!row.dataset.directLink, archive: view !== 'archive', restore: view === 'archive', kindle: !row.dataset.target, 'kindle-setup': !row.dataset.target, manage: true};
   rowMenu.replaceChildren(...$('#row-menu-items').content.cloneNode(true).children);
   $$('[role=menuitem]', rowMenu).forEach(item => { item.tabIndex = -1; });
   $$('[data-act]', rowMenu).forEach(item => {
    const act = item.dataset.act;
    if (!wanted[act]) { item.remove(); return; }
    if (act === 'kindle') item.action = '/manage/' + slug;
-   if (act === 'edit') item.href = '/edit/' + slug;
+   if (act === 'edit') item.href = (row.dataset.target ? '/manage/' : '/edit/') + slug;
+   if (act === 'target') item.href = row.dataset.target;
    if (act === 'manage') item.href = '/manage/' + slug;
   });
  };
@@ -480,7 +481,7 @@
   else if (key === '?') { event.preventDefault(); sheetOfKeys.showModal(); }
   else if (key === 'j' || key === 'J') { event.preventDefault(); move(1); }
   else if (key === 'k' || key === 'K') { event.preventDefault(); move(-1); }
-  else if ((key === ' ' || key === 'p' || key === 'P') && onRow && event.target.matches('.row-title')) { event.preventDefault(); trigger = event.target; show(onRow); }
+  else if ((key === ' ' || key === 'p' || key === 'P') && onRow && !onRow.dataset.target && event.target.matches('.row-title')) { event.preventDefault(); trigger = event.target; show(onRow); }
   else if ((key === 'e' || key === 'E') && onRow) { event.preventDefault(); archive(onRow); }
  });
 

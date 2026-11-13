@@ -269,6 +269,11 @@ func openAPIDocument() map[string]any {
 				"operationId": "openapi", "summary": "This document.", "security": []any{},
 				"responses": map[string]any{"200": response("This document.", map[string]any{"type": "object"})},
 			}},
+			"/api/links": map[string]any{"post": map[string]any{
+				"operationId": "createLink", "summary": "Create a short link. Private by default; share only when the owner asks.",
+				"requestBody": map[string]any{"required": true, "content": map[string]any{"application/json": map[string]any{"schema": map[string]any{"type": "object", "required": []string{"url"}, "additionalProperties": false, "properties": map[string]any{"url": map[string]any{"type": "string", "maxLength": 2048, "description": "An http or https URL with a valid host, outside this server's public link paths."}, "slug": map[string]any{"type": "string", "maxLength": 64}, "share_enabled": map[string]any{"type": "boolean", "default": false}}}}}},
+				"responses":   errorResponses(map[string]any{"201": response("The link was saved. public_url is present only when shared.", ref("PageWrite"))}, 400, 401, 403, 409, 413, 415, 500, 503),
+			}},
 			"/api/files":        map[string]any{"post": fileOperation("Publish a private file page.", "publishFile", 201)},
 			"/api/files/{slug}": map[string]any{"parameters": []any{slug}, "put": fileOperation("Replace a page with a file; sharing and passwords stay.", "replaceFile", 200)},
 			"/api/pages": map[string]any{
