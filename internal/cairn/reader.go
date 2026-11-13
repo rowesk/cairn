@@ -48,6 +48,7 @@ func readerTitle(title string) template.HTML {
 type readerPage struct{ Slug, Title string }
 
 type readerData struct {
+	Social                                                                *linkPreview
 	File                                                                  bool
 	FileSize                                                              int64
 	DirectLink, DirectPath, Preview                                       string
@@ -145,6 +146,9 @@ func (s *Server) renderReader(w http.ResponseWriter, r *http.Request, p savedPag
 	if ext := directExtension(p); d.File && ext != "" {
 		d.DirectLink, d.DirectPath = link+ext, "/"+route+ext
 		d.Preview = filePreview(p.FileName)
+	}
+	if !owner {
+		d.Social = s.linkPreview(p, protected)
 	}
 	themes := s.themes()
 	d.Theme = themes.public()

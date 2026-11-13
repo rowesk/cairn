@@ -30,12 +30,13 @@ var libraryJS = focusJS + "\n" + libraryBodyJS
 const uiAssetPolicy = "style-src 'self'; font-src 'self'; script-src 'self'"
 
 var uiFunctions = template.FuncMap{
-	"themes":       func() []themePreset { return themePresets },
-	"stylesheet":   func() string { return stylesheetURL },
-	"fontPreloads": fontPreloads,
-	"scriptURL":    scriptFor,
-	"colorScheme":  colorScheme,
-	"themeColors":  themeColors,
+	"publicPreview": publicPreview,
+	"themes":        func() []themePreset { return themePresets },
+	"stylesheet":    func() string { return stylesheetURL },
+	"fontPreloads":  fontPreloads,
+	"scriptURL":     scriptFor,
+	"colorScheme":   colorScheme,
+	"themeColors":   themeColors,
 	"mark": func() template.HTML {
 		return template.HTML(`<svg class="mark" viewBox="0 0 30 34" aria-hidden="true"><path d="M11 3c3-3 10-2 10 2 0 3-8 5-11 3C7 7 8 5 11 3ZM7 13c4-3 15-3 17 1 2 4-9 6-15 5-6 0-7-3-2-6ZM5 24c6-3 19-3 22 1 3 5-7 8-17 7-10-1-13-4-5-8Z"/></svg>`)
 	},

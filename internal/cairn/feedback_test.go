@@ -546,7 +546,9 @@ func TestPasswordGateSaysWhoseItIsAndWhatWentWrong(t *testing.T) {
 				t.Errorf("gate %d lacks %q", status, want)
 			}
 		}
-		if strings.Contains(body, "report") {
+		// The canonical preview URL may contain /report; check the visible copy.
+		_, visible, _ := strings.Cut(body, "</head>")
+		if strings.Contains(visible, "report") {
 			t.Error("gate still says report")
 		}
 	}
