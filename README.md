@@ -8,8 +8,6 @@ Cairn gives your agents a place to publish finished work as standalone pages. Th
 
 [Download Cairn](https://github.com/rowesk/cairn/releases/latest) · [Installation guide](docs/install.md) · [Publishing API](docs/publishing.md)
 
-This README describes the current code on `main`. Some of it, including search, editing, the wider API, `cairn publish` and Send to Kindle, has not reached a published release yet. The [changelog](CHANGELOG.md) lists what is still unreleased.
-
 ![Cairn's private library: a search field above a list of pages with their authors and dates](docs/images/library.png)
 
 ## What you get
@@ -72,10 +70,10 @@ Reading a page: C opens the contents, [ and ] go to the previous and next page i
 
 Download the Linux archive and `checksums.txt` from [GitHub Releases](https://github.com/rowesk/cairn/releases/latest). Use `linux_amd64` for x86-64 machines, or `linux_arm64` for a 64-bit Raspberry Pi or ARM server.
 
-On ARM64, with both files in the current directory, set `VERSION` to the version in the archive's name. These commands match the code on `main`; v0.1.0 starts differently, so for that release follow the README inside its archive.
+On ARM64, with both files in the current directory, set `VERSION` to the version in the archive's name.
 
 ```sh
-VERSION=v0.0.0   # replace with the version you downloaded
+VERSION=v0.3.0   # the version in the archive's name
 sha256sum --ignore-missing --check checksums.txt
 # Check that your archive reports OK before continuing.
 tar -xzf cairn_${VERSION}_linux_arm64.tar.gz
