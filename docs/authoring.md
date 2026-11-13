@@ -72,7 +72,7 @@ Import accepts any file up to 512 MiB. Cairn opens a file as a page when it can:
 | DOCX | Extracted paragraph text; original retains formatting and embedded content |
 | Other files, including ZIP, PDF, DOC, ODT, RTF, spreadsheets, video and large images | A file page with a Download button |
 
-A blank title comes from the file: a Markdown file's first `#` heading or an HTML file's `<title>`, as `cairn publish` reads them, and otherwise the file name. The author and your request have defaults; **More details** lets you change them. Every import keeps the original file. File pages offer Download to the owner and visitors with access. Ordinary pages keep their source owner-only. From the library's preview, **Open page** reaches the reader and the download.
+A blank title comes from the file: a Markdown file's first `#` heading or an HTML file's `<title>`, as `cairn publish` reads them, and otherwise the file name. The author and your request have defaults; **More details** lets you change them. Every import keeps the original file. File pages offer Download to the owner and visitors with access. Other page sources stay owner-only, except shared HTML imports, which also have a sandboxed direct HTML address. From the library's preview, **Open page** reaches the reader and the download.
 
 ## Storage and access
 

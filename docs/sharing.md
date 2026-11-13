@@ -40,7 +40,7 @@ Link names Cairn picks are three letters and digits, mixed case, by default; you
 
 Sharing keeps the page's link name on the public address. A link name you change in Manage page replaces the old one; the page's original short address also keeps working while the page is shared. Stopping sharing turns off every public link to the page and leaves private reading alone. Changing a password signs out everyone who unlocked the page. Archiving hides a page from the library; it does not stop sharing.
 
-Visitors see the page, its byline and the author's photo, and its images. They never see your request, its summary or source, your library, or the file the page was made from: Download original is offered only to you.
+Visitors see the page, its byline, the author's photo and its images. They never see your request, its summary or source, or your library. File pages offer their stored file to visitors with access. Shared HTML imports also expose their original HTML at a sandboxed direct address. Other page sources and Download original stay owner-only.
 
 ## Security model
 
