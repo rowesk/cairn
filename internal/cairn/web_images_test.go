@@ -158,6 +158,13 @@ func TestWebImagesSaveAndReuse(t *testing.T) {
 			}
 		})
 	}
+	// A failed image inside the author's link keeps that link's destination.
+	save("fail-linked", "[![Linked]("+fixture.URL+"/missing)](https://example.org/target)", false)
+	linked, _ := s.getPage("fail-linked")
+	linkedBody, _ := os.ReadFile(filepath.Join(s.cfg.DataDir, "objects", linked.Object, "page.html"))
+	if body := string(linkedBody); strings.Contains(body, "<img") || !strings.Contains(body, "https://example.org/target") || !strings.Contains(body, "Linked") {
+		t.Fatalf("linked fallback: %s", body)
+	}
 }
 
 type repeatingReader struct{}

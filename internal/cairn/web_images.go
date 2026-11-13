@@ -281,13 +281,10 @@ func mapWebImages(n *html.Node, images map[string]string) {
 				} else {
 					a := element("a", "href", src)
 					a.AppendChild(&html.Node{Type: html.TextNode, Data: attr(c, "alt")})
+					// Inside the author's own link, the alt text keeps
+					// that link's destination.
 					if link != nil {
 						n.InsertBefore(&html.Node{Type: html.TextNode, Data: attr(c, "alt")}, c)
-						for i := range link.Attr {
-							if link.Attr[i].Key == "href" {
-								link.Attr[i].Val = src
-							}
-						}
 					} else {
 						n.InsertBefore(a, c)
 					}
