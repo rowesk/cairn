@@ -137,10 +137,7 @@ func (s *Server) spool(part io.Reader) (string, int64, error) {
 	if err != nil {
 		return "", 0, err
 	}
-	size, err := io.Copy(f, io.LimitReader(part, maxFileBytes+1))
-	if err == nil && size > maxFileBytes {
-		err = errUploadTooLarge
-	}
+	size, err := copyFileUpload(f, part)
 	if err == nil {
 		err = f.Sync()
 	}
@@ -209,7 +206,7 @@ func (s *Server) publishFile(w http.ResponseWriter, r *http.Request) {
 	defer u.remove()
 	for name := range u.fields {
 		switch name {
-		case "title", "agent", "original_request", "request_summary", "request_source", "slug":
+		case "title", "agent", "original_request", "request_summary", "request_source", "slug", "share_enabled":
 		default:
 			writeAPIErrorField(w, http.StatusBadRequest, ErrValidationFailed, name, "unknown field "+name, false)
 			return
@@ -225,7 +222,15 @@ func (s *Server) publishFile(w http.ResponseWriter, r *http.Request) {
 		writeAPIErrorField(w, http.StatusBadRequest, ErrValidationFailed, "file", "send exactly one file part named file", false)
 		return
 	}
-	in := publication{Title: u.fields["title"], Agent: u.fields["agent"], OriginalRequest: u.fields["original_request"], RequestSummary: u.fields["request_summary"], RequestSource: u.fields["request_source"], Slug: u.fields["slug"]}
+	shared := false
+	if value, present := u.fields["share_enabled"]; present {
+		if r.Method != http.MethodPost || (value != "true" && value != "false") {
+			writeAPIErrorField(w, 400, ErrValidationFailed, "share_enabled", "Use true or false on creation only.", false)
+			return
+		}
+		shared = value == "true"
+	}
+	in := publication{Share: shared, Title: u.fields["title"], Agent: u.fields["agent"], OriginalRequest: u.fields["original_request"], RequestSummary: u.fields["request_summary"], RequestSource: u.fields["request_source"], Slug: u.fields["slug"]}
 	if err := filePublication(&in, u.files["file"][0]); err != nil {
 		writeAPIErrorField(w, http.StatusBadRequest, ErrValidationFailed, "file", err.Error(), false)
 		return
@@ -373,4 +378,13 @@ func (s *Server) sourceNotFound(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s.notFound(w, r)
 	}
+}
+
+// copyFileUpload bounds the streamed payload independently of multipart overhead.
+func copyFileUpload(dst io.Writer, src io.Reader) (int64, error) {
+	size, err := io.Copy(dst, io.LimitReader(src, maxFileBytes+1))
+	if err == nil && size > maxFileBytes {
+		err = errUploadTooLarge
+	}
+	return size, err
 }

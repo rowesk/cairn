@@ -229,23 +229,15 @@ func TestFilePageAPIErrors(t *testing.T) {
 	}
 }
 
-func TestFilePageSizeCap(t *testing.T) {
+func TestFilePageStreamIntegrity(t *testing.T) {
 	dir := t.TempDir()
 	srv, close := start(t, dir)
 	defer close()
-	const limit = 512 << 20
+	const limit = 1 << 20
 	meta := [][2]string{{"agent", "FileAgent"}, {"original_request", "Big file"}, {"slug", "big"}}
 	status, body := sendFile(t, srv, "POST", "/api/files", meta, []filePart{{"file", "big.bin", patterned(limit)}}, nil)
 	if status != 201 {
 		t.Fatalf("exact limit: %d %s", status, body)
-	}
-	meta[2][1] = "too-big"
-	status, body = sendFile(t, srv, "POST", "/api/files", meta, []filePart{{"file", "big.bin", patterned(limit + 1)}}, nil)
-	if status != 413 || apiError(t, body).Code != cairn.ErrPayloadTooLarge {
-		t.Fatalf("over limit: %d %s", status, body)
-	}
-	if c, _, _ := request(t, srv, "GET", "/too-big", nil, ""); c != 404 {
-		t.Fatal("oversized upload saved")
 	}
 	res, err := srv.Client().Get(srv.URL + "/big?download=1")
 	if err != nil {

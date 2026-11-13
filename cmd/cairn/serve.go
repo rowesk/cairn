@@ -355,16 +355,11 @@ func (c *cli) runServer(ctx context.Context, cfg serveConfig) error {
 		return openError(cfg.data, err, "serve")
 	}
 	defer app.Close()
-	makeServer := func(handler http.Handler) *http.Server {
-		// Transfers can take minutes over Tailscale. Bound headers and idle
-		// connections without imposing a deadline on uploads or downloads.
-		return &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
-	}
 	privateListener, err := net.Listen("tcp", cfg.listen.value)
 	if err != nil {
 		return listenError(cfg.listen, cfg.listen.value, err)
 	}
-	servers := []*http.Server{makeServer(app)}
+	servers := []*http.Server{transferServer(app, false)}
 	listeners := []net.Listener{privateListener}
 	defer func() {
 		for _, server := range servers {
@@ -380,11 +375,10 @@ func (c *cli) runServer(ctx context.Context, cfg serveConfig) error {
 		if err != nil {
 			return listenError(cfg.publicListen, cfg.publicListen.value, err)
 		}
-		public := makeServer(app.PublicHandler())
+		public := transferServer(app.PublicHandler(), true)
 		// Visitors only send password forms, never uploads, so the public
 		// listener keeps a short body deadline. Downloads keep no write
 		// deadline, so large files still finish.
-		public.ReadTimeout = 30 * time.Second
 		servers = append(servers, public)
 		listeners = append(listeners, publicListener)
 		publicAddress = publicListener.Addr()
@@ -442,4 +436,13 @@ func (c *cli) banner(cfg serveConfig, private, public net.Addr) {
 	}
 	fmt.Fprintf(&b, "Open http://%s %s to read your library.\n", private, where)
 	io.WriteString(c.stderr, b.String())
+}
+
+// transferServer leaves streamed transfers without an absolute deadline.
+func transferServer(handler http.Handler, public bool) *http.Server {
+	server := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
+	if public {
+		server.ReadTimeout = 30 * time.Second
+	}
+	return server
 }

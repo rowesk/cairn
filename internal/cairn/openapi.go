@@ -351,5 +351,9 @@ func fileOperation(summary, id string, status int) map[string]any {
 			fields[f.Name] = map[string]any{"type": "string", "description": f.Description}
 		}
 	}
+	if status == 201 {
+		fields["share_enabled"] = map[string]any{"type": "boolean", "default": false, "description": "Share on creation only when the owner asks."}
+	}
+
 	return map[string]any{"operationId": id, "summary": summary, "requestBody": map[string]any{"required": true, "content": map[string]any{"multipart/form-data": map[string]any{"schema": map[string]any{"type": "object", "properties": fields, "required": []string{"file", "original_request"}, "additionalProperties": false}}}}, "responses": errorResponses(map[string]any{strconv.Itoa(status): response("The file page was saved.", ref("PageWrite"))}, 400, 401, 403, 404, 409, 413, 415, 500, 503)}
 }
