@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.3.0
+
+This release also carries every change listed under v0.2.0, which was tagged but never published.
 
 - Add Pages, Files and Links tabs, with searches scoped to each and hints for matches elsewhere.
 - Share owner uploads and owner-created links on creation. Keep agent files and links private unless sharing is requested explicitly.
@@ -104,6 +106,8 @@
 - Pages rendered from now on keep a number with its unit ("6.1 kW", "2 × 8 TB") on one line.
 
 ## v0.2.0
+
+Tagged but never published as a release. These changes ship in v0.3.0.
 
 - Saved preset themes (Cairn, Minimal, Futuristic) for the admin view, private reader and public reader.
 - One page scroll in the reader at every width: a shorter cover band, a pinned bar with the title, current section and page actions, and a page-details sheet with the byline and full request.

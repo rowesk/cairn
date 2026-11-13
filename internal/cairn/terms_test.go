@@ -132,7 +132,7 @@ func TestRetiredTermsStayRetired(t *testing.T) {
 			}
 		}
 	}
-	// The documentation, the agent setup text and the unreleased changes.
+	// The documentation, the agent setup text and the newest changes.
 	docs, _ := filepath.Glob(filepath.Join("..", "..", "docs", "*.md"))
 	docs = append(docs, filepath.Join("..", "..", "README.md"), filepath.Join("..", "..", "CONTRIBUTING.md"), "contract.md", filepath.Join("ui", "agent-setup.md"))
 	code := regexp.MustCompile("(?s)```.*?```|`[^`\n]*`")
@@ -144,8 +144,9 @@ func TestRetiredTermsStayRetired(t *testing.T) {
 		findRetired(t, file, code.ReplaceAllString(string(data), " "), retiredTerms)
 	}
 	changelog, _ := os.ReadFile(filepath.Join("..", "..", "CHANGELOG.md"))
-	unreleased := strings.SplitN(strings.SplitN(string(changelog), "## Unreleased", 2)[1], "\n## ", 2)[0]
-	findRetired(t, "CHANGELOG.md Unreleased", code.ReplaceAllString(unreleased, " "), retiredTerms[:len(retiredTerms)-1])
+	// The newest section, whether it is still Unreleased or already a version.
+	newest := strings.SplitN(strings.SplitN(string(changelog), "\n## ", 2)[1], "\n## ", 2)[0]
+	findRetired(t, "CHANGELOG.md newest section", code.ReplaceAllString(newest, " "), retiredTerms[:len(retiredTerms)-1])
 	glossary, _ := os.ReadFile(filepath.Join("..", "..", "CONTEXT.md"))
 	var lines []string
 	for _, line := range strings.Split(string(glossary), "\n") {
