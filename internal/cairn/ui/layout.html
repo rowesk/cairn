@@ -33,6 +33,14 @@
 {{- range themeColors .Theme}}
 <meta name="theme-color" content="{{.Color}}"{{if .Media}} media="{{.Media}}"{{end}}>
 {{- end}}
+<link rel="icon" href="{{iconURL 32}}" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="{{iconURL 180}}">
+{{- if ownerPage .}}
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="apple-mobile-web-app-title" content="Cairn">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+{{- end}}
 <title>{{template "title" .}}</title>
 {{- with publicPreview .}}
 <meta property="og:type" content="website">

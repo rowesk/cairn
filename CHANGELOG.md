@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add a home-screen icon, browser tab icon and web app manifest, so the private library installs as an app called Cairn and opens without the browser's address bar. Shared pages show the icon but never offer to install. `scripts/generate-icons.go` redraws the icons.
+
 ## v0.3.0
 
 This release also carries every change listed under v0.2.0, which was tagged but never published.
