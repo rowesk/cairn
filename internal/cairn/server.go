@@ -298,6 +298,9 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "no-referrer")
+	if serveFixedIcon(w, r) || serveManifest(w, r) {
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/_runtime/") {
 		serveRuntimeFile(w, r, s.notFound)
 		return

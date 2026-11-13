@@ -28,6 +28,10 @@ func (s *Server) servePublic(w http.ResponseWriter, r *http.Request) {
 		s.publicNotFound(w, r)
 		return
 	}
+	// Browser and home-screen icons; the app manifest stays private.
+	if serveFixedIcon(w, r) {
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/_runtime/") {
 		serveRuntimeFile(w, r, s.publicNotFound)
 		return
