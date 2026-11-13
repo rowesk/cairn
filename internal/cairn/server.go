@@ -495,7 +495,9 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 			return
 		}
 	}
-	autoShare := in.File && !replace
+	// Files the owner uploads are shared at once, like a file drop. Agent
+	// uploads stay private until the owner asks, as pages do.
+	autoShare := in.File && in.OwnerWritten && !replace
 	if autoShare {
 		in.Share = true
 		for {

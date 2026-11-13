@@ -171,7 +171,8 @@ func TestFilePageAPIPublishReadAndDownload(t *testing.T) {
 		t.Fatal("file appears under Pages")
 	}
 	_, _, list := request(t, srv, "GET", "/?kind=files", nil, "")
-	if !strings.Contains(string(list), `data-shared`) || !strings.Contains(string(list), "doc-mark file-mark") || !strings.Contains(string(list), "Q3 numbers.xlsx · <span class=\"file-row-size\">2.9 KB</span>") {
+	// An agent's file stays private until the owner shares it.
+	if strings.Contains(string(list), `data-shared`) || !strings.Contains(string(list), "doc-mark file-mark") || !strings.Contains(string(list), "Q3 numbers.xlsx · <span class=\"file-row-size\">2.9 KB</span>") {
 		t.Fatal("library row is not a file row")
 	}
 	// An explicit title wins over the filename.
