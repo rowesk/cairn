@@ -144,7 +144,7 @@
        unusual gets a badge: Shared, with a lock when it has a password. */ -}}
 {{- define "rows" -}}
 {{- range .Items}}
-<article class="report-row{{if .Unread}} is-unread{{end}}" id="page-row-{{.Row}}" data-slug="{{.Slug}}" data-title="{{.Title}}" data-agent="{{.Agent}}" data-date="{{.WhenFull}}" data-link="{{.Link}}"{{if .Shared}} data-shared{{end}}{{if .Editable}} data-editable{{end}}>
+<article class="report-row{{if .Unread}} is-unread{{end}}" id="page-row-{{.Row}}" data-slug="{{.Slug}}" data-title="{{.Title}}" data-agent="{{.Agent}}" data-date="{{.WhenFull}}" data-link="{{.Link}}"{{if .DirectLink}} data-direct-link="{{.DirectLink}}"{{end}}{{if .Shared}} data-shared{{end}}{{if .Editable}} data-editable{{end}}>
 <div class="row-main{{if .File}} file-row-main{{end}}">
 {{if .File}}<span class="doc-mark file-mark" aria-hidden="true">{{fileIcon .FileName}}</span>{{end}}
 {{- if .Unread}}<span class="unread-dot" aria-hidden="true" title="Not opened yet"></span>{{end}}
@@ -179,6 +179,7 @@
 <template id="row-menu-items">
 <a role="menuitem" data-act="edit">{{icon "pen"}}<span>Edit</span></a>
 <button type="button" role="menuitem" data-act="copy">{{icon "copy"}}<span>Copy link</span></button>
+<button type="button" role="menuitem" data-act="copy-direct">{{icon "copy"}}<span>Copy direct link</span></button>
 {{- if .Kindle}}
 {{- if .KindleReady}}
 <form method="post" data-act="kindle"><input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="action" value="kindle"><button role="menuitem">{{icon "kindle"}}<span>Send to Kindle</span></button></form>

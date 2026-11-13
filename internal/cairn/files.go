@@ -241,6 +241,83 @@ func (s *Server) publishFile(w http.ResponseWriter, r *http.Request) {
 // lock before sending it. A slow 512 MiB download must not hold up saves.
 // The open descriptor stays valid if the page is replaced or deleted meanwhile.
 func (s *Server) serveSource(w http.ResponseWriter, r *http.Request, p savedPage, unlock func()) {
+	s.serveOriginal(w, r, p, unlock, false)
+}
+
+// Direct routes select originals by metadata, never by a user-supplied disk path.
+func directParts(route string) (string, string) {
+	ext := filepath.Ext(route)
+	if ext == "" {
+		return route, ""
+	}
+	return strings.TrimSuffix(route, ext), ext
+}
+
+func directExtension(p savedPage) string {
+	ext := filepath.Ext(p.FileName)
+	if p.File || strings.EqualFold(ext, ".html") || strings.EqualFold(ext, ".htm") {
+		return ext
+	}
+	return ""
+}
+
+func directType(name string) string {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".avif":
+		return "image/avif"
+	case ".pdf":
+		return "application/pdf"
+	case ".mp4":
+		return "video/mp4"
+	case ".webm":
+		return "video/webm"
+	case ".mov":
+		return "video/quicktime"
+	case ".mp3":
+		return "audio/mpeg"
+	case ".m4a":
+		return "audio/mp4"
+	case ".wav":
+		return "audio/wav"
+	case ".ogg", ".oga":
+		return "audio/ogg"
+	case ".flac":
+		return "audio/flac"
+	case ".html", ".htm":
+		return "text/html; charset=utf-8"
+	case ".svg":
+		return "image/svg+xml"
+	case ".txt", ".md", ".csv", ".json", ".xml", ".yaml", ".yml", ".toml",
+		".go", ".py", ".js", ".ts", ".jsx", ".tsx", ".css", ".sh", ".sql", ".c", ".h", ".cpp", ".rs", ".rb", ".java", ".log":
+		return "text/plain; charset=utf-8"
+	}
+	return ""
+}
+
+func filePreview(name string) string {
+	typ := directType(name)
+	switch {
+	case strings.HasPrefix(typ, "image/"):
+		return "image"
+	case strings.HasPrefix(typ, "video/"):
+		return "video"
+	case strings.HasPrefix(typ, "audio/"):
+		return "audio"
+	case typ == "application/pdf":
+		return "pdf"
+	}
+	return ""
+}
+
+func (s *Server) serveOriginal(w http.ResponseWriter, r *http.Request, p savedPage, unlock func(), direct bool) {
 	if p.FileName == "" {
 		unlock()
 		s.sourceNotFound(w, r)
@@ -258,9 +335,35 @@ func (s *Server) serveSource(w http.ResponseWriter, r *http.Request, p savedPage
 		s.sourceNotFound(w, r)
 		return
 	}
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": p.FileName}))
-	w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
+	typ, disposition := "application/octet-stream", "attachment"
+	policy := "sandbox; default-src 'none'"
+	if direct {
+		policy = "default-src 'none'"
+		typ = directType(p.FileName)
+		if typ == "" {
+			var sample [512]byte
+			n, _ := f.Read(sample[:])
+			known, _, _ := mime.ParseMediaType(mime.TypeByExtension(strings.ToLower(filepath.Ext(p.FileName))))
+			if strings.HasPrefix(known, "text/") || (known == "" && strings.HasPrefix(http.DetectContentType(sample[:n]), "text/plain")) {
+				typ = "text/plain; charset=utf-8"
+			} else {
+				typ = "application/octet-stream"
+			}
+			if _, err := f.Seek(0, io.SeekStart); err != nil {
+				s.sourceNotFound(w, r)
+				return
+			}
+		}
+		if typ != "application/octet-stream" {
+			disposition = "inline"
+		}
+		if strings.HasPrefix(typ, "text/html") || typ == "image/svg+xml" {
+			policy = "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox; default-src 'self' data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src 'none'; form-action 'none'; base-uri 'none'"
+		}
+	}
+	w.Header().Set("Content-Type", typ)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": p.FileName}))
+	w.Header().Set("Content-Security-Policy", policy)
 	http.ServeContent(w, r, "", info.ModTime(), f)
 }
 

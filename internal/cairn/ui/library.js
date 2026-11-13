@@ -105,7 +105,7 @@
  const buildMenu = row => {
   menuRow = row;
   const slug = row.dataset.slug;
-  const wanted = {edit: 'editable' in row.dataset, copy: true, archive: view !== 'archive', restore: view === 'archive', kindle: true, 'kindle-setup': true, manage: true};
+  const wanted = {edit: 'editable' in row.dataset, copy: true, 'copy-direct': !!row.dataset.directLink, archive: view !== 'archive', restore: view === 'archive', kindle: true, 'kindle-setup': true, manage: true};
   rowMenu.replaceChildren(...$('#row-menu-items').content.cloneNode(true).children);
   $$('[role=menuitem]', rowMenu).forEach(item => { item.tabIndex = -1; });
   $$('[data-act]', rowMenu).forEach(item => {
@@ -147,12 +147,12 @@
   const item = event.target.closest('[data-act]');
   if (!item || !menuRow) return;
   const row = menuRow, act = item.dataset.act;
-  if (act === 'copy') { event.preventDefault(); rowMenu.hidePopover(); copyLink(row); }
+  if (act === 'copy' || act === 'copy-direct') { event.preventDefault(); rowMenu.hidePopover(); copyLink(row, act === 'copy-direct'); }
   else if (act === 'archive' || act === 'restore') { event.preventDefault(); rowMenu.hidePopover(); archive(row); }
  });
 
- const copyLink = async row => {
-  const link = new URL(row.dataset.link, location.href).href;
+ const copyLink = async (row, direct = false) => {
+  const link = new URL(direct ? row.dataset.directLink : row.dataset.link, location.href).href;
   try {
    if (navigator.clipboard && isSecureContext) await navigator.clipboard.writeText(link);
    else {

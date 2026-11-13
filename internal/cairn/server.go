@@ -375,13 +375,27 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 	if content {
 		slug = strings.TrimPrefix(slug, "_content/")
 	}
+	ext := ""
+	if !content {
+		slug, ext = directParts(slug)
+	}
 	if !validSlug(slug) {
 		s.notFound(w, r)
 		return
 	}
+	if ext != "" {
+		var resolved string
+		if err := s.db.QueryRow(`SELECT slug FROM pages WHERE slug=? OR public_slug=? ORDER BY slug=? DESC LIMIT 1`, slug, slug, slug).Scan(&resolved); err == nil {
+			slug = resolved
+		}
+	}
 	p, err := s.getPage(slug)
-	if err != nil {
+	if err != nil || (ext != "" && !strings.EqualFold(ext, directExtension(p))) {
 		s.notFound(w, r)
+		return
+	}
+	if ext != "" {
+		s.serveOriginal(w, r, p, unlock, true)
 		return
 	}
 	if r.URL.Query().Get("download") == "1" {

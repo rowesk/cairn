@@ -4,7 +4,7 @@
  const body=document.body,url=new URL(body.dataset.link,location.href).href,status=document.querySelector('#copy-status');
  const is=name=>body.classList.contains(name);
  const said=!is('is-owner')?'Link copied.':!is('is-shared')?'Link copied. Only you can open it.':is('is-protected')?'Link copied. Visitors also need the password.':'Link copied. Anyone with it can read this page.';
- async function copy(from){
+ async function copy(from,url){
   try {
    if(navigator.clipboard&&window.isSecureContext)await navigator.clipboard.writeText(url);
    else {
@@ -16,7 +16,7 @@
   }catch {return false;}
  }
  const timers=new Map();
- function announce(text,failed){
+ function announce(text,failed,url){
   status.textContent='';status.classList.toggle('is-failed',failed);
   requestAnimationFrame(()=>{
    status.textContent=text;
@@ -26,10 +26,11 @@
  for(const button of document.querySelectorAll('[data-copy-link]')){
   button.hidden=false;
   button.addEventListener('click',async()=>{
-   const copied=await copy(button);
+   const link=button.dataset.copyLink?new URL(button.dataset.copyLink,location.href).href:url;
+   const copied=await copy(button,link);
    clearTimeout(timers.get(button));
    button.classList.toggle('is-copied',copied);
-   announce(copied?said:'Could not copy the link. It is selected here:',!copied);
+   announce(copied?said:'Could not copy the link. It is selected here:',!copied,link);
    timers.set(button,setTimeout(()=>button.classList.remove('is-copied'),2000));
   });
  }

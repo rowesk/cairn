@@ -50,6 +50,7 @@ type readerPage struct{ Slug, Title string }
 type readerData struct {
 	File                                                                  bool
 	FileSize                                                              int64
+	DirectLink, DirectPath, Preview                                       string
 	Theme                                                                 string
 	Title, Agent, CreatedAt, Slug, FileName, Request, Link, RequestSource string
 	Photo                                                                 template.URL
@@ -141,6 +142,10 @@ func (s *Server) followLibraryView(d *readerData, p savedPage, in string) {
 
 func (s *Server) renderReader(w http.ResponseWriter, r *http.Request, p savedPage, route string, owner, shared, protected bool, link string) {
 	d := readerData{Title: p.Title, Agent: p.Agent, CreatedAt: p.CreatedAt, Slug: route, FileName: p.FileName, Owner: owner, Shared: shared, Protected: protected, Link: link, File: p.File && p.FileName != "", FileSize: p.FileSize}
+	if ext := directExtension(p); d.File && ext != "" {
+		d.DirectLink, d.DirectPath = link+ext, "/"+route+ext
+		d.Preview = filePreview(p.FileName)
+	}
 	themes := s.themes()
 	d.Theme = themes.public()
 	if owner {
@@ -191,7 +196,11 @@ func (s *Server) renderReader(w http.ResponseWriter, r *http.Request, p savedPag
 		w.Header().Set("Referrer-Policy", "same-origin")
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-src 'self'; "+uiAssetPolicy+"; img-src data:; base-uri 'none'; form-action "+formAction+"; frame-ancestors 'none'")
+	filePolicy := "img-src data:;"
+	if d.File {
+		filePolicy = "img-src 'self' data:; media-src 'self';"
+	}
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-src 'self'; "+uiAssetPolicy+"; "+filePolicy+" base-uri 'none'; form-action "+formAction+"; frame-ancestors 'none'")
 	_ = readerView.Execute(w, d)
 }
 

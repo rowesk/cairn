@@ -32,7 +32,7 @@ type libraryItem struct {
 	// Asked is the request summary in one line, when the agent sent one.
 	Asked                               string
 	When, WhenFull                      string
-	Link                                string
+	Link, DirectLink                    string
 	Archived, Shared, Protected, Unread bool
 	Editable                            bool
 	Photo                               string
@@ -601,6 +601,11 @@ func (s *Server) scanItems(query string, args ...any) ([]libraryItem, []int, []s
 				publicSlug = p.Slug
 			}
 			p.Link = base + "/" + publicSlug
+		}
+		if p.File {
+			if ext := filepath.Ext(p.FileName); ext != "" {
+				p.DirectLink = p.Link + ext
+			}
 		}
 		items = append(items, p)
 		tiers = append(tiers, tier)

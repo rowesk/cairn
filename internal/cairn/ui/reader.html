@@ -25,6 +25,8 @@
 
 {{- define "copy-label"}}<span class="copy-label"><span class="copy-ready">{{icon "copy"}}<span class="copy-text">Copy link</span></span><span class="copy-done" aria-hidden="true">{{icon "check"}}<span class="copy-text">Copied</span></span></span>{{end}}
 
+{{- define "direct-copy-label"}}<span class="copy-label"><span class="copy-ready">{{icon "copy"}}<span class="copy-text">Copy direct link</span></span><span class="copy-done" aria-hidden="true">{{icon "check"}}<span class="copy-text">Copied</span></span></span>{{end}}
+
 {{- /* Who can open the page, in words and icons, the way the library's badge says it. */ -}}
 {{- define "access"}}{{if .Shared}}{{icon "link"}}<span class="sr-only">This page is </span>{{if .Protected}}Shared with a password{{icon "lock"}}{{else}}Shared{{end}}{{else}}{{icon "lock"}}<span class="sr-only">This page is </span>Private{{end}}{{end}}
 
@@ -46,7 +48,7 @@
 <a class="brand" href="/">{{mark}}cairn</a>
 <div class="reading-actions">
 <p class="access-status">{{template "access" .}}</p>
-<button type="button" class="nav-button copy-link wide-action" data-copy-link hidden>{{template "copy-label"}}</button>
+<button type="button" class="nav-button copy-link wide-action" data-copy-link hidden>{{template "copy-label"}}</button>{{if .DirectLink}}<button type="button" class="nav-button copy-link wide-action" data-copy-link="{{.DirectLink}}" hidden>{{template "direct-copy-label"}}</button>{{end}}
 <button type="button" class="nav-button more-button" popovertarget="reader-menu" aria-expanded="false">More{{icon "chevron"}}</button>
 </div>
 </div>
@@ -95,7 +97,7 @@
 <h1 class="report-title{{if .LongTitle}} is-long{{end}}{{if .OwnTitle}} sr-only{{end}}">{{readerTitle .Title}}</h1>
 <div class="strip-row">
 {{template "byline" .}}
-<button type="button" class="button quiet copy-link strip-copy" data-copy-link hidden>{{template "copy-label"}}</button>
+<button type="button" class="button quiet copy-link strip-copy" data-copy-link hidden>{{template "copy-label"}}</button>{{if .DirectLink}}<button type="button" class="button quiet copy-link strip-copy" data-copy-link="{{.DirectLink}}" hidden>{{template "direct-copy-label"}}</button>{{end}}
 </div>
 {{- template "contents-fallback" .}}
 </div>
@@ -114,7 +116,7 @@
 {{- if .Contents}}
 <button type="button" class="compact-contents" tabindex="-1" aria-expanded="false" aria-controls="reader-contents">{{icon "list"}}<span>Contents</span></button>
 {{- end}}
-<button type="button" class="compact-copy copy-link" data-copy-link tabindex="-1" hidden>{{template "copy-label"}}</button>
+<button type="button" class="compact-copy copy-link" data-copy-link tabindex="-1" hidden>{{template "copy-label"}}</button>{{if .DirectLink}}<button type="button" class="compact-copy copy-link" data-copy-link="{{.DirectLink}}" tabindex="-1" hidden>{{template "direct-copy-label"}}</button>{{end}}
 {{- if .Owner}}
 <button type="button" class="compact-more more-button" popovertarget="reader-menu" aria-expanded="false" tabindex="-1">More{{icon "chevron"}}</button>
 {{- end}}
@@ -125,7 +127,7 @@
 {{- if .Owner}}
 <div class="reader-menu" id="reader-menu" popover>
 <p class="menu-status">{{template "access-sentence" .}}</p>
-<button type="button" class="menu-copy copy-link" data-copy-link hidden>{{template "copy-label"}}</button>
+<button type="button" class="menu-copy copy-link" data-copy-link hidden>{{template "copy-label"}}</button>{{if .DirectLink}}<button type="button" class="menu-copy copy-link" data-copy-link="{{.DirectLink}}" hidden>{{template "direct-copy-label"}}</button>{{end}}
 <button type="button" class="menu-details" hidden>{{icon "doc"}}Page details</button>
 {{- if .Contents}}
 <button type="button" class="menu-contents" aria-controls="reader-contents" hidden>{{icon "list"}}Contents</button>
@@ -166,7 +168,12 @@
 </div>
 </nav>
 {{- end}}
-{{if .File}}<div class="file-card">{{fileIcon .FileName}}<div class="file-details"><p class="file-name">{{.FileName}}</p><p class="file-facts">{{fileType .FileName}} · {{fileSize .FileSize}}</p></div><a class="button file-download" href="/{{.Slug}}?download=1" download>{{icon "download"}}<span>Download</span></a></div>{{else}}<iframe class="report-frame" title="{{.Title}}" name="report" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" src="{{.FrameSrc}}"></iframe>{{end}}
+{{if .File}}
+{{if eq .Preview "image"}}<img class="file-preview" src="{{.DirectPath}}" alt="{{.Title}}">
+{{else if eq .Preview "pdf"}}<iframe class="file-preview file-preview-document" src="{{.DirectPath}}" title="{{.Title}}"></iframe>
+{{else if eq .Preview "video"}}<video class="file-preview" src="{{.DirectPath}}" controls preload="metadata"></video>
+{{else if eq .Preview "audio"}}<audio class="file-preview" src="{{.DirectPath}}" controls preload="metadata"></audio>{{end}}
+<div class="file-card">{{fileIcon .FileName}}<div class="file-details"><p class="file-name">{{.FileName}}</p><p class="file-facts">{{fileType .FileName}} · {{fileSize .FileSize}}</p></div><a class="button file-download" href="/{{.Slug}}?download=1" download>{{icon "download"}}<span>Download</span></a></div>{{else}}<iframe class="report-frame" title="{{.Title}}" name="report" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" src="{{.FrameSrc}}"></iframe>{{end}}
 </main>
 {{- if .Owner}}
 <footer class="reader-end">
@@ -187,7 +194,7 @@
 <button class="button quiet">{{if .Archived}}{{icon "restore"}}Restore page{{else}}{{icon "archive"}}Archive page{{end}}</button>
 </form>
 {{- if .Shared}}
-<button type="button" class="button quiet copy-link" data-copy-link hidden>{{template "copy-label"}}</button>
+<button type="button" class="button quiet copy-link" data-copy-link hidden>{{template "copy-label"}}</button>{{if .DirectLink}}<button type="button" class="button quiet copy-link" data-copy-link="{{.DirectLink}}" hidden>{{template "direct-copy-label"}}</button>{{end}}
 {{- else}}
 <a class="button quiet" href="/manage/{{.Slug}}#sharing">{{icon "share"}}Share page</a>
 {{- end}}

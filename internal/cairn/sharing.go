@@ -78,6 +78,10 @@ func (s *Server) servePublic(w http.ResponseWriter, r *http.Request) {
 		s.publicNotFound(w, r)
 		return
 	}
+	ext := ""
+	if kind == "page" {
+		route, ext = directParts(route)
+	}
 	if (r.Method == http.MethodPost && kind != "page") || !validSlug(route) || (kind == "asset" && !assetName.MatchString(asset)) {
 		s.publicNotFound(w, r)
 		return
@@ -99,7 +103,7 @@ func (s *Server) servePublic(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		p, err = s.getPage(slug)
 	}
-	if err != nil {
+	if err != nil || (ext != "" && !strings.EqualFold(ext, directExtension(p))) {
 		unlock()
 		s.publicNotFound(w, r)
 		return
@@ -108,16 +112,20 @@ func (s *Server) servePublic(w http.ResponseWriter, r *http.Request) {
 		// Checking a password takes bcrypt's deliberate time; nothing else
 		// waits for it.
 		unlock()
-		s.unlockShare(w, r, p, hash.String, route, revision)
+		s.unlockShare(w, r, p, hash.String, route+ext, revision)
 		return
 	}
 	// Ordinary page sources stay owner-only. A shared file page offers
 	// its file, behind the same password gate as the reader.
-	if r.URL.Query().Get("download") == "1" && !p.File {
+	if ext == "" && r.URL.Query().Get("download") == "1" && !p.File {
 		s.publicNotFound(w, r)
 		return
 	}
 	if !s.passwordGate(w, r, p, hash.String, route, kind, revision) {
+		return
+	}
+	if ext != "" {
+		s.serveOriginal(w, r, p, unlock, true)
 		return
 	}
 	if r.URL.Query().Get("download") == "1" {
