@@ -1153,3 +1153,50 @@ input.toggle:focus-visible {
     column-gap: var(--space-3);
   }
 }
+
+/* Storage uses the same section and panel as the settings forms. */
+.storage-breakdown {
+  margin: 0;
+}
+
+.storage-breakdown > div,
+.storage-files li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block: var(--space-2);
+}
+
+.storage-breakdown dd {
+  margin: 0;
+}
+
+.storage-breakdown dd,
+.storage-files span {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.storage-total {
+  margin-bottom: var(--space-2);
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+}
+
+.storage-files {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-label);
+}
+
+.storage-files a {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.storage-files span {
+  color: var(--muted);
+}

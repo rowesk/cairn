@@ -172,6 +172,33 @@
 </form>
 </section>
 
+<section class="settings-section" id="storage" aria-labelledby="storage-title">
+<div class="settings-intro">
+<h2 id="storage-title">Storage</h2>
+<p>Space used by Cairn's pages, files and database. Archived items are included.</p>
+<p>Sizes count stored bytes. The disk may use a little more space for each file.</p>
+</div>
+<div class="settings-fields storage-usage">
+{{with .Storage}}
+{{if .Incomplete}}<p class="field-note">Couldn't measure everything. These numbers may be incomplete. Reload Settings to try again.</p>{{end}}
+<dl class="storage-breakdown">
+<div class="storage-total"><dt>Total Cairn usage</dt><dd>{{fileSize .Total}}</dd></div>
+<div><dt>Pages</dt><dd>{{fileSize .Pages}}</dd></div>
+<div><dt>Files</dt><dd>{{fileSize .Files}}</dd></div>
+<div><dt>Everything else</dt><dd>{{fileSize .Other}}</dd></div>
+</dl>
+<p class="field-help">Everything else includes the database, file details and temporary uploads.</p>
+{{if .DiskKnown}}<p>{{fileSize .Free}} free of {{fileSize .Capacity}}</p>{{else}}<p class="field-help">Couldn't read the disk's free space.</p>{{end}}
+<div>
+<h3>Largest files</h3>
+{{if .Largest}}<ol class="storage-files">
+{{range .Largest}}<li><a href="/{{.Slug}}">{{.Name}}</a><span>{{fileSize .Size}}</span></li>{{end}}
+</ol>{{else}}<p class="field-help">No files to show.</p>{{end}}
+</div>
+{{end}}
+</div>
+</section>
+
 <section class="settings-section" id="kindle" aria-labelledby="kindle-title">
 <div class="settings-intro">
 <h2 id="kindle-title">Send to Kindle</h2>
