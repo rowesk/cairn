@@ -6,7 +6,7 @@ Cairn can email any page to your Kindle as an EPUB book. The library's row menu 
 
 Cairn builds the book from the saved page. Text, headings, lists, tables, footnotes, links to public websites and the page's own PNG, JPEG and GIF images come through. Headings become the book's contents list. The byline and date sit under the title. Your request never leaves Cairn.
 
-Scripts cannot run on a Kindle, so charts and diagrams drawn by scripts, embedded frames, forms and the page's own styling are left out. The book is always light, whatever Cairn's theme. WebP images and images hosted elsewhere are replaced by their alt text. A book can be at most about 18 MiB, which keeps the email under Gmail's 25 MB limit.
+Scripts cannot run on a Kindle, so charts and diagrams drawn by scripts, embedded frames, forms and the page's own styling are left out. The book is always light, whatever Cairn's theme. Cairn stores Markdown web images when you save, so their PNG, JPEG and GIF images also come through. WebP images and web images that could not be saved are replaced by their alt text. A book can be at most about 18 MiB, which keeps the email under Gmail's 25 MB limit.
 
 ## Set up the mail account
 

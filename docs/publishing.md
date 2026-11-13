@@ -81,7 +81,13 @@ There is no DELETE. Deleting is permanent and, like sharing, stays with the owne
 | `capabilities` | array of strings | No | `mermaid`, `echarts` | For `html`: bundled libraries to load before the page's scripts. Markdown loads them itself |
 | `assets` | object | No | 32 images, 4 MiB each | File name to base64 bytes. PNG, JPEG, GIF or WebP. Padding, either base64 alphabet, line breaks and `data:` URLs are all accepted |
 
-Name images with letters, digits, hyphens or underscores, up to 96 characters, then `.png`, `.jpg`, `.jpeg`, `.gif` or `.webp`, and refer to them as `?asset=name.png`. That address works before the page's slug is known. [docs/authoring.md](authoring.md#markdown) covers what the Markdown can hold: footnotes, callouts, images, Mermaid, ECharts and the raw HTML Cairn keeps.
+Name images with letters, digits, hyphens or underscores, up to 96 characters, then `.png`, `.jpg`, `.jpeg`, `.gif` or `.webp`, and refer to them as `?asset=name.png`. That address works before the page's slug is known.
+
+Markdown web images, including raw `<img src>` and protocol-relative URLs, download at save time and count toward the same 32-asset limit. Cairn accepts HTTP and HTTPS on ports 80 and 443, checks the address it connects to and refuses private or other non-public addresses after DNS and each redirect. It follows at most 3 redirects, fetches up to 4 images at once and allows 10 seconds per image and 30 seconds per save. Each image must fit 4 MiB and contain PNG, JPEG, GIF or WebP bytes, regardless of Content-Type. Cairn sends a plain `Cairn` User-Agent with no cookies or credentials.
+
+The stored Markdown keeps the original URLs. Rendered pages use local assets with stable names derived from each URL's SHA-256. Duplicate URLs fetch once, and replacements reuse stored assets for unchanged URLs. A failed fetch saves the page with a `web_image_failed` warning and a link containing the image's alt text. Shared readers never fetch the outside image. This applies to API saves, editor saves and Markdown imports. It does not change HTML publications, HTML imports, `srcset`, CSS backgrounds, script-loaded images, live preview or existing saved pages.
+
+[docs/authoring.md](authoring.md#markdown) covers what the Markdown can hold: footnotes, callouts, images, Mermaid, ECharts and the raw HTML Cairn keeps.
 
 Fields Cairn does not take are refused, never ignored. A likely typo says so (`titel is not a field Cairn accepts. Did you mean title?`), and fields for passwords or existing sharing stay with the owner.
 
@@ -113,6 +119,7 @@ Warnings never stop a save:
 | `agent_ignored` | An agent key sent an `agent` other than its own name |
 | `template_ignored` | `template` was sent with `html` |
 | `private_url_unset` | The server has no private base URL, so `private_url` is `null` |
+| `web_image_failed` | The page saved, but some web images could not be stored. The message lists each URL and its reason. Each failed image becomes alt text linked to its original URL |
 | `storage_cleanup_pending` | Saved, but an old version's files could not be removed yet. Cairn retries before the next save. The old `warning` string carries the same news |
 
 ## Listing and searching

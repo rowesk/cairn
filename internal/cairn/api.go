@@ -94,13 +94,13 @@ var assetsAllowed = []string{"png", "jpeg", "gif", "webp"}
 // apiWarning tells a publisher what Cairn changed or could not do while
 // saving a page. The page is saved either way.
 type apiWarning struct {
-	Code       string   `json:"code" doc:"dropped_html, agent_ignored, template_ignored, private_url_unset or storage_cleanup_pending."`
+	Code       string   `json:"code" doc:"web_image_failed, dropped_html, agent_ignored, template_ignored, private_url_unset or storage_cleanup_pending."`
 	Message    string   `json:"message" doc:"What happened, in plain words."`
 	Tags       []string `json:"tags,omitempty" doc:"For dropped_html: the HTML elements Cairn removed."`
 	Attributes []string `json:"attributes,omitempty" doc:"For dropped_html: the attributes Cairn removed. href means an unsafe address was removed."`
 }
 
-var warningCodes = []string{"dropped_html", "agent_ignored", "template_ignored", "private_url_unset", "storage_cleanup_pending"}
+var warningCodes = []string{"web_image_failed", "dropped_html", "agent_ignored", "template_ignored", "private_url_unset", "storage_cleanup_pending"}
 
 // apiPage is a page as the API describes it.
 type apiPage struct {
