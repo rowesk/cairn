@@ -7,15 +7,16 @@ Cairn ships as a single binary for 64-bit Linux: AMD64 for x86-64 PCs and server
 Download the archive for your architecture and `checksums.txt` from [Releases](https://github.com/rowesk/cairn/releases/latest). Run `uname -m`: `x86_64` means AMD64, `aarch64` means ARM64.
 
 ```sh
+VERSION=v0.0.0   # replace with the version in the archive's name
 sha256sum --ignore-missing --check checksums.txt
-tar -xzf cairn_v0.2.0_linux_arm64.tar.gz
-cd cairn_v0.2.0_linux_arm64
+tar -xzf cairn_${VERSION}_linux_arm64.tar.gz
+cd cairn_${VERSION}_linux_arm64
 ./cairn version
 ./cairn init -data ./data -owner "Alex"
 ./cairn serve -data ./data
 ```
 
-Use the AMD64 filename instead on x86-64, and check that the archive reports `OK`. Run these commands from a directory you own.
+Use the AMD64 filename instead on x86-64, and check that the archive reports `OK`. These steps match the code on `main`; for v0.1.0, follow the README inside its archive. Run these commands from a directory you own.
 
 `init` creates the database and an installation token in `./data/publisher-token` that only you can read, then prints the command to start Cairn. `serve` finds the token there on its own. `-owner` sets the default author for pages you write in Cairn; change it later in Settings. Running `init` again keeps the existing author and token and says so. If the database exists but its token is missing, `init` stops rather than make a new one. Restore the original token or pass its path with `-publisher-token-file`.
 

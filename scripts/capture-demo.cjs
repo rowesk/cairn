@@ -76,8 +76,11 @@ const path = require('node:path');
       await page.goto(base + '/settings');
       const card = page.locator('.theme-choice[data-choice="' + id + '"]');
       if (!await card.locator('input').isChecked()) {
+        // Settings save as you go, so wait for this click's own save reply.
+        const saved = page.waitForResponse(r => r.url() === base + '/settings' && r.request().method() === 'POST');
         await card.click();
-        await page.locator('#theme-notice .notice.is-success').waitFor();
+        const reply = await saved;
+        if (!reply.ok() || !(await reply.json()).ok) throw Error('theme save failed');
       }
     };
     const reader = async (slug, wide) => {
