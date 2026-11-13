@@ -12,11 +12,13 @@ go vet ./...
 go test -race ./...
 python3 scripts/check-install.py ./cairn
 npm ci
+npm audit
 npx playwright install chromium
 npm run test:browser
+go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 ```
 
-All five must pass before a change is ready. Browser tests are headless and use temporary data. On Linux, `npx playwright install --with-deps chromium` installs the browser's system dependencies too. Never point a test at a personal library.
+All checks must pass before a change is ready. Browser tests are headless and use temporary data. On Linux, `npx playwright install --with-deps chromium` installs the browser's system dependencies too. Never point a test at a personal library.
 
 Read `CONTEXT.md` for the product's words; screens, messages and documentation use them, and `internal/cairn/terms_test.go` fails when a retired word comes back. Keep page content isolated from private management, keep private access working after sharing stops, and preserve existing data on upgrade. Add focused regression tests for changes to access or storage. Run `gofmt` and keep credentials out of commits.
 
@@ -105,4 +107,4 @@ After building `cairn` and installing the browser-check dependencies above, run:
 node scripts/capture-demo.cjs
 ```
 
-The script starts Cairn on localhost with a temporary library, publishes made-up example pages, and captures the library, the desktop and phone readers, the desktop reader in Dark, and the phone library in each theme, using headless Chromium. It writes the images to `docs/images/`, stops the browser and the server, then removes the demo data. It never touches your running Cairn or your own pages.
+The script starts Cairn on localhost with a temporary library, publishes made-up example pages, and captures the Pages and Files tabs, the desktop and phone readers, the desktop reader in Dark, and the phone library in each theme, using headless Chromium. It writes the images to `docs/images/`, stops the browser and the server, then removes the demo data. It never touches your running Cairn or your own pages.

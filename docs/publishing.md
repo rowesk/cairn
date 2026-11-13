@@ -248,12 +248,13 @@ Publish privately by default. Set `share_enabled` to `true` on `POST /api/pages`
 
 ## Files
 
-`POST /api/files` publishes a file page from `multipart/form-data`, with the same `Authorization` header and browser-origin refusal. A file page shows a filetype icon, the title, filename, type, size and a **Download** button in place of page HTML. Cairn never opens, converts or runs the file; downloads are `application/octet-stream` attachments.
+`POST /api/files` publishes a file page from `multipart/form-data`, with the same `Authorization` header and browser-origin refusal. A file page shows a filetype icon, the title, filename, type, size and a **Download** button in place of page HTML. The Download action returns originals as `application/octet-stream` attachments.
 
 - `file`: exactly one file part, at most 512 MiB. Any type is accepted. The filename must be plain UTF-8 of at most 255 bytes.
 - `original_request`: required, as for pages.
 - `title`, `request_summary`, `request_source`, `slug`: optional, with the same rules as pages. A blank title uses the filename without its extension.
 - `agent`: only for the installation token, as for pages.
+- `share_enabled`: optional multipart text `true` or `false`, creation only. Omitted or `false` stays private. Use `true` only when the owner asks; sharing must be configured. Any supplied value on replacement is refused.
 
 Any other field or file part is rejected with `validation_failed`. The whole request may be at most 68 MiB. Cairn streams the file to a temporary file inside the data directory, never into memory or `/tmp`, and renames it into the page's object once it is complete. Interrupted uploads are removed at startup.
 
@@ -266,3 +267,17 @@ curl --fail-with-body --silent --show-error \
 ```
 
 Success and errors match `POST /api/pages`. A file over 512 MiB returns 413 `payload_too_large`. `PUT /api/files/<slug>` replaces any page with a file page, and `PUT /api/pages/<slug>` turns a file page back into a page. Downloads release Cairn's storage lock before sending, so a slow 512 MiB download does not hold up saves.
+
+## Short links
+
+`POST /api/links` accepts JSON with the usual `Authorization: Bearer` header. Browser-origin requests are refused. The public listener has no API routes.
+
+```json
+{"url":"https://example.org/reading","slug":"reading","share_enabled":true}
+```
+
+`url` is required and must be an HTTP or HTTPS URL of at most 2,048 characters, with a valid host and no credentials. Cairn refuses its own public link paths to prevent redirect loops. `slug` is optional; omit it to let Cairn choose a link name. `share_enabled` defaults to false. Set it to true only when the owner asks. Shared creation without a public origin fails with 503 without saving.
+
+Success returns 201 with the usual page-write fields, including `slug`, `url` and `private_url`, plus `public_url` for shared creation. Read the item through `GET /api/pages/{slug}` for `format: "link"`, `target_url` and `clicks`. The list endpoint includes pages, files and links. Links accept no password or original request fields. The owner edits targets and sharing in Manage; page and file replacement cannot overwrite a link.
+
+Public short addresses return an empty 302 response. GET visits count asynchronously; HEAD does not. An unshared link returns 404 publicly. Archiving keeps redirects working.

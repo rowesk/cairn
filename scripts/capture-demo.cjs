@@ -5,10 +5,19 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+async function freePort() {
+ const net = require('node:net');
+ for (;;) {
+  const port = 49152 + Math.floor(Math.random() * 16384);
+  const server = net.createServer();
+  const ok = await new Promise(resolve => { server.once('error', () => resolve(false)); server.listen(port, '127.0.0.1', () => resolve(true)); });
+  if (ok) { await new Promise(resolve => server.close(resolve)); return port; }
+ }
+}
 (async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cairn-demo-'));
   const token = 'fictional-demo-only-not-a-real-credential';
-  const child = spawn(path.resolve('cairn'), ['-data', dir, '-listen', '127.0.0.1:0'], {
+  const child = spawn(path.resolve('cairn'), ['-data', dir, '-listen', '127.0.0.1:' + await freePort()], {
     env: {...process.env, CAIRN_PUBLISHER_TOKEN: token}
   });
   let browser;
@@ -65,6 +74,14 @@ const path = require('node:path');
       });
       if (response.status !== 201) throw Error(await response.text());
     }
+    const file = new FormData();
+    file.set('file', new Blob([Buffer.from('Example archive for the reading list')]), 'reading-list.zip');
+    file.set('agent','Writing assistant');file.set('title', 'Reading list archive');file.set('slug', 'demo-file');
+    file.set('original_request', 'Keep this fictional reading list archive.');file.set('share_enabled','false');
+    const savedFile=await fetch(base+'/api/files',{method:'POST',headers:{authorization:'Bearer '+token},body:file});
+    if(savedFile.status!==201)throw Error(await savedFile.text());
+    const savedLink=await fetch(base+'/api/links',{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify({slug:'demo-link',url:'https://example.org/reading'})});
+    if(savedLink.status!==201)throw Error(await savedLink.text());
     browser = await chromium.launch({headless: true});
     // Reduced motion skips the contents fade-in so the list is captured fully drawn.
     const page = await browser.newPage({viewport: {width: 1440, height: 850}, deviceScaleFactor: 1, reducedMotion: 'reduce'});
@@ -102,6 +119,8 @@ const path = require('node:path');
     await page.goto(base + '/');
     await settle();
     await page.screenshot({path: path.join(out, 'library.png')});
+    await page.goto(base+'/?kind=files');await settle();
+    await page.screenshot({path:path.join(out,'files.png')});
     await page.setViewportSize({width: 1440, height: 1100});
     await reader('d3S', true);
     await page.screenshot({path: path.join(out, 'report.png')});
@@ -113,6 +132,21 @@ const path = require('node:path');
     await reader('d3S', true);
     await page.screenshot({path: path.join(out, 'report-dark.png')});
     await useTheme('cairn');
+    if (process.env.CAIRN_VISUAL_OUT) {
+      fs.mkdirSync(process.env.CAIRN_VISUAL_OUT,{recursive:true});
+      for (const theme of ['cairn','dark']) {
+        await useTheme(theme);
+        for (const width of [1440,390]) {
+          await page.setViewportSize({width,height:900});
+          for (const [name,route] of [['pages','/'],['files','/?kind=files'],['links','/?kind=links'],['file','/demo-file'],['link-manage','/manage/demo-link'],['storage','/settings#storage']]) {
+            await page.goto(base+route);await settle();
+            if(name==='storage')await page.locator('#storage').scrollIntoViewIfNeeded();
+            if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error('Horizontal overflow: '+theme+' '+width+' '+name);
+            await page.screenshot({path:path.join(process.env.CAIRN_VISUAL_OUT,theme+'-'+width+'-'+name+'.png')});
+          }
+        }
+      }
+    }
     console.log('Captured library, report, report-dark, mobile and theme screenshots from fictional demo data.');
   } finally {
     if (browser) await browser.close();
