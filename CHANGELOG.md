@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Download Markdown web images at save time and keep them as page assets for shared readers and Kindle books. Keep original URLs in the Markdown, reuse saved images on replacement and report failed fetches with `web_image_failed`. Refuse non-public addresses and limit fetch time, redirects, concurrency and image size.
+
 - Add a home-screen icon, browser tab icon and web app manifest, so the private library installs as an app called Cairn and opens without the browser's address bar. Shared pages show the icon but never offer to install. `scripts/generate-icons.go` redraws the icons.
 
 ## v0.3.0

@@ -9,7 +9,7 @@ Cairn keeps a page's Markdown beside its rendered HTML, in the same stored objec
 Cairn renders GitHub-flavoured Markdown: headings, lists, task lists, tables, strikethrough, links and fenced code. It also renders the following.
 
 - **Footnotes.** Write `text[^1]` and, anywhere below, `[^1]: The note.` Notes collect at the end of the page, numbered, with a link back to each reference. They survive into Send to Kindle.
-- **Images.** Attach the file as an asset and place it with `![What the picture shows](?asset=bulb.png)`. The alt text is what a screen reader says and what shows if the image cannot load. An image alone in its paragraph becomes a figure; a title becomes its caption: `![Alt text](?asset=bulb.png "The caption")`. Two or more figures in a row sit side by side where there is room.
+- **Images.** Attach the file as an asset and place it with `![What the picture shows](?asset=bulb.png)`. The alt text is what a screen reader says and what shows if the image cannot load. An image alone in its paragraph becomes a figure; a title becomes its caption: `![Alt text](?asset=bulb.png "The caption")`. Two or more figures in a row sit side by side where there is room. You can also use a web URL, such as `![The ridge](https://example.com/ridge.jpg)`, or a raw `<img src>` in Markdown. Cairn downloads it when you save, stores it with the page and keeps the original URL in your Markdown. Re-saving reuses the stored image while the URL stays the same. Preview may show a broken image until save. If a fetch fails, the saved page shows the alt text linked to the original URL.
 - **Callouts.** A quote that starts with `[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]` or `[!CAUTION]` becomes a labelled note, as on GitHub. Cairn adds `[!VERDICT]` and `[!SUMMARY]` for the conclusion of a comparison, set larger than the text around it.
 
   ```
@@ -96,7 +96,7 @@ The browser keeps unsaved writing for each page separately, so a reload or a cra
 
 ### Editing a saved page
 
-Pages written in the editor, and pages imported from a Markdown file, keep their Markdown. Open **Edit** from the page's menu in the library, from Manage page, or from the reader. The editor reopens with the title, Markdown, images and access. **Save changes** replaces the page and returns to it. The page keeps its address, its date, its sharing and link name, and its password. Images stay while the Markdown still refers to them by name. Choosing Private in Page access stops sharing; choosing Shared shares it at the link name shown.
+Pages written in the editor, and pages imported from a Markdown file, keep their Markdown. Open **Edit** from the page's menu in the library, from Manage page, or from the reader. The editor reopens with the title, Markdown, images and access. **Save changes** replaces the page and returns to it. The page keeps its address, its date, its sharing and link name, and its password. Images stay while the Markdown still refers to them by name or original web URL. Choosing Private in Page access stops sharing; choosing Shared shares it at the link name shown.
 
 Markdown that agents send through the API is kept too, so their pages can be edited here. Pages Cairn cannot edit say why on Manage page in one sentence: custom HTML, Markdown an agent sent before Cairn kept a copy, or a file imported in another format such as a Word document. Ask the agent for a new version, or change the original and import it again.
 

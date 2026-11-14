@@ -74,8 +74,9 @@ type Server struct {
 	privateHosts, publicHosts *hostPolicy
 }
 type publication struct {
-	Share     bool   `json:"-"`
-	TargetURL string `json:"-"`
+	WebImages map[string]string `json:"-"`
+	Share     bool              `json:"-"`
+	TargetURL string            `json:"-"`
 	// ImportedHTML is set only by the owner import path, never from JSON.
 	ImportedHTML bool `json:"-"`
 	// OwnerWritten marks a page the owner wrote or imported in Cairn. It may
@@ -469,12 +470,25 @@ func (s *Server) savePublication(w http.ResponseWriter, r *http.Request, in publ
 	if ctx == nil {
 		ctx = &publishContext{}
 	}
+	markdown := in.Markdown
 	problems, rendered := preparePage(&in)
 	if len(problems) > 0 {
 		writeAPIProblems(w, http.StatusBadRequest, ErrValidationFailed, problems)
 		return
 	}
 	warnings := append(ctx.warnings, renderWarnings(rendered)...)
+	if markdown != "" && !in.File {
+		warnings = append(warnings, s.fetchWebImages(r.Context(), r, &in)...)
+		// Render again only when web images need local URLs or fallback links.
+		if len(in.WebImages) > 0 {
+			in.Markdown, in.HTML = markdown, ""
+			problems, _ = preparePage(&in)
+			if len(problems) > 0 {
+				writeAPIProblems(w, http.StatusBadRequest, ErrValidationFailed, problems)
+				return
+			}
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cleanupPending {

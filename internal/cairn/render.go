@@ -90,7 +90,7 @@ func renderPublication(in *publication) (renderResult, error) {
 	if layout == "" {
 		layout = "report"
 	}
-	body, log, err := renderMarkdown(in.Markdown, in.Title, layout)
+	body, log, err := renderMarkdown(in.Markdown, in.Title, layout, in.WebImages)
 	if err != nil {
 		return result, err
 	}
@@ -110,7 +110,7 @@ func renderPublication(in *publication) (renderResult, error) {
 }
 
 // renderMarkdown turns Markdown into the inside of a report's <main>.
-func renderMarkdown(markdown, title, layout string) (string, dropLog, error) {
+func renderMarkdown(markdown, title, layout string, images ...map[string]string) (string, dropLog, error) {
 	var log dropLog
 	source := []byte(markdown)
 	doc := markdownEngine.Parser().Parse(text.NewReader(source))
@@ -126,6 +126,9 @@ func renderMarkdown(markdown, title, layout string) (string, dropLog, error) {
 		return "", log, err
 	}
 	sanitizeChildren(root, &log)
+	if len(images) > 0 {
+		mapWebImages(root, images[0])
+	}
 	decorateReport(root, title, layout)
 	var content bytes.Buffer
 	for c := root.FirstChild; c != nil; c = c.NextSibling {
