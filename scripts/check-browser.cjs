@@ -1061,7 +1061,7 @@ async function freePort() {
     const editorErrors=await p.evaluate(()=>{const after=(field,error)=>!!(document.getElementById(field).compareDocumentPosition(document.getElementById(error))&Node.DOCUMENT_POSITION_FOLLOWING);return {title:after('page-title','page-title-error'),body:after('markdown','markdown-error'),colours:getComputedStyle(document.getElementById('page-title-error')).color===getComputedStyle(document.getElementById('markdown-error')).color,rails:getComputedStyle(document.getElementById('page-title')).borderLeftColor===getComputedStyle(document.getElementById('markdown')).borderLeftColor};});
     if(Object.values(editorErrors).includes(false))throw Error('editor errors are not under their fields alike: '+JSON.stringify(editorErrors));
     // An invalid link name never previews as an address.
-    await p.locator('#access-trigger').click();await p.locator('[name=access][value=public]').check({force:true});await p.locator('#page-slug').fill('kitchen plan!');
+    await p.locator('#access-trigger').click();await p.locator('#sharing-panel').waitFor();await p.locator('[name=access][value=public]').check();await p.locator('#page-slug').fill('kitchen plan!');
     await p.locator('#page-slug-error').waitFor();if((await p.locator('#address-full').innerText()).includes('kitchen plan!'))throw Error('an invalid link name shows as an address');
     // The panel re-places itself on the next frame when the button's words change.
     const aligned=await p.waitForFunction(()=>{const a=document.querySelector('#sharing-panel').getBoundingClientRect(),b=document.querySelector('#access-trigger').getBoundingClientRect();return Math.abs(a.right-b.right)<=1;},null,{timeout:2000}).then(()=>true,()=>false);
@@ -1189,7 +1189,7 @@ async function freePort() {
     await p.locator('#kindle-address').fill('reader@kindle.com');await p.keyboard.press('Tab');await p.locator('#kindle-address-warning').waitFor({state:'hidden'});
     // 2. A taken link name never shows as an address; Private shows the name the page will use.
     await p.goto(base+'/new');await p.getByLabel('Title',{exact:true}).fill('Loft quotes');await p.getByLabel('Markdown',{exact:true}).fill('Three firms quoted.');
-    await p.locator('#access-trigger').click();await p.locator('[name=access][value=public]').check({force:true});
+    await p.locator('#access-trigger').click();await p.locator('#sharing-panel').waitFor();await p.locator('[name=access][value=public]').check();
     await p.locator('#page-slug').fill('report');await p.locator('#page-slug-error').getByText(/already uses this link/).waitFor();
     if(await p.locator('#address-full').textContent()!=='')throw Error('a taken link name still shows as an address');
     await p.locator('#page-slug').fill('p9-loft-quotes');await p.locator('#address-full').getByText('https://reports.example.com/p9-loft-quotes').waitFor();

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Update dependencies: Mermaid 12.3.0 (bundled for diagrams), modernc SQLite 1.62.0, goldmark 1.8.7, golang.org/x/sys 0.50.0, Playwright 1.65.0, and the setup-node, upload-artifact and download-artifact actions. The browser checks now wait for the editor's access panel to open before choosing Shared, which made them fail now and then on the arm64 runner.
+
 - Download Markdown web images at save time and keep them as page assets for shared readers and Kindle books. Keep original URLs in the Markdown, reuse saved images on replacement and report failed fetches with `web_image_failed`. Refuse non-public addresses and limit fetch time, redirects, concurrency and image size.
 
 - Add a home-screen icon, browser tab icon and web app manifest, so the private library installs as an app called Cairn and opens without the browser's address bar. Shared pages show the icon but never offer to install. `scripts/generate-icons.go` redraws the icons.
