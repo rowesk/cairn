@@ -4,8 +4,8 @@ go 1.26.11
 
 require (
 	github.com/yuin/goldmark v1.8.7
-	golang.org/x/crypto v0.58.0
-	golang.org/x/net v0.62.0
+	golang.org/x/crypto v0.59.0
+	golang.org/x/net v0.63.0
 	golang.org/x/sys v0.50.0
 	modernc.org/sqlite v1.62.0
 )
