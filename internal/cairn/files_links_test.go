@@ -93,8 +93,8 @@ func TestDirectFileAddresses(t *testing.T) {
 			if c != 200 || !bytes.Equal(b, data) || !strings.HasPrefix(h.Get("Content-Type"), tc.mime) || strings.HasPrefix(h.Get("Content-Disposition"), "inline") != tc.inline {
 				t.Fatal(c, h, string(b))
 			}
+			policy := h.Get("Content-Security-Policy")
 			if tc.ext == "html" || tc.ext == "svg" {
-				policy := h.Get("Content-Security-Policy")
 				for _, v := range []string{"sandbox ", "connect-src 'none'", "form-action 'none'"} {
 					if !strings.Contains(policy, v) {
 						t.Fatal(policy)
@@ -102,6 +102,14 @@ func TestDirectFileAddresses(t *testing.T) {
 				}
 				if strings.Contains(policy, "allow-same-origin") {
 					t.Fatal(policy)
+				}
+			} else {
+				want := "default-src 'none'"
+				if tc.ext == "mp4" || tc.ext == "mp3" {
+					want += "; media-src 'self'"
+				}
+				if policy != want {
+					t.Fatalf("%s CSP = %q, want %q", srv.path, policy, want)
 				}
 			}
 		}

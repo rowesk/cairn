@@ -362,6 +362,10 @@ func (s *Server) serveOriginal(w http.ResponseWriter, r *http.Request, p savedPa
 		if typ != "application/octet-stream" {
 			disposition = "inline"
 		}
+		if strings.HasPrefix(typ, "video/") || strings.HasPrefix(typ, "audio/") {
+			// Browsers open direct media in a document whose player loads the same URL.
+			policy = "default-src 'none'; media-src 'self'"
+		}
 		if strings.HasPrefix(typ, "text/html") || typ == "image/svg+xml" {
 			policy = "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox; default-src 'self' data: blob: 'unsafe-inline' 'unsafe-eval'; connect-src 'none'; form-action 'none'; base-uri 'none'"
 		}
